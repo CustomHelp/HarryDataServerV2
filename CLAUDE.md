@@ -585,6 +585,14 @@ Location: configurable per camera in Harry.ini (`JsonParameters=` and `JsonSetti
 
 ## 10. INI Configuration (Harry.ini)
 
+> **Config location:** All configuration lives in the central folder `F:\002_Configs`
+> (Harry.ini, the `Templates\` subfolder with the JSON files, and later Collage.ini /
+> MSA references). The application looks for Harry.ini in this order:
+> `HARRY_CONFIG_DIR` env var → `F:\002_Configs` → next to the executable →
+> legacy `D:\HarryDataServer`.
+> **Relative paths** in Harry.ini (e.g. `Templates\Result_*.json`) are resolved
+> against the directory that contains Harry.ini, so the whole config folder is portable.
+
 ```ini
 [General]
 LogFilePath=D:\HarryDataServer\Logs\
@@ -642,8 +650,8 @@ SaveIntervalSeconds=1
 CameraName=M10_ST030_KF1
 IP=172.28.10.30
 Port=8001
-JsonParameters=D:\HarryDataServer\Templates\Result_M10_ST030_KF1.json
-JsonSettings=D:\HarryDataServer\Templates\Settings_M10_ST030_KF1.json
+JsonParameters=Templates\Result_M10_ST030_KF1.json
+JsonSettings=Templates\Settings_M10_ST030_KF1.json
 AutoConnect=true
 
 ; ... Camera2 through Camera14 follow same pattern
@@ -894,8 +902,9 @@ dotnet build HarryDataServer.sln --configuration Release
 
 ### Deploy
 1. Copy `Release` output to server
-2. Copy `Templates\` JSON files to configured path
-3. Copy `Harry.ini` and `Collage.ini` to configured path
+2. Place config in the central folder `F:\002_Configs`: `Harry.ini`, `Collage.ini`,
+   and the `Templates\` subfolder with the JSON files (template paths are relative).
+3. (Optional) Set `HARRY_CONFIG_DIR` to override the config folder location.
 4. Application creates DB and all tables on first startup
 5. Customer changes DB passwords after successful test
 

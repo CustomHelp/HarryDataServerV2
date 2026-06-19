@@ -27,6 +27,11 @@ public sealed class IniConfigManager
 
         IniData data = _parser.ReadFile(iniPath);
 
+        // Relative paths in Harry.ini (e.g. template files) are resolved against
+        // the directory that contains Harry.ini, so the whole config folder
+        // (Harry.ini + Templates\) is portable.
+        var configDir = Path.GetDirectoryName(Path.GetFullPath(iniPath)) ?? AppContext.BaseDirectory;
+
         return new AppConfig
         {
             General = ParseGeneral(data),
@@ -36,8 +41,17 @@ public sealed class IniConfigManager
             Collage = ParseCollage(data),
             Sps = ParseSps(data),
             SqlSettings = ParseSqlSettings(data),
-            Cameras = ParseCameras(data),
+            Cameras = ParseCameras(data, configDir),
         };
+    }
+
+    /// <summary>Resolve a path from the INI: absolute paths are kept, relative paths
+    /// are combined with the config directory. Empty stays empty.</summary>
+    private static string ResolvePath(string value, string configDir)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return string.Empty;
+        return Path.IsPathRooted(value) ? value : Path.GetFullPath(Path.Combine(configDir, value));
     }
 
     private static GeneralConfig ParseGeneral(IniData data)
@@ -138,7 +152,7 @@ public sealed class IniConfigManager
     /// Discover all [CameraN] sections dynamically and build a <see cref="CameraConfig"/>
     /// for each, ordered by index. Sections without an IP are skipped.
     /// </summary>
-    private static IReadOnlyList<CameraConfig> ParseCameras(IniData data)
+    private static IReadOnlyList<CameraConfig> ParseCameras(IniData data, string configDir)
     {
         var cameras = new List<CameraConfig>();
 
@@ -165,8 +179,8 @@ public sealed class IniConfigManager
                 Module = DeriveModule(cameraName),
                 Ip = ip,
                 Port = Int(keys, "Port", 8500),
-                JsonParameters = Str(keys, "JsonParameters", string.Empty),
-                JsonSettings = Str(keys, "JsonSettings", string.Empty),
+                JsonParameters = ResolvePath(Str(keys, "JsonParameters", string.Empty), configDir),
+                JsonSettings = ResolvePath(Str(keys, "JsonSettings", string.Empty), configDir),
                 AutoConnect = Bool(keys, "AutoConnect", true),
             });
         }

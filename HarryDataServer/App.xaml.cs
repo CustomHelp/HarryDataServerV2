@@ -101,17 +101,25 @@ public partial class App : Application
         return services.BuildServiceProvider();
     }
 
+    /// <summary>Central configuration folder (Harry.ini, Templates\, and later
+    /// Collage.ini / MSA references). Overridable via the HARRY_CONFIG_DIR env var.</summary>
+    public const string DefaultConfigDir = @"F:\002_Configs";
+
     /// <summary>
-    /// Locate Harry.ini: prefer a file next to the executable, then the default
-    /// deployment path, otherwise fall back to the bundled template.
+    /// Locate Harry.ini in priority order: HARRY_CONFIG_DIR env var, the central
+    /// config folder, next to the executable, then the legacy deployment path.
     /// </summary>
     private static string ResolveIniPath()
     {
-        var candidates = new[]
-        {
-            Path.Combine(AppContext.BaseDirectory, "Harry.ini"),
-            @"D:\HarryDataServer\Harry.ini",
-        };
+        var candidates = new List<string>();
+
+        var envDir = Environment.GetEnvironmentVariable("HARRY_CONFIG_DIR");
+        if (!string.IsNullOrWhiteSpace(envDir))
+            candidates.Add(Path.Combine(envDir, "Harry.ini"));
+
+        candidates.Add(Path.Combine(DefaultConfigDir, "Harry.ini"));
+        candidates.Add(Path.Combine(AppContext.BaseDirectory, "Harry.ini"));
+        candidates.Add(@"D:\HarryDataServer\Harry.ini");
 
         foreach (var candidate in candidates)
         {
@@ -119,7 +127,7 @@ public partial class App : Application
                 return candidate;
         }
 
-        // Return the executable-local path so the error message points there.
+        // Fall back to the highest-priority location so the error message points there.
         return candidates[0];
     }
 }
