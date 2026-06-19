@@ -1,5 +1,7 @@
 using System.IO;
 using System.Windows;
+using HarryDataServer.Configuration;
+using HarryDataServer.Infrastructure;
 using HarryDataServer.Services;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -14,6 +16,7 @@ public partial class App : Application
 {
     private ServiceProvider? _services;
     private ILogService? _log;
+    private readonly CancellationTokenSource _shutdownCts = new();
 
     /// <summary>Resolved service provider, available to controls/windows after startup.</summary>
     public IServiceProvider Services =>
@@ -34,6 +37,11 @@ public partial class App : Application
 
             var window = _services.GetRequiredService<MainWindow>();
             window.Show();
+
+            // Kick off the database startup sequence in the background so the UI
+            // stays responsive while MySQL connects / schema is provisioned.
+            var database = _services.GetRequiredService<IDatabaseService>();
+            _ = Task.Run(() => database.StartAsync(_shutdownCts.Token));
         }
         catch (Exception ex)
         {
@@ -51,8 +59,10 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         _log?.Information("HarryDataServer shutting down.");
+        _shutdownCts.Cancel();
         _log?.Shutdown();
         _services?.Dispose();
+        _shutdownCts.Dispose();
         base.OnExit(e);
     }
 
@@ -74,6 +84,16 @@ public partial class App : Application
             var general = sp.GetRequiredService<IConfigService>().Config.General;
             return new SerilogService(general.LogFilePath, general.LoggingActive);
         });
+
+        // --- Database (Phase 2): repository, partitions, JSON templates, orchestration ---
+        services.AddSingleton<JsonTemplateLoader>();
+        services.AddSingleton(sp =>
+        {
+            var mysql = sp.GetRequiredService<IConfigService>().Config.MySql;
+            return new MySqlRepository(mysql, sp.GetRequiredService<ILogService>());
+        });
+        services.AddSingleton<PartitionManager>();
+        services.AddSingleton<IDatabaseService, MySqlDatabaseService>();
 
         // --- Windows ---
         services.AddSingleton<MainWindow>();
