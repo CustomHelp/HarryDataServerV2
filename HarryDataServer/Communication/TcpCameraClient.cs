@@ -22,8 +22,18 @@ public sealed class TcpCameraClient
 
     private static readonly TimeSpan ReconnectInitial = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan ReconnectMax = TimeSpan.FromSeconds(60);
-    private static readonly TimeSpan KeepAliveInterval = TimeSpan.FromSeconds(5);
-    private static readonly TimeSpan OfflineTimeout = TimeSpan.FromSeconds(30);
+
+    // Keepalive watchdog (Keyence version request): probe after 2s of silence,
+    // poll every 500ms, declare offline after 10s of silence or 3 failed pings.
+    private static readonly TimeSpan WatchdogInterval = TimeSpan.FromMilliseconds(500);
+    private static readonly TimeSpan IdleBeforePing = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan MaxSilence = TimeSpan.FromSeconds(10);
+    private const int MaxFailedPings = 3;
+
+    // Prefixes of Keyence command replies (version response / error response):
+    // these are keepalive traffic, not measurement telegrams.
+    private const string VersionReplyPrefix = "MR";
+    private const string ErrorReplyPrefix = "ER";
 
     private readonly CameraConfig _config;
     private readonly CameraTemplates _templates;
@@ -33,6 +43,7 @@ public sealed class TcpCameraClient
     private CancellationTokenSource? _cts;
     private Task? _runTask;
     private CameraConnectionState _state = CameraConnectionState.Disconnected;
+    private int _failedPings;
 
     public TcpCameraClient(CameraConfig config, CameraTemplates templates, TelegramParser parser, ILogService log)
     {
@@ -63,12 +74,12 @@ public sealed class TcpCameraClient
     public DateTime LastDataUtc { get; private set; }
 
     /// <summary>
-    /// Optional active keepalive: the version-variable request string to send
-    /// periodically while idle. When empty (default) the client monitors the
-    /// connection passively and relies on TCP keepalive + socket errors.
-    /// TODO: set the real Keyence version-request command to enable active probing.
+    /// Active keepalive: the Keyence version-variable request sent while the
+    /// connection is idle. Confirmed from the production V1 code. A trailing
+    /// carriage return is ensured when sending. Set to empty to disable active
+    /// probing (passive monitoring only).
     /// </summary>
-    public string KeepAliveCommand { get; set; } = string.Empty;
+    public string KeepAliveCommand { get; set; } = "MR,#Version\r";
 
     public event EventHandler<CameraConnectionState>? StateChanged;
     public event EventHandler<ParsedTelegram>? TelegramReceived;
@@ -114,7 +125,7 @@ public sealed class TcpCameraClient
                 await client.ConnectAsync(_config.Ip, _config.Port, ct).ConfigureAwait(false);
 
                 State = CameraConnectionState.Connected;
-                LastDataUtc = DateTime.UtcNow;
+                MarkDataReceived();
                 backoff = ReconnectInitial;
                 _log.Information("{Camera}: connected to {Endpoint}.", CameraName, Endpoint);
 
@@ -185,7 +196,7 @@ public sealed class TcpCameraClient
                 return;
             }
 
-            LastDataUtc = DateTime.UtcNow;
+            MarkDataReceived();
             accumulator.AddRange(buffer[..read]);
             ExtractFrames(accumulator);
 
@@ -218,6 +229,19 @@ public sealed class TcpCameraClient
     {
         try
         {
+            // Keyence command replies (version response "MR..." / error "ER...") are
+            // keepalive traffic — reset the watchdog and skip the measurement pipeline.
+            // Measurement telegrams start with the controller name (e.g. "M50_..."),
+            // so they never collide with these prefixes.
+            if (text.StartsWith(VersionReplyPrefix, StringComparison.Ordinal) ||
+                text.StartsWith(ErrorReplyPrefix, StringComparison.Ordinal))
+            {
+                MarkDataReceived();
+                _log.Debug("{Camera}: keepalive reply received ({Prefix}).",
+                    CameraName, text.Length >= 2 ? text[..2] : text);
+                return;
+            }
+
             var telegram = _parser.ParseLine(text);
             if (telegram is null)
                 return;
@@ -260,32 +284,61 @@ public sealed class TcpCameraClient
         }
     }
 
+    /// <summary>Record inbound activity: refresh the silence timer and clear the failed-ping count.</summary>
+    private void MarkDataReceived()
+    {
+        LastDataUtc = DateTime.UtcNow;
+        _failedPings = 0;
+    }
+
+    /// <summary>
+    /// Watchdog: every 500ms, after 2s of silence send the Keyence version request.
+    /// Force a reconnect after 10s of total silence or 3 consecutive failed pings.
+    /// </summary>
     private async Task KeepAliveLoopAsync(NetworkStream stream, CancellationTokenSource connCts, CancellationToken token)
     {
-        var command = Encoding.Latin1.GetBytes(KeepAliveCommand + "\r");
+        var payload = KeepAliveCommand.EndsWith('\r') ? KeepAliveCommand : KeepAliveCommand + "\r";
+        var command = Encoding.Latin1.GetBytes(payload);
 
         while (!token.IsCancellationRequested)
         {
-            try { await Task.Delay(KeepAliveInterval, token).ConfigureAwait(false); }
+            try { await Task.Delay(WatchdogInterval, token).ConfigureAwait(false); }
             catch (OperationCanceledException) { return; }
 
-            if (DateTime.UtcNow - LastDataUtc > OfflineTimeout)
+            var silence = DateTime.UtcNow - LastDataUtc;
+
+            if (silence > MaxSilence)
             {
-                _log.Warning("{Camera}: no data for {Seconds:0}s; forcing reconnect.",
-                    CameraName, OfflineTimeout.TotalSeconds);
+                _log.Warning("{Camera}: no data for {Seconds:0.0}s; forcing reconnect.",
+                    CameraName, silence.TotalSeconds);
                 connCts.Cancel();
                 return;
             }
+
+            if (silence < IdleBeforePing)
+                continue; // Camera is actively sending; no probe needed.
 
             try
             {
                 await stream.WriteAsync(command, token).ConfigureAwait(false);
             }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
             catch (Exception ex)
             {
-                _log.Debug("{Camera}: keepalive send failed: {Message}", CameraName, ex.Message);
-                connCts.Cancel();
-                return;
+                _failedPings++;
+                _log.Debug("{Camera}: keepalive send failed ({Count}/{Max}): {Message}",
+                    CameraName, _failedPings, MaxFailedPings, ex.Message);
+
+                if (_failedPings >= MaxFailedPings)
+                {
+                    _log.Warning("{Camera}: {Count} consecutive failed pings; forcing reconnect.",
+                        CameraName, _failedPings);
+                    connCts.Cancel();
+                    return;
+                }
             }
         }
     }
