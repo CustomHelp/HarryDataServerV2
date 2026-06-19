@@ -31,7 +31,11 @@ public sealed class CameraConnectionService : ICameraService
             if (!templates.TryGetValue(cam.CameraName, out var camTemplates))
                 camTemplates = new CameraTemplates { CameraName = cam.CameraName };
 
-            var client = new TcpCameraClient(cam, camTemplates, parser, log);
+            var client = new TcpCameraClient(cam, camTemplates, parser, log)
+            {
+                // Keyence version-variable request (confirmed from production V1).
+                KeepAliveCommand = "MR,#Version\r",
+            };
             client.StateChanged += (_, _) => StatusChanged?.Invoke();
             _clients.Add(client);
         }

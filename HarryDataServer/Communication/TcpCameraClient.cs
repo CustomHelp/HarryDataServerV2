@@ -33,11 +33,6 @@ public sealed class TcpCameraClient
     private static readonly TimeSpan PingTimeout = TimeSpan.FromSeconds(2);
     private const int MaxFailedPings = 3;
 
-    // Prefixes of Keyence command replies (version response / error response):
-    // these are keepalive traffic, not measurement telegrams.
-    private const string VersionReplyPrefix = "MR";
-    private const string ErrorReplyPrefix = "ER";
-
     private readonly CameraConfig _config;
     private readonly CameraTemplates _templates;
     private readonly TelegramParser _parser;
@@ -224,7 +219,12 @@ public sealed class TcpCameraClient
             if (frame.Length == 0)
                 continue;
 
-            var text = Encoding.Latin1.GetString(frame).TrimEnd('\n');
+            // Trim CR/LF from both ends so CRLF framing can't leave a leading '\n'
+            // on the next frame (which would defeat the keepalive prefix check).
+            var text = Encoding.Latin1.GetString(frame).Trim('\r', '\n');
+            if (text.Length == 0)
+                continue;
+
             ProcessFrame(text);
         }
     }
@@ -233,13 +233,10 @@ public sealed class TcpCameraClient
     {
         try
         {
-            // Keyence command replies are keepalive traffic — reset the watchdog and
-            // skip the measurement pipeline. The version reply is just the variable
-            // value, e.g. "MR,1.1" (read OK), and errors come back as "ER,...".
-            // Measurement telegrams start with the controller name (e.g. "M50_...",
-            // i.e. 'M' + a digit), so they never collide with the "MR"/"ER" prefixes.
-            if (text.StartsWith(VersionReplyPrefix, StringComparison.Ordinal) ||
-                text.StartsWith(ErrorReplyPrefix, StringComparison.Ordinal))
+            // Keyence command replies ("MR,..." version reply / "ER" error reply) are
+            // keepalive traffic: reset the watchdog (silence timer + failed-ping count)
+            // and return immediately — never pass them to the telegram parser.
+            if (_parser.IsKeepAliveReply(text))
             {
                 MarkDataReceived();
                 _log.Debug("{Camera}: keepalive reply received: {Reply}.", CameraName, text);

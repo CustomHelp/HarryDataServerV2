@@ -20,9 +20,24 @@ public sealed class TelegramParser
     public TelegramParser(ILogService log) => _log = log;
 
     /// <summary>
+    /// True when a line is a Keyence command reply rather than a measurement
+    /// telegram: the version-request reply (e.g. "MR,1.1") or an error reply
+    /// ("ER" / "ER,..."). These are keepalive traffic and must not be parsed.
+    /// Measurement telegrams start with the controller name ("M50_...", i.e. 'M'
+    /// followed by a digit), so they never collide with the "MR,"/"ER" prefixes.
+    /// </summary>
+    public bool IsKeepAliveReply(string text)
+    {
+        var t = text.Trim('\r', '\n', ' ', '\t');
+        return t.StartsWith("MR,", StringComparison.Ordinal)
+            || t.Equals("ER", StringComparison.Ordinal)
+            || t.StartsWith("ER,", StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Parse a single raw telegram line (without the trailing carriage return)
-    /// into a <see cref="ParsedTelegram"/>. Returns null for empty lines or lines
-    /// too short to contain a header.
+    /// into a <see cref="ParsedTelegram"/>. Returns null for empty lines, keepalive
+    /// replies, or lines too short to contain a header.
     /// </summary>
     public ParsedTelegram? ParseLine(string raw)
     {
@@ -31,6 +46,10 @@ public sealed class TelegramParser
 
         var line = raw.Trim('\r', '\n');
         if (line.Length == 0)
+            return null;
+
+        // Defense in depth: never interpret a keepalive reply as a telegram.
+        if (IsKeepAliveReply(line))
             return null;
 
         var fields = line.Split(Delimiter);
