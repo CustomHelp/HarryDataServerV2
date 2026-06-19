@@ -267,13 +267,19 @@ ORDER BY c.camera_name, md.telegram_place;";
             if (!_columnByDefinitionId.TryGetValue(definitionId, out var column))
                 continue; // definition not in the current layout (retired)
 
-            string? cell = null;
-            if (!reader.IsDBNull(1))
+            // Priority: if a string value exists, use only it; otherwise the numeric
+            // measurement_value, otherwise the result_status (R_ and V_ are separate
+            // definitions/columns, so result and value are both exported per feature).
+            var str = reader.IsDBNull(2) ? null : reader.GetString(2);
+            string? cell;
+            if (!string.IsNullOrEmpty(str))
+                cell = str;
+            else if (!reader.IsDBNull(1))
                 cell = reader.GetDouble(1).ToString(CultureInfo.InvariantCulture);
             else if (!reader.IsDBNull(3))
                 cell = reader.GetInt32(3).ToString(CultureInfo.InvariantCulture);
-            else if (!reader.IsDBNull(2))
-                cell = reader.GetString(2);
+            else
+                cell = null;
 
             row[MetaHeaders.Length + column] = cell;
         }
