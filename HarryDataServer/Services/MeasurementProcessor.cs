@@ -118,38 +118,13 @@ public sealed class MeasurementProcessor : IMeasurementProcessor
         var isTrimmer = _isTrimmerByCamera.GetValueOrDefault(telegram.ControllerName);
         var measuredAt = DateTime.Now;
 
-        foreach (var sample in e.Measurements)
-        {
-            PendingMeasurement item;
-            if (sample.IsResult)
-            {
-                item = new PendingMeasurement
-                {
-                    CameraName = telegram.ControllerName,
-                    VariableName = sample.VariableName,
-                    Serial = serial,
-                    IsTrimmer = isTrimmer,
-                    ResultStatus = sample.ResultStatus,
-                    MeasuredAt = measuredAt,
-                };
-            }
-            else
-            {
-                // Value entry: keep the number, or fall back to the raw string when unparseable.
-                item = new PendingMeasurement
-                {
-                    CameraName = telegram.ControllerName,
-                    VariableName = sample.VariableName,
-                    Serial = serial,
-                    IsTrimmer = isTrimmer,
-                    Value = sample.Value,
-                    MeasurementString = sample.Value is null ? sample.RawField : null,
-                    MeasuredAt = measuredAt,
-                };
-            }
+        // Combine each R_/V_ pair into ONE row (keyed by the R_ definition): result
+        // and value live in the same row (CLAUDE.md section 4).
+        var rows = MeasurementRowBuilder.Build(
+            telegram.ControllerName, serial, isTrimmer, runType: 0, measuredAt, e.Measurements);
 
+        foreach (var item in rows)
             _queue.Enqueue(item);
-        }
     }
 
     // --- Flush side (dedicated background task; performs all DB I/O) ---

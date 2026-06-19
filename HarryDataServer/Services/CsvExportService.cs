@@ -41,6 +41,11 @@ public sealed class CsvExportService : ICsvService
     private readonly List<string> _measurementHeaders = new();
     private readonly Dictionary<int, int> _columnByDefinitionId = new();
 
+    // Measurements are stored combined under the R_ definition id; this maps that
+    // R_ definition id to the column index of its paired V_ definition, so the
+    // result goes in the R_ column and the value in the V_ column.
+    private readonly Dictionary<int, int> _valueColumnByResultDefinitionId = new();
+
     private CsvFileWriter? _csv;
     private string? _currentOrder;
     private CancellationTokenSource? _cts;
@@ -153,6 +158,9 @@ ORDER BY c.camera_name, md.telegram_place;";
 
         try
         {
+            // Collect columns and the data needed to pair R_/V_ definitions.
+            var columns = new List<(int Id, string Camera, string Variable, int Index)>();
+
             await using var conn = await _database.OpenConnectionAsync(ct).ConfigureAwait(false);
             await using var cmd = new MySqlCommand(sql, conn);
             await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
@@ -161,13 +169,18 @@ ORDER BY c.camera_name, md.telegram_place;";
                 var definitionId = reader.GetInt32(0);
                 var camera = reader.GetString(1);
                 var variable = reader.GetString(2);
-                _columnByDefinitionId[definitionId] = _measurementHeaders.Count;
+                var index = _measurementHeaders.Count;
+
+                _columnByDefinitionId[definitionId] = index;
                 _measurementControllers.Add(camera);  // header row 1
                 _measurementHeaders.Add(variable);     // header row 2
+                columns.Add((definitionId, camera, variable, index));
             }
 
-            _log.Information("CSV layout built: {Meta} meta + {Cols} measurement columns.",
-                MetaHeaders.Length, _measurementHeaders.Count);
+            BuildResultValuePairs(columns);
+
+            _log.Information("CSV layout built: {Meta} meta + {Cols} measurement columns ({Pairs} R_/V_ pairs).",
+                MetaHeaders.Length, _measurementHeaders.Count, _valueColumnByResultDefinitionId.Count);
             return true;
         }
         catch (Exception ex)
@@ -183,6 +196,31 @@ ORDER BY c.camera_name, md.telegram_place;";
     /// full column-name row (meta labels + parameter names) — usable on its own as a
     /// single header by tools that skip row 1.
     /// </summary>
+    /// <summary>
+    /// For each camera, pair the R_ definition with its V_ definition (same base
+    /// name) so combined rows route the result into the R_ column and the value
+    /// into the V_ column.
+    /// </summary>
+    private void BuildResultValuePairs(List<(int Id, string Camera, string Variable, int Index)> columns)
+    {
+        var groups = columns.GroupBy(c => (c.Camera, MeasurementRowBuilder.StripTypePrefix(c.Variable)));
+        foreach (var group in groups)
+        {
+            int? resultId = null;
+            int? valueColumn = null;
+            foreach (var c in group)
+            {
+                if (c.Variable.StartsWith("R_", StringComparison.Ordinal))
+                    resultId = c.Id;
+                else if (c.Variable.StartsWith("V_", StringComparison.Ordinal))
+                    valueColumn = c.Index;
+            }
+
+            if (resultId.HasValue && valueColumn.HasValue)
+                _valueColumnByResultDefinitionId[resultId.Value] = valueColumn.Value;
+        }
+    }
+
     private IReadOnlyList<IReadOnlyList<string>> FullHeaderRows()
     {
         var row1 = new List<string>(MetaHeaders.Length + _measurementControllers.Count);
@@ -281,21 +319,31 @@ ORDER BY c.camera_name, md.telegram_place;";
             if (!_columnByDefinitionId.TryGetValue(definitionId, out var column))
                 continue; // definition not in the current layout (retired)
 
-            // Priority: if a string value exists, use only it; otherwise the numeric
-            // measurement_value, otherwise the result_status (R_ and V_ are separate
-            // definitions/columns, so result and value are both exported per feature).
             var str = reader.IsDBNull(2) ? null : reader.GetString(2);
-            string? cell;
-            if (!string.IsNullOrEmpty(str))
-                cell = str;
-            else if (!reader.IsDBNull(1))
-                cell = reader.GetDouble(1).ToString(CultureInfo.InvariantCulture);
-            else if (!reader.IsDBNull(3))
-                cell = reader.GetInt32(3).ToString(CultureInfo.InvariantCulture);
-            else
-                cell = null;
+            var value = reader.IsDBNull(1) ? (double?)null : reader.GetDouble(1);
+            var result = reader.IsDBNull(3) ? (int?)null : reader.GetInt32(3);
 
-            row[MetaHeaders.Length + column] = cell;
+            // Combined row (keyed by the R_ definition): result_status → R_ column,
+            // measurement_value (or string) → the paired V_ column.
+            if (_valueColumnByResultDefinitionId.TryGetValue(definitionId, out var valueColumn))
+            {
+                if (result.HasValue)
+                    row[MetaHeaders.Length + column] = result.Value.ToString(CultureInfo.InvariantCulture);
+
+                var valueCell = !string.IsNullOrEmpty(str)
+                    ? str
+                    : value?.ToString(CultureInfo.InvariantCulture);
+                if (valueCell is not null)
+                    row[MetaHeaders.Length + valueColumn] = valueCell;
+            }
+            else
+            {
+                // Standalone definition (no R_/V_ pair): string > value > result.
+                row[MetaHeaders.Length + column] = !string.IsNullOrEmpty(str)
+                    ? str
+                    : value?.ToString(CultureInfo.InvariantCulture)
+                      ?? result?.ToString(CultureInfo.InvariantCulture);
+            }
         }
     }
 }
