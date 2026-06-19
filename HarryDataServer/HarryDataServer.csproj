@@ -25,8 +25,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- JSON camera template files shipped with the application. -->
-    <Content Include="Resources\*.json">
+    <!-- JSON camera template files shipped with the application, copied into a
+         Templates\ folder next to the executable (loader falls back to this path). -->
+    <Content Include="Resources\Templates\*.json" Link="Templates\%(Filename)%(Extension)">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <!-- Default Harry.ini template; deployed copy lives next to the executable. -->

@@ -20,16 +20,54 @@ public sealed class JsonTemplateLoader
         AllowTrailingCommas = true,
     };
 
+    /// <summary>Folder next to the executable that templates are deployed into.</summary>
+    private static readonly string LocalTemplateDir = Path.Combine(AppContext.BaseDirectory, "Templates");
+
     private readonly ILogService _log;
 
     public JsonTemplateLoader(ILogService log) => _log = log;
 
-    /// <summary>Load and parse a single Result_*.json file. Returns null if missing/invalid.</summary>
-    public ResultTemplateFile? LoadResultTemplate(string path)
+    /// <summary>
+    /// Resolve a template path: use the configured path if it exists, otherwise
+    /// fall back to a same-named file in the local <c>Templates\</c> folder (and
+    /// finally the executable directory). Returns null if nothing is found.
+    /// This lets absolute production paths work while keeping dev/test runs
+    /// functional when those paths are absent.
+    /// </summary>
+    private string? ResolveTemplatePath(string configuredPath)
     {
-        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        if (!string.IsNullOrWhiteSpace(configuredPath) && File.Exists(configuredPath))
+            return configuredPath;
+
+        if (string.IsNullOrWhiteSpace(configuredPath))
+            return null;
+
+        var fileName = Path.GetFileName(configuredPath);
+
+        var localTemplates = Path.Combine(LocalTemplateDir, fileName);
+        if (File.Exists(localTemplates))
         {
-            _log.Warning("Result template not found: {Path}", path);
+            _log.Debug("Template {File} not at configured path; using {Fallback}.", fileName, localTemplates);
+            return localTemplates;
+        }
+
+        var localBase = Path.Combine(AppContext.BaseDirectory, fileName);
+        if (File.Exists(localBase))
+        {
+            _log.Debug("Template {File} not at configured path; using {Fallback}.", fileName, localBase);
+            return localBase;
+        }
+
+        return null;
+    }
+
+    /// <summary>Load and parse a single Result_*.json file. Returns null if missing/invalid.</summary>
+    public ResultTemplateFile? LoadResultTemplate(string configuredPath)
+    {
+        var path = ResolveTemplatePath(configuredPath);
+        if (path is null)
+        {
+            _log.Warning("Result template not found (configured: {Path}).", configuredPath);
             return null;
         }
 
@@ -55,11 +93,12 @@ public sealed class JsonTemplateLoader
     }
 
     /// <summary>Load and parse a single Settings_*.json file. Returns null if missing/invalid.</summary>
-    public SettingsTemplateFile? LoadSettingsTemplate(string path)
+    public SettingsTemplateFile? LoadSettingsTemplate(string configuredPath)
     {
-        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        var path = ResolveTemplatePath(configuredPath);
+        if (path is null)
         {
-            _log.Warning("Settings template not found: {Path}", path);
+            _log.Warning("Settings template not found (configured: {Path}).", configuredPath);
             return null;
         }
 
