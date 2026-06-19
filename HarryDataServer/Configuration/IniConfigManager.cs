@@ -1,0 +1,217 @@
+using System.Globalization;
+using System.IO;
+using HarryDataServer.Models;
+using IniParser;
+using IniParser.Model;
+
+namespace HarryDataServer.Configuration;
+
+/// <summary>
+/// Reads Harry.ini from disk and maps it into a strongly-typed <see cref="AppConfig"/>.
+/// Camera sections ([Camera1], [Camera2], ...) are discovered dynamically — the
+/// number of cameras is never hardcoded. Missing keys fall back to the defaults
+/// defined on the model classes.
+/// </summary>
+public sealed class IniConfigManager
+{
+    private readonly FileIniDataParser _parser = new();
+
+    /// <summary>
+    /// Parse the INI file at <paramref name="iniPath"/>. Throws
+    /// <see cref="FileNotFoundException"/> if the file does not exist.
+    /// </summary>
+    public AppConfig Load(string iniPath)
+    {
+        if (!File.Exists(iniPath))
+            throw new FileNotFoundException($"Harry.ini not found at '{iniPath}'.", iniPath);
+
+        IniData data = _parser.ReadFile(iniPath);
+
+        return new AppConfig
+        {
+            General = ParseGeneral(data),
+            MySql = ParseMySql(data),
+            Csv = ParseCsv(data),
+            Nas = ParseNas(data),
+            Collage = ParseCollage(data),
+            Sps = ParseSps(data),
+            SqlSettings = ParseSqlSettings(data),
+            Cameras = ParseCameras(data),
+        };
+    }
+
+    private static GeneralConfig ParseGeneral(IniData data)
+    {
+        var s = data["General"];
+        return new GeneralConfig
+        {
+            LogFilePath = Str(s, "LogFilePath", @"D:\HarryDataServer\Logs\"),
+            LoggingActive = Bool(s, "LoggingActive", true),
+            Language = Str(s, "Language", "English"),
+        };
+    }
+
+    private static MySqlConfig ParseMySql(IniData data)
+    {
+        var s = data["MySQL"];
+        return new MySqlConfig
+        {
+            Server = Str(s, "Server", "localhost"),
+            Database = Str(s, "Database", "camera_data"),
+            User = Str(s, "User", "SettData"),
+            Password = Str(s, "Password", "1234Set"),
+            RetentionPeriodDays = Int(s, "RetentionPeriodDays", 35),
+        };
+    }
+
+    private static CsvConfig ParseCsv(IniData data)
+    {
+        var s = data["CSV"];
+        return new CsvConfig
+        {
+            BasePath = Str(s, "CSV_BasePath", string.Empty),
+            MsaPath = Str(s, "CSV_MSAPath", string.Empty),
+            DiagnosticPath = Str(s, "CSV_DiagnosticPath", string.Empty),
+            DataSetsPerFile = Int(s, "DataSetsPerFile", 10000),
+            Save = Bool(s, "CSV_Save", true),
+            MsaSave = Bool(s, "CSVMSA_Save", true),
+            DiagnosticSave = Bool(s, "CSVDiagnostic_Save", true),
+        };
+    }
+
+    private static NasConfig ParseNas(IniData data)
+    {
+        var s = data["NAS"];
+        return new NasConfig
+        {
+            BasePath = Str(s, "NAS_BasePath", string.Empty),
+            LowResIndividualPath = Str(s, "LowResIndividualPath", string.Empty),
+            CollagePath = Str(s, "CollagePath", string.Empty),
+            HighResNgPath = Str(s, "HighResNGPath", string.Empty),
+            HighResDiagnosticPath = Str(s, "HighResDiagnosticPath", string.Empty),
+            HighResGoldenSamplePath = Str(s, "HighResGoldenSamplePath", string.Empty),
+            RetentionNgDays = Int(s, "RetentionNGDays", 30),
+            RetentionDiagnosticDays = Int(s, "RetentionDiagnosticDays", 30),
+            RetentionGoldenSampleDays = Int(s, "RetentionGoldenSampleDays", 30),
+            DeleteAfterCollage = Bool(s, "DeleteAfterCollage", true),
+        };
+    }
+
+    private static CollageConfig ParseCollage(IniData data)
+    {
+        var s = data["Collage"];
+        return new CollageConfig
+        {
+            IniPath = Str(s, "Collage_IniPath", string.Empty),
+            Generate = Bool(s, "Collage_Generate", true),
+        };
+    }
+
+    private static SpsConfig ParseSps(IniData data)
+    {
+        var s = data["SPS"];
+        return new SpsConfig
+        {
+            Ip = Str(s, "IP", "172.29.1.5"),
+            PortKeepAlive = Int(s, "PortKeepAlive", 6000),
+            PortPartExit = Int(s, "PortPartExit", 6001),
+            PortMsaM10 = Int(s, "PortMSA_M10", 6002),
+            PortMsaM11 = Int(s, "PortMSA_M11", 6003),
+            PortMsaM20 = Int(s, "PortMSA_M20", 6004),
+            PortMsaM21 = Int(s, "PortMSA_M21", 6005),
+            PortMsaM50 = Int(s, "PortMSA_M50", 6006),
+            AutoConnect = Bool(s, "AutoConnect", true),
+        };
+    }
+
+    private static SqlSettingsConfig ParseSqlSettings(IniData data)
+    {
+        var s = data["SQLSettings"];
+        return new SqlSettingsConfig
+        {
+            BatchSize = Int(s, "BatchSize", 100),
+            SaveIntervalSeconds = Int(s, "SaveIntervalSeconds", 1),
+        };
+    }
+
+    /// <summary>
+    /// Discover all [CameraN] sections dynamically and build a <see cref="CameraConfig"/>
+    /// for each, ordered by index. Sections without an IP are skipped.
+    /// </summary>
+    private static IReadOnlyList<CameraConfig> ParseCameras(IniData data)
+    {
+        var cameras = new List<CameraConfig>();
+
+        foreach (SectionData section in data.Sections)
+        {
+            if (!section.SectionName.StartsWith("Camera", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var indexText = section.SectionName.Substring("Camera".Length);
+            if (!int.TryParse(indexText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var index))
+                continue; // Not a "CameraN" section (e.g. a [Camera] heading).
+
+            var keys = section.Keys;
+            var cameraName = Str(keys, "CameraName", string.Empty);
+            var ip = Str(keys, "IP", string.Empty);
+
+            if (string.IsNullOrWhiteSpace(ip))
+                continue;
+
+            cameras.Add(new CameraConfig
+            {
+                Index = index,
+                CameraName = cameraName,
+                Module = DeriveModule(cameraName),
+                Ip = ip,
+                Port = Int(keys, "Port", 8500),
+                JsonParameters = Str(keys, "JsonParameters", string.Empty),
+                JsonSettings = Str(keys, "JsonSettings", string.Empty),
+                AutoConnect = Bool(keys, "AutoConnect", true),
+            });
+        }
+
+        cameras.Sort((a, b) => a.Index.CompareTo(b.Index));
+        return cameras;
+    }
+
+    /// <summary>Extract the module prefix (e.g. "M50") from a camera name "M50_ST110_KF1".</summary>
+    private static string DeriveModule(string cameraName)
+    {
+        if (string.IsNullOrWhiteSpace(cameraName))
+            return string.Empty;
+
+        var underscore = cameraName.IndexOf('_');
+        return underscore > 0 ? cameraName.Substring(0, underscore) : cameraName;
+    }
+
+    private static string Str(KeyDataCollection? keys, string key, string fallback)
+    {
+        if (keys is null || !keys.ContainsKey(key))
+            return fallback;
+        var value = keys[key];
+        return string.IsNullOrEmpty(value) ? fallback : value.Trim();
+    }
+
+    private static int Int(KeyDataCollection? keys, string key, int fallback)
+    {
+        var raw = Str(keys, key, string.Empty);
+        return int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
+            ? value
+            : fallback;
+    }
+
+    private static bool Bool(KeyDataCollection? keys, string key, bool fallback)
+    {
+        var raw = Str(keys, key, string.Empty);
+        if (string.IsNullOrEmpty(raw))
+            return fallback;
+
+        return raw.Trim().ToLowerInvariant() switch
+        {
+            "true" or "1" or "yes" or "on" => true,
+            "false" or "0" or "no" or "off" => false,
+            _ => fallback,
+        };
+    }
+}

@@ -1,0 +1,36 @@
+<Window x:Class="HarryDataServer.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="HarryDataServer V2" Height="720" Width="1280"
+        WindowStartupLocation="CenterScreen">
+    <DockPanel>
+        <StatusBar DockPanel.Dock="Bottom">
+            <StatusBarItem>
+                <TextBlock x:Name="StatusText" Text="Ready" />
+            </StatusBarItem>
+        </StatusBar>
+
+        <TabControl Margin="4">
+            <TabItem Header="Cameras">
+                <TextBlock Text="Camera clients — implemented in a later phase."
+                           Margin="12" Foreground="Gray" />
+            </TabItem>
+            <TabItem Header="SPS">
+                <TextBlock Text="SPS server (7 channels) — implemented in a later phase."
+                           Margin="12" Foreground="Gray" />
+            </TabItem>
+            <TabItem Header="Database">
+                <TextBlock Text="Database status — implemented in a later phase."
+                           Margin="12" Foreground="Gray" />
+            </TabItem>
+            <TabItem Header="CSV">
+                <TextBlock Text="CSV export status — implemented in a later phase."
+                           Margin="12" Foreground="Gray" />
+            </TabItem>
+            <TabItem Header="MSA">
+                <TextBlock Text="MSA evaluation — implemented in a later phase."
+                           Margin="12" Foreground="Gray" />
+            </TabItem>
+        </TabControl>
+    </DockPanel>
+</Window>

@@ -1,0 +1,105 @@
+using System.IO;
+using System.Windows;
+using HarryDataServer.Services;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace HarryDataServer;
+
+/// <summary>
+/// Application entry point. Builds the dependency-injection container, wires up
+/// the core services (configuration + logging for Phase 1) and shows the main
+/// window. Additional services are registered here as later phases are added.
+/// </summary>
+public partial class App : Application
+{
+    private ServiceProvider? _services;
+    private ILogService? _log;
+
+    /// <summary>Resolved service provider, available to controls/windows after startup.</summary>
+    public IServiceProvider Services =>
+        _services ?? throw new InvalidOperationException("Service provider is not initialized yet.");
+
+    protected override void OnStartup(StartupEventArgs e)
+    {
+        base.OnStartup(e);
+
+        try
+        {
+            _services = BuildServiceProvider();
+            _log = _services.GetRequiredService<ILogService>();
+
+            var config = _services.GetRequiredService<IConfigService>();
+            _log.Information("HarryDataServer starting. Config={IniPath} Cameras={Count}",
+                config.IniPath, config.Config.Cameras.Count);
+
+            var window = _services.GetRequiredService<MainWindow>();
+            window.Show();
+        }
+        catch (Exception ex)
+        {
+            // Surface fatal startup failures (e.g. missing Harry.ini) to the operator.
+            _log?.Error(ex, "Fatal error during startup.");
+            MessageBox.Show(
+                $"HarryDataServer failed to start:\n\n{ex.Message}",
+                "Startup Error",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            Shutdown(-1);
+        }
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        _log?.Information("HarryDataServer shutting down.");
+        _log?.Shutdown();
+        _services?.Dispose();
+        base.OnExit(e);
+    }
+
+    /// <summary>
+    /// Compose the DI container. All long-lived services are singletons, matching
+    /// the architecture defined in CLAUDE.md section 14.
+    /// </summary>
+    private static ServiceProvider BuildServiceProvider()
+    {
+        var services = new ServiceCollection();
+
+        // --- Configuration (loaded once from Harry.ini) ---
+        var iniPath = ResolveIniPath();
+        services.AddSingleton<IConfigService>(_ => new IniConfigService(iniPath));
+
+        // --- Logging (Serilog), configured from [General] section ---
+        services.AddSingleton<ILogService>(sp =>
+        {
+            var general = sp.GetRequiredService<IConfigService>().Config.General;
+            return new SerilogService(general.LogFilePath, general.LoggingActive);
+        });
+
+        // --- Windows ---
+        services.AddSingleton<MainWindow>();
+
+        return services.BuildServiceProvider();
+    }
+
+    /// <summary>
+    /// Locate Harry.ini: prefer a file next to the executable, then the default
+    /// deployment path, otherwise fall back to the bundled template.
+    /// </summary>
+    private static string ResolveIniPath()
+    {
+        var candidates = new[]
+        {
+            Path.Combine(AppContext.BaseDirectory, "Harry.ini"),
+            @"D:\HarryDataServer\Harry.ini",
+        };
+
+        foreach (var candidate in candidates)
+        {
+            if (File.Exists(candidate))
+                return candidate;
+        }
+
+        // Return the executable-local path so the error message points there.
+        return candidates[0];
+    }
+}
