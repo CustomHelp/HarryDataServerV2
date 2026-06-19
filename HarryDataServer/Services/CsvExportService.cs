@@ -35,7 +35,9 @@ public sealed class CsvExportService : ICsvService
 
     private readonly ConcurrentQueue<SpsPartExitData> _queue = new();
 
-    // Dynamic column layout (built once when the DB is ready).
+    // Dynamic column layout (built once when the DB is ready). Two header rows:
+    // controller name (row 1) above the parameter/variable name (row 2).
+    private readonly List<string> _measurementControllers = new();
     private readonly List<string> _measurementHeaders = new();
     private readonly Dictionary<int, int> _columnByDefinitionId = new();
 
@@ -160,7 +162,8 @@ ORDER BY c.camera_name, md.telegram_place;";
                 var camera = reader.GetString(1);
                 var variable = reader.GetString(2);
                 _columnByDefinitionId[definitionId] = _measurementHeaders.Count;
-                _measurementHeaders.Add($"{camera}.{variable}");
+                _measurementControllers.Add(camera);  // header row 1
+                _measurementHeaders.Add(variable);     // header row 2
             }
 
             _log.Information("CSV layout built: {Meta} meta + {Cols} measurement columns.",
@@ -174,12 +177,23 @@ ORDER BY c.camera_name, md.telegram_place;";
         }
     }
 
-    private IReadOnlyList<string> FullHeader()
+    /// <summary>
+    /// Build the two header rows. Row 1 is the controller grouping band: blank over
+    /// the meta columns, controller name over each measurement column. Row 2 is the
+    /// full column-name row (meta labels + parameter names) — usable on its own as a
+    /// single header by tools that skip row 1.
+    /// </summary>
+    private IReadOnlyList<IReadOnlyList<string>> FullHeaderRows()
     {
-        var header = new List<string>(MetaHeaders.Length + _measurementHeaders.Count);
-        header.AddRange(MetaHeaders);
-        header.AddRange(_measurementHeaders);
-        return header;
+        var row1 = new List<string>(MetaHeaders.Length + _measurementControllers.Count);
+        row1.AddRange(Enumerable.Repeat(string.Empty, MetaHeaders.Length)); // meta: blank in the controller band
+        row1.AddRange(_measurementControllers);
+
+        var row2 = new List<string>(MetaHeaders.Length + _measurementHeaders.Count);
+        row2.AddRange(MetaHeaders);          // meta labels live in the lower (primary) header row
+        row2.AddRange(_measurementHeaders);
+
+        return new IReadOnlyList<string>[] { row1, row2 };
     }
 
     private async Task FlushAsync(CancellationToken ct)
@@ -207,7 +221,7 @@ ORDER BY c.camera_name, md.telegram_place;";
             if (!string.Equals(part.OrderName, _currentOrder, StringComparison.Ordinal))
             {
                 _csv.Rotate();
-                _csv.Configure(FullHeader(), string.IsNullOrWhiteSpace(part.OrderName) ? "NoOrder" : part.OrderName);
+                _csv.Configure(FullHeaderRows(), string.IsNullOrWhiteSpace(part.OrderName) ? "NoOrder" : part.OrderName);
                 _currentOrder = part.OrderName;
             }
 

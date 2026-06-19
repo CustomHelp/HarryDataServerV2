@@ -18,7 +18,7 @@ public sealed class CsvFileWriter : IDisposable
     private readonly ILogService _log;
     private readonly string _delimiter;
 
-    private IReadOnlyList<string> _header = Array.Empty<string>();
+    private IReadOnlyList<IReadOnlyList<string>> _headerRows = Array.Empty<IReadOnlyList<string>>();
     private string _fileLabel = "data";
     private StreamWriter? _writer;
     private string? _currentPath;
@@ -37,10 +37,17 @@ public sealed class CsvFileWriter : IDisposable
     public int RowsInCurrentFile => _rowsInFile;
     public string? CurrentPath => _currentPath;
 
-    /// <summary>Set the header and file label used for the next file that is opened.</summary>
-    public void Configure(IReadOnlyList<string> header, string fileLabel)
+    /// <summary>Set a single header row and the file label used for the next file.</summary>
+    public void Configure(IReadOnlyList<string> header, string fileLabel) =>
+        Configure(new[] { header }, fileLabel);
+
+    /// <summary>
+    /// Set one or more header rows (e.g. a controller row above a parameter row)
+    /// and the file label used for the next file that is opened.
+    /// </summary>
+    public void Configure(IReadOnlyList<IReadOnlyList<string>> headerRows, string fileLabel)
     {
-        _header = header;
+        _headerRows = headerRows;
         _fileLabel = SanitizeLabel(fileLabel);
     }
 
@@ -91,8 +98,11 @@ public sealed class CsvFileWriter : IDisposable
         _currentPath = path;
         _rowsInFile = 0;
 
-        if (_header.Count > 0)
-            _writer.WriteLine(string.Join(_delimiter, _header.Select(Escape)));
+        foreach (var headerRow in _headerRows)
+        {
+            if (headerRow.Count > 0)
+                _writer.WriteLine(string.Join(_delimiter, headerRow.Select(Escape)));
+        }
 
         _log.Information("CSV file opened: {Path}", path);
     }
