@@ -229,16 +229,16 @@ public sealed class TcpCameraClient
     {
         try
         {
-            // Keyence command replies (version response "MR..." / error "ER...") are
-            // keepalive traffic — reset the watchdog and skip the measurement pipeline.
-            // Measurement telegrams start with the controller name (e.g. "M50_..."),
-            // so they never collide with these prefixes.
+            // Keyence command replies are keepalive traffic — reset the watchdog and
+            // skip the measurement pipeline. The version reply is just the variable
+            // value, e.g. "MR,1.1" (read OK), and errors come back as "ER,...".
+            // Measurement telegrams start with the controller name (e.g. "M50_...",
+            // i.e. 'M' + a digit), so they never collide with the "MR"/"ER" prefixes.
             if (text.StartsWith(VersionReplyPrefix, StringComparison.Ordinal) ||
                 text.StartsWith(ErrorReplyPrefix, StringComparison.Ordinal))
             {
                 MarkDataReceived();
-                _log.Debug("{Camera}: keepalive reply received ({Prefix}).",
-                    CameraName, text.Length >= 2 ? text[..2] : text);
+                _log.Debug("{Camera}: keepalive reply received: {Reply}.", CameraName, text);
                 return;
             }
 
