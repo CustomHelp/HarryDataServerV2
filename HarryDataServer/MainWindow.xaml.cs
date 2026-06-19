@@ -15,13 +15,15 @@ public partial class MainWindow : Window
     private readonly IDatabaseService _database;
     private readonly ICameraService _cameras;
     private readonly IMeasurementProcessor _measurements;
+    private readonly ISpsServer _sps;
 
     public MainWindow(
         IConfigService config,
         ILogService log,
         IDatabaseService database,
         ICameraService cameras,
-        IMeasurementProcessor measurements)
+        IMeasurementProcessor measurements,
+        ISpsServer sps)
     {
         InitializeComponent();
         _config = config;
@@ -29,10 +31,12 @@ public partial class MainWindow : Window
         _database = database;
         _cameras = cameras;
         _measurements = measurements;
+        _sps = sps;
 
         _database.StatusChanged += OnDatabaseStatusChanged;
         _cameras.StatusChanged += OnCameraStatusChanged;
         _measurements.StatsChanged += OnMeasurementStatsChanged;
+        _sps.StatusChanged += OnSpsStatusChanged;
 
         Loaded += OnLoaded;
         Closed += (_, _) =>
@@ -40,6 +44,7 @@ public partial class MainWindow : Window
             _database.StatusChanged -= OnDatabaseStatusChanged;
             _cameras.StatusChanged -= OnCameraStatusChanged;
             _measurements.StatsChanged -= OnMeasurementStatsChanged;
+            _sps.StatusChanged -= OnSpsStatusChanged;
         };
     }
 
@@ -48,6 +53,7 @@ public partial class MainWindow : Window
         UpdateStatus(_database.Status);
         UpdateCameraStatus();
         UpdateMeasurementStatus();
+        UpdateSpsStatus();
         _log.Information("Main window loaded.");
     }
 
@@ -59,6 +65,9 @@ public partial class MainWindow : Window
 
     private void OnMeasurementStatsChanged() =>
         Dispatcher.Invoke(UpdateMeasurementStatus);
+
+    private void OnSpsStatusChanged() =>
+        Dispatcher.Invoke(UpdateSpsStatus);
 
     private void UpdateStatus(DatabaseStatus dbStatus)
     {
@@ -74,4 +83,9 @@ public partial class MainWindow : Window
     private void UpdateMeasurementStatus() =>
         MeasurementStatusText.Text =
             $"Measurements written: {_measurements.TotalInserted:N0} (queue {_measurements.PendingCount:N0})";
+
+    private void UpdateSpsStatus() =>
+        SpsStatusText.Text = _sps.IsRunning
+            ? $"SPS: {_sps.ListeningChannels}/7 ch, {_sps.ActiveConnections} conn"
+            : "SPS: stopped";
 }

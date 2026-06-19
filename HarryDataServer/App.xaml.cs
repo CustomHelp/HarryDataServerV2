@@ -51,6 +51,10 @@ public partial class App : Application
             // Start the measurement pipeline (waits internally for the database to be ready).
             var measurements = _services.GetRequiredService<IMeasurementProcessor>();
             _ = Task.Run(() => measurements.StartAsync(_shutdownCts.Token));
+
+            // Start the SPS server (7 channels) — independent of cameras/database.
+            var sps = _services.GetRequiredService<ISpsServer>();
+            _ = Task.Run(() => sps.StartAsync(_shutdownCts.Token));
         }
         catch (Exception ex)
         {
@@ -122,6 +126,9 @@ public partial class App : Application
         // --- Measurement pipeline (Phase 4): definition cache + queue processor ---
         services.AddSingleton<MeasurementDefinitionCache>();
         services.AddSingleton<IMeasurementProcessor, MeasurementProcessor>();
+
+        // --- SPS server (Phase 5): 7-channel PLC TCP server ---
+        services.AddSingleton<ISpsServer, TcpSpsServer>();
 
         // --- Windows ---
         services.AddSingleton<MainWindow>();

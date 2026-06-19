@@ -16,6 +16,10 @@
             <StatusBarItem>
                 <TextBlock x:Name="MeasurementStatusText" Text="Measurements: 0" />
             </StatusBarItem>
+            <Separator />
+            <StatusBarItem>
+                <TextBlock x:Name="SpsStatusText" Text="SPS: stopped" />
+            </StatusBarItem>
         </StatusBar>
 
         <TabControl Margin="4">
