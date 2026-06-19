@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows;
+using HarryDataServer.Communication;
 using HarryDataServer.Configuration;
 using HarryDataServer.Infrastructure;
 using HarryDataServer.Services;
@@ -42,6 +43,10 @@ public partial class App : Application
             // stays responsive while MySQL connects / schema is provisioned.
             var database = _services.GetRequiredService<IDatabaseService>();
             _ = Task.Run(() => database.StartAsync(_shutdownCts.Token));
+
+            // Start the camera clients in parallel (independent of the database).
+            var cameras = _services.GetRequiredService<ICameraService>();
+            _ = Task.Run(() => cameras.StartAsync(_shutdownCts.Token));
         }
         catch (Exception ex)
         {
@@ -94,6 +99,10 @@ public partial class App : Application
         });
         services.AddSingleton<PartitionManager>();
         services.AddSingleton<IDatabaseService, MySqlDatabaseService>();
+
+        // --- Cameras (Phase 3): telegram parser + per-camera TCP clients ---
+        services.AddSingleton<TelegramParser>();
+        services.AddSingleton<ICameraService, CameraConnectionService>();
 
         // --- Windows ---
         services.AddSingleton<MainWindow>();

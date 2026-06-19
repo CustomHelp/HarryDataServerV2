@@ -8,6 +8,10 @@
             <StatusBarItem>
                 <TextBlock x:Name="StatusText" Text="Ready" />
             </StatusBarItem>
+            <Separator />
+            <StatusBarItem>
+                <TextBlock x:Name="CameraStatusText" Text="Cameras: 0/0" />
+            </StatusBarItem>
         </StatusBar>
 
         <TabControl Margin="4">
