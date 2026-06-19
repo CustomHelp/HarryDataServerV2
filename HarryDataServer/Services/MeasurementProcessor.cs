@@ -1,0 +1,299 @@
+using System.Collections.Concurrent;
+using System.Text;
+using HarryDataServer.Communication;
+using HarryDataServer.Models;
+using MySqlConnector;
+
+namespace HarryDataServer.Services;
+
+/// <summary>
+/// Background measurement pipeline. Subscribes to every camera's
+/// <see cref="TcpCameraClient.ResultsReceived"/> event, enqueues the samples
+/// (no I/O on the receive thread) and batches them into <c>measurements_serial</c>
+/// or <c>measurements_serial_trimmer</c> on a single dedicated connection.
+/// Only Normal-mode telegrams are persisted here; MSA runs go to the MSA pipeline.
+/// </summary>
+public sealed class MeasurementProcessor : IMeasurementProcessor
+{
+    private const int MaxQueue = 500_000;       // back-pressure guard if the DB is down
+    private const int MaxItemsPerFlush = 10_000; // bound the work of a single flush cycle
+
+    private readonly ICameraService _cameras;
+    private readonly IDatabaseService _database;
+    private readonly MeasurementDefinitionCache _cache;
+    private readonly ILogService _log;
+
+    private readonly ConcurrentQueue<PendingMeasurement> _queue = new();
+    private readonly Dictionary<string, bool> _isTrimmerByCamera;
+    private readonly int _batchSize;
+    private readonly TimeSpan _flushInterval;
+
+    private readonly HashSet<string> _warnedUnknown = new();
+
+    private CancellationTokenSource? _cts;
+    private Task? _flushTask;
+    private long _totalInserted;
+    private bool _started;
+
+    public MeasurementProcessor(
+        ICameraService cameras,
+        IDatabaseService database,
+        MeasurementDefinitionCache cache,
+        IConfigService config,
+        ILogService log)
+    {
+        _cameras = cameras;
+        _database = database;
+        _cache = cache;
+        _log = log;
+
+        _batchSize = Math.Max(1, config.Config.SqlSettings.BatchSize);
+        _flushInterval = TimeSpan.FromSeconds(Math.Max(1, config.Config.SqlSettings.SaveIntervalSeconds));
+
+        // M20/M21 measurements belong to the trimmer table (CLAUDE.md section 8).
+        _isTrimmerByCamera = config.Config.Cameras.ToDictionary(
+            c => c.CameraName,
+            c => c.Module is "M20" or "M21",
+            StringComparer.OrdinalIgnoreCase);
+    }
+
+    public int PendingCount => _queue.Count;
+    public long TotalInserted => Interlocked.Read(ref _totalInserted);
+
+    public event Action? StatsChanged;
+
+    public Task StartAsync(CancellationToken ct)
+    {
+        if (_started)
+            return Task.CompletedTask;
+        _started = true;
+
+        foreach (var client in _cameras.Clients)
+            client.ResultsReceived += OnResultsReceived;
+
+        _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        _flushTask = Task.Run(() => RunAsync(_cts.Token), CancellationToken.None);
+        _log.Information("Measurement processor started (batch={Batch}, interval={Interval}s).",
+            _batchSize, _flushInterval.TotalSeconds);
+        return Task.CompletedTask;
+    }
+
+    public async Task StopAsync()
+    {
+        foreach (var client in _cameras.Clients)
+            client.ResultsReceived -= OnResultsReceived;
+
+        _cts?.Cancel();
+        if (_flushTask is not null)
+        {
+            try { await _flushTask.ConfigureAwait(false); }
+            catch (OperationCanceledException) { /* expected */ }
+        }
+    }
+
+    // --- Receive side (runs on the camera thread; in-memory only) ---
+
+    private void OnResultsReceived(object? sender, ResultsTelegramEventArgs e)
+    {
+        var telegram = e.Telegram;
+
+        // MSA / LimitSample runs are persisted by the MSA pipeline (Phase 10), not here.
+        if (telegram.Mode != CameraOperatingMode.Normal)
+            return;
+
+        var serial = telegram.Serial1;
+        if (string.IsNullOrWhiteSpace(serial))
+        {
+            _log.Debug("{Camera}: results telegram without serial; skipped.", telegram.ControllerName);
+            return;
+        }
+
+        if (_queue.Count >= MaxQueue)
+        {
+            _log.Warning("Measurement queue full ({Max}); dropping samples from {Camera}.",
+                MaxQueue, telegram.ControllerName);
+            return;
+        }
+
+        var isTrimmer = _isTrimmerByCamera.GetValueOrDefault(telegram.ControllerName);
+        var measuredAt = DateTime.Now;
+
+        foreach (var sample in e.Measurements)
+        {
+            PendingMeasurement item;
+            if (sample.IsResult)
+            {
+                item = new PendingMeasurement
+                {
+                    CameraName = telegram.ControllerName,
+                    VariableName = sample.VariableName,
+                    Serial = serial,
+                    IsTrimmer = isTrimmer,
+                    ResultStatus = sample.ResultStatus,
+                    MeasuredAt = measuredAt,
+                };
+            }
+            else
+            {
+                // Value entry: keep the number, or fall back to the raw string when unparseable.
+                item = new PendingMeasurement
+                {
+                    CameraName = telegram.ControllerName,
+                    VariableName = sample.VariableName,
+                    Serial = serial,
+                    IsTrimmer = isTrimmer,
+                    Value = sample.Value,
+                    MeasurementString = sample.Value is null ? sample.RawField : null,
+                    MeasuredAt = measuredAt,
+                };
+            }
+
+            _queue.Enqueue(item);
+        }
+    }
+
+    // --- Flush side (dedicated background task; performs all DB I/O) ---
+
+    private async Task RunAsync(CancellationToken ct)
+    {
+        if (!await PrepareCacheAsync(ct).ConfigureAwait(false))
+            return;
+
+        while (!ct.IsCancellationRequested)
+        {
+            try { await Task.Delay(_flushInterval, ct).ConfigureAwait(false); }
+            catch (OperationCanceledException) { break; }
+
+            try { await FlushAsync(ct).ConfigureAwait(false); }
+            catch (Exception ex) { _log.Error(ex, "Measurement flush failed."); }
+        }
+
+        // Final drain on shutdown (best effort).
+        try { await FlushAsync(CancellationToken.None).ConfigureAwait(false); }
+        catch (Exception ex) { _log.Error(ex, "Final measurement flush failed."); }
+    }
+
+    /// <summary>Wait until the database is ready, then load the definition cache.</summary>
+    private async Task<bool> PrepareCacheAsync(CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested && _database.Status != DatabaseStatus.Ready)
+        {
+            try { await Task.Delay(TimeSpan.FromMilliseconds(500), ct).ConfigureAwait(false); }
+            catch (OperationCanceledException) { return false; }
+        }
+
+        if (ct.IsCancellationRequested)
+            return false;
+
+        try
+        {
+            await using var conn = await _database.OpenConnectionAsync(ct).ConfigureAwait(false);
+            await _cache.LoadAsync(conn, ct).ConfigureAwait(false);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _log.Error(ex, "Failed to load measurement definition cache; processor stopping.");
+            return false;
+        }
+    }
+
+    private async Task FlushAsync(CancellationToken ct)
+    {
+        if (_queue.IsEmpty)
+            return;
+
+        // Drain a bounded slice, split by destination table.
+        var serialRows = new List<PendingMeasurement>();
+        var trimmerRows = new List<PendingMeasurement>();
+        var drained = 0;
+
+        while (drained < MaxItemsPerFlush && _queue.TryDequeue(out var item))
+        {
+            (item.IsTrimmer ? trimmerRows : serialRows).Add(item);
+            drained++;
+        }
+
+        if (drained == 0)
+            return;
+
+        await using var conn = await _database.OpenConnectionAsync(ct).ConfigureAwait(false);
+
+        var inserted = 0;
+        inserted += await InsertRowsAsync(conn, "measurements_serial", "serial_number", serialRows, ct).ConfigureAwait(false);
+        inserted += await InsertRowsAsync(conn, "measurements_serial_trimmer", "serial_trimmer", trimmerRows, ct).ConfigureAwait(false);
+
+        if (inserted > 0)
+        {
+            Interlocked.Add(ref _totalInserted, inserted);
+            _log.Debug("Flushed {Inserted} measurement(s); {Pending} pending.", inserted, _queue.Count);
+            StatsChanged?.Invoke();
+        }
+    }
+
+    private async Task<int> InsertRowsAsync(
+        MySqlConnection conn, string table, string serialColumn, List<PendingMeasurement> rows, CancellationToken ct)
+    {
+        if (rows.Count == 0)
+            return 0;
+
+        var inserted = 0;
+        for (var offset = 0; offset < rows.Count; offset += _batchSize)
+        {
+            var chunk = rows.GetRange(offset, Math.Min(_batchSize, rows.Count - offset));
+            inserted += await InsertChunkAsync(conn, table, serialColumn, chunk, ct).ConfigureAwait(false);
+        }
+        return inserted;
+    }
+
+    private async Task<int> InsertChunkAsync(
+        MySqlConnection conn, string table, string serialColumn, List<PendingMeasurement> chunk, CancellationToken ct)
+    {
+        var sql = new StringBuilder(
+            $"INSERT INTO `{table}` (`{serialColumn}`, definition_id, measurement_value, measurement_string, result_status, run_type, measured_at) VALUES ");
+
+        await using var cmd = new MySqlCommand { Connection = conn };
+
+        var rowIndex = 0;
+        for (var i = 0; i < chunk.Count; i++)
+        {
+            var row = chunk[i];
+            if (!_cache.TryGet(row.CameraName, row.VariableName, out var definitionId))
+            {
+                WarnUnknown(row);
+                continue;
+            }
+
+            if (rowIndex > 0)
+                sql.Append(',');
+            sql.Append($"(@s{rowIndex},@d{rowIndex},@v{rowIndex},@ms{rowIndex},@r{rowIndex},@rt{rowIndex},@m{rowIndex})");
+
+            cmd.Parameters.AddWithValue($"@s{rowIndex}", row.Serial);
+            cmd.Parameters.AddWithValue($"@d{rowIndex}", definitionId);
+            cmd.Parameters.AddWithValue($"@v{rowIndex}", (object?)row.Value ?? DBNull.Value);
+            cmd.Parameters.AddWithValue($"@ms{rowIndex}", (object?)row.MeasurementString ?? DBNull.Value);
+            cmd.Parameters.AddWithValue($"@r{rowIndex}", (object?)row.ResultStatus ?? DBNull.Value);
+            cmd.Parameters.AddWithValue($"@rt{rowIndex}", row.RunType);
+            cmd.Parameters.AddWithValue($"@m{rowIndex}", row.MeasuredAt);
+            rowIndex++;
+        }
+
+        if (rowIndex == 0)
+            return 0; // nothing resolved in this chunk
+
+        cmd.CommandText = sql.ToString();
+        await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        return rowIndex;
+    }
+
+    private void WarnUnknown(PendingMeasurement row)
+    {
+        var key = $"{row.CameraName}/{row.VariableName}";
+        lock (_warnedUnknown)
+        {
+            if (!_warnedUnknown.Add(key))
+                return;
+        }
+        _log.Warning("No active definition for {Key}; measurement dropped (logged once).", key);
+    }
+}

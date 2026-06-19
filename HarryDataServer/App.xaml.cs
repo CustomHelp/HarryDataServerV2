@@ -47,6 +47,10 @@ public partial class App : Application
             // Start the camera clients in parallel (independent of the database).
             var cameras = _services.GetRequiredService<ICameraService>();
             _ = Task.Run(() => cameras.StartAsync(_shutdownCts.Token));
+
+            // Start the measurement pipeline (waits internally for the database to be ready).
+            var measurements = _services.GetRequiredService<IMeasurementProcessor>();
+            _ = Task.Run(() => measurements.StartAsync(_shutdownCts.Token));
         }
         catch (Exception ex)
         {
@@ -65,6 +69,17 @@ public partial class App : Application
     {
         _log?.Information("HarryDataServer shutting down.");
         _shutdownCts.Cancel();
+
+        // Best-effort final flush of any queued measurements before the process exits.
+        try
+        {
+            _services?.GetService<IMeasurementProcessor>()?.StopAsync().Wait(TimeSpan.FromSeconds(5));
+        }
+        catch (Exception ex)
+        {
+            _log?.Error(ex, "Error during measurement processor shutdown.");
+        }
+
         _log?.Shutdown();
         _services?.Dispose();
         _shutdownCts.Dispose();
@@ -103,6 +118,10 @@ public partial class App : Application
         // --- Cameras (Phase 3): telegram parser + per-camera TCP clients ---
         services.AddSingleton<TelegramParser>();
         services.AddSingleton<ICameraService, CameraConnectionService>();
+
+        // --- Measurement pipeline (Phase 4): definition cache + queue processor ---
+        services.AddSingleton<MeasurementDefinitionCache>();
+        services.AddSingleton<IMeasurementProcessor, MeasurementProcessor>();
 
         // --- Windows ---
         services.AddSingleton<MainWindow>();
