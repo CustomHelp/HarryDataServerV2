@@ -1,0 +1,2166 @@
+{
+  "camera": "M50_ST110_KF3",
+  "signal_word": "Results",
+  "measurements": [
+    {
+      "telegram_place": 71,
+      "variable_name": "R_Anode_Flatness_L",
+      "display_name": "Anode_Flatness_L",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 1,
+      "module_ref": "NoRef",
+      "feature_group": "Anode Measured"
+    },
+    {
+      "telegram_place": 72,
+      "variable_name": "V_Anode_Flatness_L",
+      "display_name": "Anode_Flatness_L",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 1,
+      "module_ref": "NoRef",
+      "feature_group": "Anode Measured"
+    },
+    {
+      "telegram_place": 73,
+      "variable_name": "R_Anode_Flatness_R",
+      "display_name": "Anode_Flatness_R",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 1,
+      "module_ref": "NoRef",
+      "feature_group": "Anode Measured"
+    },
+    {
+      "telegram_place": 74,
+      "variable_name": "V_Anode_Flatness_R",
+      "display_name": "Anode_Flatness_R",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 1,
+      "module_ref": "NoRef",
+      "feature_group": "Anode Measured"
+    },
+    {
+      "telegram_place": 75,
+      "variable_name": "R_Blade_Count",
+      "display_name": "Blade_Count",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 7,
+      "module_ref": "M3x",
+      "feature_group": "Blades Issues"
+    },
+    {
+      "telegram_place": 76,
+      "variable_name": "V_Blade_Count",
+      "display_name": "Blade_Count",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 7,
+      "module_ref": "M3x",
+      "feature_group": "Blades Issues"
+    },
+    {
+      "telegram_place": 77,
+      "variable_name": "R_Fin_Profile_Top",
+      "display_name": "Fin_Profile_Top",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 23,
+      "module_ref": "NoRef",
+      "feature_group": "Frame Cosmetic"
+    },
+    {
+      "telegram_place": 78,
+      "variable_name": "V_Fin_Profile_Top",
+      "display_name": "Fin_Profile_Top",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 23,
+      "module_ref": "NoRef",
+      "feature_group": "Frame Cosmetic"
+    },
+    {
+      "telegram_place": 79,
+      "variable_name": "R_Fin_Profile_Bottom",
+      "display_name": "Fin_Profile_Bottom",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 24,
+      "module_ref": "NoRef",
+      "feature_group": "Frame Cosmetic"
+    },
+    {
+      "telegram_place": 80,
+      "variable_name": "V_Fin_Profile_Bottom",
+      "display_name": "Fin_Profile_Bottom",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 24,
+      "module_ref": "NoRef",
+      "feature_group": "Frame Cosmetic"
+    },
+    {
+      "telegram_place": 81,
+      "variable_name": "R_Fin_Blob_X",
+      "display_name": "Fin_Blob_X",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 25,
+      "module_ref": "NoRef",
+      "feature_group": "Frame Cosmetic"
+    },
+    {
+      "telegram_place": 82,
+      "variable_name": "V_Fin_Blob_X",
+      "display_name": "Fin_Blob_X",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 25,
+      "module_ref": "NoRef",
+      "feature_group": "Frame Cosmetic"
+    },
+    {
+      "telegram_place": 83,
+      "variable_name": "R_Fin_Blob_Area",
+      "display_name": "Fin_Blob_Area",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 26,
+      "module_ref": "NoRef",
+      "feature_group": "Frame Cosmetic"
+    },
+    {
+      "telegram_place": 84,
+      "variable_name": "V_Fin_Blob_Area",
+      "display_name": "Fin_Blob_Area",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 26,
+      "module_ref": "NoRef",
+      "feature_group": "Frame Cosmetic"
+    },
+    {
+      "telegram_place": 85,
+      "variable_name": "R_Fin_Blob_Count",
+      "display_name": "Fin_Blob_Count",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 27,
+      "module_ref": "NoRef",
+      "feature_group": "Frame Cosmetic"
+    },
+    {
+      "telegram_place": 86,
+      "variable_name": "V_Fin_Blob_Count",
+      "display_name": "Fin_Blob_Count",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 27,
+      "module_ref": "NoRef",
+      "feature_group": "Frame Cosmetic"
+    },
+    {
+      "telegram_place": 87,
+      "variable_name": "R_Lubra_Height_S1",
+      "display_name": "Lubra_Height_S1",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 19,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 88,
+      "variable_name": "V_Lubra_Height_S1",
+      "display_name": "Lubra_Height_S1",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 19,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 89,
+      "variable_name": "R_Lubra_Height_S2",
+      "display_name": "Lubra_Height_S2",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 19,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 90,
+      "variable_name": "V_Lubra_Height_S2",
+      "display_name": "Lubra_Height_S2",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 19,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 91,
+      "variable_name": "R_Lubra_Height_S3",
+      "display_name": "Lubra_Height_S3",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 19,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 92,
+      "variable_name": "V_Lubra_Height_S3",
+      "display_name": "Lubra_Height_S3",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 19,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 93,
+      "variable_name": "R_Lubra_Height_S4",
+      "display_name": "Lubra_Height_S4",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 19,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 94,
+      "variable_name": "V_Lubra_Height_S4",
+      "display_name": "Lubra_Height_S4",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 19,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 95,
+      "variable_name": "R_Lubra_Height_S5",
+      "display_name": "Lubra_Height_S5",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 19,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 96,
+      "variable_name": "V_Lubra_Height_S5",
+      "display_name": "Lubra_Height_S5",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 19,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 97,
+      "variable_name": "R_Lubra_Position_S1",
+      "display_name": "Lubra_Position_S1",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 20,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 98,
+      "variable_name": "V_Lubra_Position_S1",
+      "display_name": "Lubra_Position_S1",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 20,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 99,
+      "variable_name": "R_Lubra_Position_S2",
+      "display_name": "Lubra_Position_S2",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 20,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 100,
+      "variable_name": "V_Lubra_Position_S2",
+      "display_name": "Lubra_Position_S2",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 20,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 101,
+      "variable_name": "R_Lubra_Position_S3",
+      "display_name": "Lubra_Position_S3",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 20,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 102,
+      "variable_name": "V_Lubra_Position_S3",
+      "display_name": "Lubra_Position_S3",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 20,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 103,
+      "variable_name": "R_Lubra_Position_S4",
+      "display_name": "Lubra_Position_S4",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 20,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 104,
+      "variable_name": "V_Lubra_Position_S4",
+      "display_name": "Lubra_Position_S4",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 20,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 105,
+      "variable_name": "R_Lubra_Position_S5",
+      "display_name": "Lubra_Position_S5",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 20,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 106,
+      "variable_name": "V_Lubra_Position_S5",
+      "display_name": "Lubra_Position_S5",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 20,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 107,
+      "variable_name": "R_Trimmer_Exposure_S1",
+      "display_name": "Trimmer_Exposure_S1",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 21,
+      "module_ref": "M2x",
+      "feature_group": "Exposure Trimmer"
+    },
+    {
+      "telegram_place": 108,
+      "variable_name": "V_Trimmer_Exposure_S1",
+      "display_name": "Trimmer_Exposure_S1",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 21,
+      "module_ref": "M2x",
+      "feature_group": "Exposure Trimmer"
+    },
+    {
+      "telegram_place": 109,
+      "variable_name": "R_Trimmer_Exposure_S2",
+      "display_name": "Trimmer_Exposure_S2",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 21,
+      "module_ref": "M2x",
+      "feature_group": "Exposure Trimmer"
+    },
+    {
+      "telegram_place": 110,
+      "variable_name": "V_Trimmer_Exposure_S2",
+      "display_name": "Trimmer_Exposure_S2",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 21,
+      "module_ref": "M2x",
+      "feature_group": "Exposure Trimmer"
+    },
+    {
+      "telegram_place": 111,
+      "variable_name": "R_Trimmer_Exposure_S3",
+      "display_name": "Trimmer_Exposure_S3",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 21,
+      "module_ref": "M2x",
+      "feature_group": "Exposure Trimmer"
+    },
+    {
+      "telegram_place": 112,
+      "variable_name": "V_Trimmer_Exposure_S3",
+      "display_name": "Trimmer_Exposure_S3",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 21,
+      "module_ref": "M2x",
+      "feature_group": "Exposure Trimmer"
+    },
+    {
+      "telegram_place": 113,
+      "variable_name": "R_Trimmer_Exposure_S4",
+      "display_name": "Trimmer_Exposure_S4",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 21,
+      "module_ref": "M2x",
+      "feature_group": "Exposure Trimmer"
+    },
+    {
+      "telegram_place": 114,
+      "variable_name": "V_Trimmer_Exposure_S4",
+      "display_name": "Trimmer_Exposure_S4",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 21,
+      "module_ref": "M2x",
+      "feature_group": "Exposure Trimmer"
+    },
+    {
+      "telegram_place": 115,
+      "variable_name": "R_Trimmer_Exposure_S5",
+      "display_name": "Trimmer_Exposure_S5",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 21,
+      "module_ref": "M2x",
+      "feature_group": "Exposure Trimmer"
+    },
+    {
+      "telegram_place": 116,
+      "variable_name": "V_Trimmer_Exposure_S5",
+      "display_name": "Trimmer_Exposure_S5",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 21,
+      "module_ref": "M2x",
+      "feature_group": "Exposure Trimmer"
+    },
+    {
+      "telegram_place": 117,
+      "variable_name": "R_Trimmer_Mounted_S1",
+      "display_name": "Trimmer_Mounted_S1",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 22,
+      "module_ref": "M2x",
+      "feature_group": "Exposure Trimmer"
+    },
+    {
+      "telegram_place": 118,
+      "variable_name": "V_Trimmer_Mounted_S1",
+      "display_name": "Trimmer_Mounted_S1",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 22,
+      "module_ref": "M2x",
+      "feature_group": "Exposure Trimmer"
+    },
+    {
+      "telegram_place": 119,
+      "variable_name": "R_Trimmer_Mounted_S2",
+      "display_name": "Trimmer_Mounted_S2",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 22,
+      "module_ref": "M2x",
+      "feature_group": "Exposure Trimmer"
+    },
+    {
+      "telegram_place": 120,
+      "variable_name": "V_Trimmer_Mounted_S2",
+      "display_name": "Trimmer_Mounted_S2",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 22,
+      "module_ref": "M2x",
+      "feature_group": "Exposure Trimmer"
+    },
+    {
+      "telegram_place": 121,
+      "variable_name": "R_Trimmer_Mounted_S3",
+      "display_name": "Trimmer_Mounted_S3",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 22,
+      "module_ref": "M2x",
+      "feature_group": "Exposure Trimmer"
+    },
+    {
+      "telegram_place": 122,
+      "variable_name": "V_Trimmer_Mounted_S3",
+      "display_name": "Trimmer_Mounted_S3",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 22,
+      "module_ref": "M2x",
+      "feature_group": "Exposure Trimmer"
+    },
+    {
+      "telegram_place": 123,
+      "variable_name": "R_Trimmer_Mounted_S4",
+      "display_name": "Trimmer_Mounted_S4",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 22,
+      "module_ref": "M2x",
+      "feature_group": "Exposure Trimmer"
+    },
+    {
+      "telegram_place": 124,
+      "variable_name": "V_Trimmer_Mounted_S4",
+      "display_name": "Trimmer_Mounted_S4",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 22,
+      "module_ref": "M2x",
+      "feature_group": "Exposure Trimmer"
+    },
+    {
+      "telegram_place": 125,
+      "variable_name": "R_Trimmer_Mounted_S5",
+      "display_name": "Trimmer_Mounted_S5",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 22,
+      "module_ref": "M2x",
+      "feature_group": "Exposure Trimmer"
+    },
+    {
+      "telegram_place": 126,
+      "variable_name": "V_Trimmer_Mounted_S5",
+      "display_name": "Trimmer_Mounted_S5",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 22,
+      "module_ref": "M2x",
+      "feature_group": "Exposure Trimmer"
+    },
+    {
+      "telegram_place": 127,
+      "variable_name": "R_Blade_Angle_B1_S1",
+      "display_name": "Blade_Angle_B1_S1",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 2,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 128,
+      "variable_name": "V_Blade_Angle_B1_S1",
+      "display_name": "Blade_Angle_B1_S1",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 2,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 129,
+      "variable_name": "R_Blade_Angle_B1_S2",
+      "display_name": "Blade_Angle_B1_S2",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 2,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 130,
+      "variable_name": "V_Blade_Angle_B1_S2",
+      "display_name": "Blade_Angle_B1_S2",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 2,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 131,
+      "variable_name": "R_Blade_Angle_B1_S3",
+      "display_name": "Blade_Angle_B1_S3",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 2,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 132,
+      "variable_name": "V_Blade_Angle_B1_S3",
+      "display_name": "Blade_Angle_B1_S3",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 2,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 133,
+      "variable_name": "R_Blade_Angle_B1_S4",
+      "display_name": "Blade_Angle_B1_S4",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 2,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 134,
+      "variable_name": "V_Blade_Angle_B1_S4",
+      "display_name": "Blade_Angle_B1_S4",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 2,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 135,
+      "variable_name": "R_Blade_Angle_B1_S5",
+      "display_name": "Blade_Angle_B1_S5",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 2,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 136,
+      "variable_name": "V_Blade_Angle_B1_S5",
+      "display_name": "Blade_Angle_B1_S5",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 3,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 137,
+      "variable_name": "R_Blade_Angle_B2_S1",
+      "display_name": "Blade_Angle_B2_S1",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 3,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 138,
+      "variable_name": "V_Blade_Angle_B2_S1",
+      "display_name": "Blade_Angle_B2_S1",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 3,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 139,
+      "variable_name": "R_Blade_Angle_B2_S2",
+      "display_name": "Blade_Angle_B2_S2",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 3,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 140,
+      "variable_name": "V_Blade_Angle_B2_S2",
+      "display_name": "Blade_Angle_B2_S2",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 3,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 141,
+      "variable_name": "R_Blade_Angle_B2_S3",
+      "display_name": "Blade_Angle_B2_S3",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 3,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 142,
+      "variable_name": "V_Blade_Angle_B2_S3",
+      "display_name": "Blade_Angle_B2_S3",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 3,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 143,
+      "variable_name": "R_Blade_Angle_B2_S4",
+      "display_name": "Blade_Angle_B2_S4",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 3,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 144,
+      "variable_name": "V_Blade_Angle_B2_S4",
+      "display_name": "Blade_Angle_B2_S4",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 3,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 145,
+      "variable_name": "R_Blade_Angle_B2_S5",
+      "display_name": "Blade_Angle_B2_S5",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 3,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 146,
+      "variable_name": "V_Blade_Angle_B2_S5",
+      "display_name": "Blade_Angle_B2_S5",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 3,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 147,
+      "variable_name": "R_Blade_Angle_B3_S1",
+      "display_name": "Blade_Angle_B3_S1",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 4,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 148,
+      "variable_name": "V_Blade_Angle_B3_S1",
+      "display_name": "Blade_Angle_B3_S1",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 4,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 149,
+      "variable_name": "R_Blade_Angle_B3_S2",
+      "display_name": "Blade_Angle_B3_S2",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 4,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 150,
+      "variable_name": "V_Blade_Angle_B3_S2",
+      "display_name": "Blade_Angle_B3_S2",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 4,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 151,
+      "variable_name": "R_Blade_Angle_B3_S3",
+      "display_name": "Blade_Angle_B3_S3",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 4,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 152,
+      "variable_name": "V_Blade_Angle_B3_S3",
+      "display_name": "Blade_Angle_B3_S3",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 4,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 153,
+      "variable_name": "R_Blade_Angle_B3_S4",
+      "display_name": "Blade_Angle_B3_S4",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 4,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 154,
+      "variable_name": "V_Blade_Angle_B3_S4",
+      "display_name": "Blade_Angle_B3_S4",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 4,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 155,
+      "variable_name": "R_Blade_Angle_B3_S5",
+      "display_name": "Blade_Angle_B3_S5",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 4,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 156,
+      "variable_name": "V_Blade_Angle_B3_S5",
+      "display_name": "Blade_Angle_B3_S5",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 4,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 157,
+      "variable_name": "R_Blade_Angle_B4_S1",
+      "display_name": "Blade_Angle_B4_S1",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 5,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 158,
+      "variable_name": "V_Blade_Angle_B4_S1",
+      "display_name": "Blade_Angle_B4_S1",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 5,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 159,
+      "variable_name": "R_Blade_Angle_B4_S2",
+      "display_name": "Blade_Angle_B4_S2",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 5,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 160,
+      "variable_name": "V_Blade_Angle_B4_S2",
+      "display_name": "Blade_Angle_B4_S2",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 5,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 161,
+      "variable_name": "R_Blade_Angle_B4_S3",
+      "display_name": "Blade_Angle_B4_S3",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 5,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 162,
+      "variable_name": "V_Blade_Angle_B4_S3",
+      "display_name": "Blade_Angle_B4_S3",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 5,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 163,
+      "variable_name": "R_Blade_Angle_B4_S4",
+      "display_name": "Blade_Angle_B4_S4",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 5,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 164,
+      "variable_name": "V_Blade_Angle_B4_S4",
+      "display_name": "Blade_Angle_B4_S4",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 5,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 165,
+      "variable_name": "R_Blade_Angle_B4_S5",
+      "display_name": "Blade_Angle_B4_S5",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 5,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 166,
+      "variable_name": "V_Blade_Angle_B4_S5",
+      "display_name": "Blade_Angle_B4_S5",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 5,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 167,
+      "variable_name": "R_Blade_Angle_B5_S1",
+      "display_name": "Blade_Angle_B5_S1",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 6,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 168,
+      "variable_name": "V_Blade_Angle_B5_S1",
+      "display_name": "Blade_Angle_B5_S1",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 6,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 169,
+      "variable_name": "R_Blade_Angle_B5_S2",
+      "display_name": "Blade_Angle_B5_S2",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 6,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 170,
+      "variable_name": "V_Blade_Angle_B5_S2",
+      "display_name": "Blade_Angle_B5_S2",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 6,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 171,
+      "variable_name": "R_Blade_Angle_B5_S3",
+      "display_name": "Blade_Angle_B5_S3",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 6,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 172,
+      "variable_name": "V_Blade_Angle_B5_S3",
+      "display_name": "Blade_Angle_B5_S3",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 6,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 173,
+      "variable_name": "R_Blade_Angle_B5_S4",
+      "display_name": "Blade_Angle_B5_S4",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 6,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 174,
+      "variable_name": "V_Blade_Angle_B5_S4",
+      "display_name": "Blade_Angle_B5_S4",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 6,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 175,
+      "variable_name": "R_Blade_Angle_B5_S5",
+      "display_name": "Blade_Angle_B5_S5",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 6,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 176,
+      "variable_name": "V_Blade_Angle_B5_S5",
+      "display_name": "Blade_Angle_B5_S5",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 6,
+      "module_ref": "M3x",
+      "feature_group": "Angles"
+    },
+    {
+      "telegram_place": 177,
+      "variable_name": "R_Blade_Dist_GuardB1_S1",
+      "display_name": "Blade_Dist_GuardB1_S1",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 8,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 178,
+      "variable_name": "V_Blade_Dist_GuardB1_S1",
+      "display_name": "Blade_Dist_GuardB1_S1",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 8,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 179,
+      "variable_name": "R_Blade_Dist_GuardB1_S2",
+      "display_name": "Blade_Dist_GuardB1_S2",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 8,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 180,
+      "variable_name": "V_Blade_Dist_GuardB1_S2",
+      "display_name": "Blade_Dist_GuardB1_S2",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 8,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 181,
+      "variable_name": "R_Blade_Dist_GuardB1_S3",
+      "display_name": "Blade_Dist_GuardB1_S3",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 8,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 182,
+      "variable_name": "V_Blade_Dist_GuardB1_S3",
+      "display_name": "Blade_Dist_GuardB1_S3",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 8,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 183,
+      "variable_name": "R_Blade_Dist_GuardB1_S4",
+      "display_name": "Blade_Dist_GuardB1_S4",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 8,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 184,
+      "variable_name": "V_Blade_Dist_GuardB1_S4",
+      "display_name": "Blade_Dist_GuardB1_S4",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 8,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 185,
+      "variable_name": "R_Blade_Dist_GuardB1_S5",
+      "display_name": "Blade_Dist_GuardB1_S5",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 8,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 186,
+      "variable_name": "V_Blade_Dist_GuardB1_S5",
+      "display_name": "Blade_Dist_GuardB1_S5",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 8,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 187,
+      "variable_name": "R_Blade_Dist_B1B2_S1",
+      "display_name": "Blade_Dist_B1B2_S1",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 9,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 188,
+      "variable_name": "V_Blade_Dist_B1B2_S1",
+      "display_name": "Blade_Dist_B1B2_S1",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 9,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 189,
+      "variable_name": "R_Blade_Dist_B1B2_S2",
+      "display_name": "Blade_Dist_B1B2_S2",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 9,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 190,
+      "variable_name": "V_Blade_Dist_B1B2_S2",
+      "display_name": "Blade_Dist_B1B2_S2",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 9,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 191,
+      "variable_name": "R_Blade_Dist_B1B2_S3",
+      "display_name": "Blade_Dist_B1B2_S3",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 9,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 192,
+      "variable_name": "V_Blade_Dist_B1B2_S3",
+      "display_name": "Blade_Dist_B1B2_S3",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 9,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 193,
+      "variable_name": "R_Blade_Dist_B1B2_S4",
+      "display_name": "Blade_Dist_B1B2_S4",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 9,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 194,
+      "variable_name": "V_Blade_Dist_B1B2_S4",
+      "display_name": "Blade_Dist_B1B2_S4",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 9,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 195,
+      "variable_name": "R_Blade_Dist_B1B2_S5",
+      "display_name": "Blade_Dist_B1B2_S5",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 9,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 196,
+      "variable_name": "V_Blade_Dist_B1B2_S5",
+      "display_name": "Blade_Dist_B1B2_S5",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 9,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 197,
+      "variable_name": "R_Blade_Dist_B2B3_S1",
+      "display_name": "Blade_Dist_B2B3_S1",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 10,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 198,
+      "variable_name": "V_Blade_Dist_B2B3_S1",
+      "display_name": "Blade_Dist_B2B3_S1",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 10,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 199,
+      "variable_name": "R_Blade_Dist_B2B3_S2",
+      "display_name": "Blade_Dist_B2B3_S2",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 10,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 200,
+      "variable_name": "V_Blade_Dist_B2B3_S2",
+      "display_name": "Blade_Dist_B2B3_S2",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 10,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 201,
+      "variable_name": "R_Blade_Dist_B2B3_S3",
+      "display_name": "Blade_Dist_B2B3_S3",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 10,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 202,
+      "variable_name": "V_Blade_Dist_B2B3_S3",
+      "display_name": "Blade_Dist_B2B3_S3",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 10,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 203,
+      "variable_name": "R_Blade_Dist_B2B3_S4",
+      "display_name": "Blade_Dist_B2B3_S4",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 10,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 204,
+      "variable_name": "V_Blade_Dist_B2B3_S4",
+      "display_name": "Blade_Dist_B2B3_S4",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 10,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 205,
+      "variable_name": "R_Blade_Dist_B2B3_S5",
+      "display_name": "Blade_Dist_B2B3_S5",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 10,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 206,
+      "variable_name": "V_Blade_Dist_B2B3_S5",
+      "display_name": "Blade_Dist_B2B3_S5",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 10,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 207,
+      "variable_name": "R_Blade_Dist_B3B4_S1",
+      "display_name": "Blade_Dist_B3B4_S1",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 11,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 208,
+      "variable_name": "V_Blade_Dist_B3B4_S1",
+      "display_name": "Blade_Dist_B3B4_S1",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 11,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 209,
+      "variable_name": "R_Blade_Dist_B3B4_S2",
+      "display_name": "Blade_Dist_B3B4_S2",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 11,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 210,
+      "variable_name": "V_Blade_Dist_B3B4_S2",
+      "display_name": "Blade_Dist_B3B4_S2",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 11,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 211,
+      "variable_name": "R_Blade_Dist_B3B4_S3",
+      "display_name": "Blade_Dist_B3B4_S3",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 11,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 212,
+      "variable_name": "V_Blade_Dist_B3B4_S3",
+      "display_name": "Blade_Dist_B3B4_S3",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 11,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 213,
+      "variable_name": "R_Blade_Dist_B3B4_S4",
+      "display_name": "Blade_Dist_B3B4_S4",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 11,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 214,
+      "variable_name": "V_Blade_Dist_B3B4_S4",
+      "display_name": "Blade_Dist_B3B4_S4",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 11,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 215,
+      "variable_name": "R_Blade_Dist_B3B4_S5",
+      "display_name": "Blade_Dist_B3B4_S5",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 11,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 216,
+      "variable_name": "V_Blade_Dist_B3B4_S5",
+      "display_name": "Blade_Dist_B3B4_S5",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 11,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 217,
+      "variable_name": "R_Blade_Dist_B4B5_S1",
+      "display_name": "Blade_Dist_B4B5_S1",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 12,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 218,
+      "variable_name": "V_Blade_Dist_B4B5_S1",
+      "display_name": "Blade_Dist_B4B5_S1",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 12,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 219,
+      "variable_name": "R_Blade_Dist_B4B5_S2",
+      "display_name": "Blade_Dist_B4B5_S2",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 12,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 220,
+      "variable_name": "V_Blade_Dist_B4B5_S2",
+      "display_name": "Blade_Dist_B4B5_S2",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 12,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 221,
+      "variable_name": "R_Blade_Dist_B4B5_S3",
+      "display_name": "Blade_Dist_B4B5_S3",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 12,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 222,
+      "variable_name": "V_Blade_Dist_B4B5_S3",
+      "display_name": "Blade_Dist_B4B5_S3",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 12,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 223,
+      "variable_name": "R_Blade_Dist_B4B5_S4",
+      "display_name": "Blade_Dist_B4B5_S4",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 12,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 224,
+      "variable_name": "V_Blade_Dist_B4B5_S4",
+      "display_name": "Blade_Dist_B4B5_S4",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 12,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 225,
+      "variable_name": "R_Blade_Dist_B4B5_S5",
+      "display_name": "Blade_Dist_B4B5_S5",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 12,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 226,
+      "variable_name": "V_Blade_Dist_B4B5_S5",
+      "display_name": "Blade_Dist_B4B5_S5",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 12,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 227,
+      "variable_name": "R_Blade_Dist_B5Cap_S1",
+      "display_name": "Blade_Dist_B5Cap_S1",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 13,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 228,
+      "variable_name": "V_Blade_Dist_B5Cap_S1",
+      "display_name": "Blade_Dist_B5Cap_S1",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 13,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 229,
+      "variable_name": "R_Blade_Dist_B5Cap_S2",
+      "display_name": "Blade_Dist_B5Cap_S2",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 13,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 230,
+      "variable_name": "V_Blade_Dist_B5Cap_S2",
+      "display_name": "Blade_Dist_B5Cap_S2",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 13,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 231,
+      "variable_name": "R_Blade_Dist_B5Cap_S3",
+      "display_name": "Blade_Dist_B5Cap_S3",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 13,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 232,
+      "variable_name": "V_Blade_Dist_B5Cap_S3",
+      "display_name": "Blade_Dist_B5Cap_S3",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 13,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 233,
+      "variable_name": "R_Blade_Dist_B5Cap_S4",
+      "display_name": "Blade_Dist_B5Cap_S4",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 13,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 234,
+      "variable_name": "V_Blade_Dist_B5Cap_S4",
+      "display_name": "Blade_Dist_B5Cap_S4",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 13,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 235,
+      "variable_name": "R_Blade_Dist_B5Cap_S5",
+      "display_name": "Blade_Dist_B5Cap_S5",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 13,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 236,
+      "variable_name": "V_Blade_Dist_B5Cap_S5",
+      "display_name": "Blade_Dist_B5Cap_S5",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 13,
+      "module_ref": "M3x",
+      "feature_group": "Spacings"
+    },
+    {
+      "telegram_place": 237,
+      "variable_name": "R_Blade_Exposure_B1_S1",
+      "display_name": "Blade_Exposure_B1_S1",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 14,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    },
+    {
+      "telegram_place": 238,
+      "variable_name": "V_Blade_Exposure_B1_S1",
+      "display_name": "Blade_Exposure_B1_S1",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 14,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    },
+    {
+      "telegram_place": 239,
+      "variable_name": "R_Blade_Exposure_B1_S2",
+      "display_name": "Blade_Exposure_B1_S2",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 14,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    },
+    {
+      "telegram_place": 240,
+      "variable_name": "V_Blade_Exposure_B1_S2",
+      "display_name": "Blade_Exposure_B1_S2",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 14,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    },
+    {
+      "telegram_place": 241,
+      "variable_name": "R_Blade_Exposure_B1_S3",
+      "display_name": "Blade_Exposure_B1_S3",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 14,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    },
+    {
+      "telegram_place": 242,
+      "variable_name": "V_Blade_Exposure_B1_S3",
+      "display_name": "Blade_Exposure_B1_S3",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 14,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    },
+    {
+      "telegram_place": 243,
+      "variable_name": "R_Blade_Exposure_B1_S4",
+      "display_name": "Blade_Exposure_B1_S4",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 14,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    },
+    {
+      "telegram_place": 244,
+      "variable_name": "V_Blade_Exposure_B1_S4",
+      "display_name": "Blade_Exposure_B1_S4",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 14,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    },
+    {
+      "telegram_place": 245,
+      "variable_name": "R_Blade_Exposure_B1_S5",
+      "display_name": "Blade_Exposure_B1_S5",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 14,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    },
+    {
+      "telegram_place": 246,
+      "variable_name": "V_Blade_Exposure_B1_S5",
+      "display_name": "Blade_Exposure_B1_S5",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 14,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    },
+    {
+      "telegram_place": 247,
+      "variable_name": "R_Blade_Exposure_B2_S1",
+      "display_name": "Blade_Exposure_B2_S1",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 15,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    },
+    {
+      "telegram_place": 248,
+      "variable_name": "V_Blade_Exposure_B2_S1",
+      "display_name": "Blade_Exposure_B2_S1",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 15,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    },
+    {
+      "telegram_place": 249,
+      "variable_name": "R_Blade_Exposure_B2_S2",
+      "display_name": "Blade_Exposure_B2_S2",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 15,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    },
+    {
+      "telegram_place": 250,
+      "variable_name": "V_Blade_Exposure_B2_S2",
+      "display_name": "Blade_Exposure_B2_S2",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 15,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    },
+    {
+      "telegram_place": 251,
+      "variable_name": "R_Blade_Exposure_B2_S3",
+      "display_name": "Blade_Exposure_B2_S3",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 15,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    },
+    {
+      "telegram_place": 252,
+      "variable_name": "V_Blade_Exposure_B2_S3",
+      "display_name": "Blade_Exposure_B2_S3",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 15,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    },
+    {
+      "telegram_place": 253,
+      "variable_name": "R_Blade_Exposure_B2_S4",
+      "display_name": "Blade_Exposure_B2_S4",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 15,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    },
+    {
+      "telegram_place": 254,
+      "variable_name": "V_Blade_Exposure_B2_S4",
+      "display_name": "Blade_Exposure_B2_S4",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 15,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    },
+    {
+      "telegram_place": 255,
+      "variable_name": "R_Blade_Exposure_B2_S5",
+      "display_name": "Blade_Exposure_B2_S5",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 15,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    },
+    {
+      "telegram_place": 256,
+      "variable_name": "V_Blade_Exposure_B2_S5",
+      "display_name": "Blade_Exposure_B2_S5",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 15,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    },
+    {
+      "telegram_place": 257,
+      "variable_name": "R_Blade_Exposure_B3_S1",
+      "display_name": "Blade_Exposure_B3_S1",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 16,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    },
+    {
+      "telegram_place": 258,
+      "variable_name": "V_Blade_Exposure_B3_S1",
+      "display_name": "Blade_Exposure_B3_S1",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 16,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    },
+    {
+      "telegram_place": 259,
+      "variable_name": "R_Blade_Exposure_B3_S2",
+      "display_name": "Blade_Exposure_B3_S2",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 16,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    },
+    {
+      "telegram_place": 260,
+      "variable_name": "V_Blade_Exposure_B3_S2",
+      "display_name": "Blade_Exposure_B3_S2",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 16,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    },
+    {
+      "telegram_place": 261,
+      "variable_name": "R_Blade_Exposure_B3_S3",
+      "display_name": "Blade_Exposure_B3_S3",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 16,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    },
+    {
+      "telegram_place": 262,
+      "variable_name": "V_Blade_Exposure_B3_S3",
+      "display_name": "Blade_Exposure_B3_S3",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 16,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    },
+    {
+      "telegram_place": 263,
+      "variable_name": "R_Blade_Exposure_B3_S4",
+      "display_name": "Blade_Exposure_B3_S4",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 16,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    },
+    {
+      "telegram_place": 264,
+      "variable_name": "V_Blade_Exposure_B3_S4",
+      "display_name": "Blade_Exposure_B3_S4",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 16,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    },
+    {
+      "telegram_place": 265,
+      "variable_name": "R_Blade_Exposure_B3_S5",
+      "display_name": "Blade_Exposure_B3_S5",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 16,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    },
+    {
+      "telegram_place": 266,
+      "variable_name": "V_Blade_Exposure_B3_S5",
+      "display_name": "Blade_Exposure_B3_S5",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 16,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    },
+    {
+      "telegram_place": 267,
+      "variable_name": "R_Blade_Exposure_B4_S1",
+      "display_name": "Blade_Exposure_B4_S1",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 17,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    },
+    {
+      "telegram_place": 268,
+      "variable_name": "V_Blade_Exposure_B4_S1",
+      "display_name": "Blade_Exposure_B4_S1",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 17,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    },
+    {
+      "telegram_place": 269,
+      "variable_name": "R_Blade_Exposure_B4_S2",
+      "display_name": "Blade_Exposure_B4_S2",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 17,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    },
+    {
+      "telegram_place": 270,
+      "variable_name": "V_Blade_Exposure_B4_S2",
+      "display_name": "Blade_Exposure_B4_S2",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 17,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    },
+    {
+      "telegram_place": 271,
+      "variable_name": "R_Blade_Exposure_B4_S3",
+      "display_name": "Blade_Exposure_B4_S3",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 17,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    },
+    {
+      "telegram_place": 272,
+      "variable_name": "V_Blade_Exposure_B4_S3",
+      "display_name": "Blade_Exposure_B4_S3",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 17,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    },
+    {
+      "telegram_place": 273,
+      "variable_name": "R_Blade_Exposure_B4_S4",
+      "display_name": "Blade_Exposure_B4_S4",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 17,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    },
+    {
+      "telegram_place": 274,
+      "variable_name": "V_Blade_Exposure_B4_S4",
+      "display_name": "Blade_Exposure_B4_S4",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 17,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    },
+    {
+      "telegram_place": 275,
+      "variable_name": "R_Blade_Exposure_B4_S5",
+      "display_name": "Blade_Exposure_B4_S5",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 17,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    },
+    {
+      "telegram_place": 276,
+      "variable_name": "V_Blade_Exposure_B4_S5",
+      "display_name": "Blade_Exposure_B4_S5",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 17,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    },
+    {
+      "telegram_place": 277,
+      "variable_name": "R_Blade_Exposure_B5_S1",
+      "display_name": "Blade_Exposure_B5_S1",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 18,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    },
+    {
+      "telegram_place": 278,
+      "variable_name": "V_Blade_Exposure_B5_S1",
+      "display_name": "Blade_Exposure_B5_S1",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 18,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    },
+    {
+      "telegram_place": 279,
+      "variable_name": "R_Blade_Exposure_B5_S2",
+      "display_name": "Blade_Exposure_B5_S2",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 18,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    },
+    {
+      "telegram_place": 280,
+      "variable_name": "V_Blade_Exposure_B5_S2",
+      "display_name": "Blade_Exposure_B5_S2",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 18,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    },
+    {
+      "telegram_place": 281,
+      "variable_name": "R_Blade_Exposure_B5_S3",
+      "display_name": "Blade_Exposure_B5_S3",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 18,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    },
+    {
+      "telegram_place": 282,
+      "variable_name": "V_Blade_Exposure_B5_S3",
+      "display_name": "Blade_Exposure_B5_S3",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 18,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    },
+    {
+      "telegram_place": 283,
+      "variable_name": "R_Blade_Exposure_B5_S4",
+      "display_name": "Blade_Exposure_B5_S4",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 18,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    },
+    {
+      "telegram_place": 284,
+      "variable_name": "V_Blade_Exposure_B5_S4",
+      "display_name": "Blade_Exposure_B5_S4",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 18,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    },
+    {
+      "telegram_place": 285,
+      "variable_name": "R_Blade_Exposure_B5_S5",
+      "display_name": "Blade_Exposure_B5_S5",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 18,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    },
+    {
+      "telegram_place": 286,
+      "variable_name": "V_Blade_Exposure_B5_S5",
+      "display_name": "Blade_Exposure_B5_S5",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 18,
+      "module_ref": "M3x",
+      "feature_group": "Exposure MBD"
+    }
+  ]
+}

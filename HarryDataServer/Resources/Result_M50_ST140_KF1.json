@@ -1,0 +1,246 @@
+{
+  "camera": "M50_ST140_KF1",
+  "signal_word": "Results",
+  "measurements": [
+    {
+      "telegram_place": 71,
+      "variable_name": "R_Blade_UnderAnode_L",
+      "display_name": "Blade_UnderAnode_L",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 2,
+      "module_ref": "M3x",
+      "feature_group": "Blades Issues"
+    },
+    {
+      "telegram_place": 72,
+      "variable_name": "V_Blade_UnderAnode_L",
+      "display_name": "Blade_UnderAnode_L",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 2,
+      "module_ref": "M3x",
+      "feature_group": "Blades Issues"
+    },
+    {
+      "telegram_place": 73,
+      "variable_name": "R_Blade_UnderAnode_R",
+      "display_name": "Blade_UnderAnode_R",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 2,
+      "module_ref": "M3x",
+      "feature_group": "Blades Issues"
+    },
+    {
+      "telegram_place": 74,
+      "variable_name": "V_Blade_UnderAnode_R",
+      "display_name": "Blade_UnderAnode_R",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 2,
+      "module_ref": "M3x",
+      "feature_group": "Blades Issues"
+    },
+    {
+      "telegram_place": 75,
+      "variable_name": "R_Blade_Defect_B1",
+      "display_name": "Blade_Defect_B1",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 1,
+      "module_ref": "M3x",
+      "feature_group": "Blades Issues"
+    },
+    {
+      "telegram_place": 76,
+      "variable_name": "V_Blade_Defect_B1",
+      "display_name": "Blade_Defect_B1",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 1,
+      "module_ref": "M3x",
+      "feature_group": "Blades Issues"
+    },
+    {
+      "telegram_place": 77,
+      "variable_name": "R_Blade_Defect_B2",
+      "display_name": "Blade_Defect_B2",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 1,
+      "module_ref": "M3x",
+      "feature_group": "Blades Issues"
+    },
+    {
+      "telegram_place": 78,
+      "variable_name": "V_Blade_Defect_B2",
+      "display_name": "Blade_Defect_B2",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 1,
+      "module_ref": "M3x",
+      "feature_group": "Blades Issues"
+    },
+    {
+      "telegram_place": 79,
+      "variable_name": "R_Blade_Defect_B3",
+      "display_name": "Blade_Defect_B3",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 1,
+      "module_ref": "M3x",
+      "feature_group": "Blades Issues"
+    },
+    {
+      "telegram_place": 80,
+      "variable_name": "V_Blade_Defect_B3",
+      "display_name": "Blade_Defect_B3",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 1,
+      "module_ref": "M3x",
+      "feature_group": "Blades Issues"
+    },
+    {
+      "telegram_place": 81,
+      "variable_name": "R_Blade_Defect_B4",
+      "display_name": "Blade_Defect_B4",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 1,
+      "module_ref": "M3x",
+      "feature_group": "Blades Issues"
+    },
+    {
+      "telegram_place": 82,
+      "variable_name": "V_Blade_Defect_B4",
+      "display_name": "Blade_Defect_B4",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 1,
+      "module_ref": "M3x",
+      "feature_group": "Blades Issues"
+    },
+    {
+      "telegram_place": 83,
+      "variable_name": "R_Blade_Defect_B5",
+      "display_name": "Blade_Defect_B5",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 1,
+      "module_ref": "M3x",
+      "feature_group": "Blades Issues"
+    },
+    {
+      "telegram_place": 84,
+      "variable_name": "V_Blade_Defect_B5",
+      "display_name": "Blade_Defect_B5",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 1,
+      "module_ref": "M3x",
+      "feature_group": "Blades Issues"
+    },
+    {
+      "telegram_place": 85,
+      "variable_name": "R_Blade_TotalWidth_B1",
+      "display_name": "Blade_TotalWidth_B1",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 3,
+      "module_ref": "M3x",
+      "feature_group": "Blades Issues"
+    },
+    {
+      "telegram_place": 86,
+      "variable_name": "V_Blade_TotalWidth_B1",
+      "display_name": "Blade_TotalWidth_B1",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 3,
+      "module_ref": "M3x",
+      "feature_group": "Blades Issues"
+    },
+    {
+      "telegram_place": 87,
+      "variable_name": "R_Blade_TotalWidth_B2",
+      "display_name": "Blade_TotalWidth_B2",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 3,
+      "module_ref": "M3x",
+      "feature_group": "Blades Issues"
+    },
+    {
+      "telegram_place": 88,
+      "variable_name": "V_Blade_TotalWidth_B2",
+      "display_name": "Blade_TotalWidth_B2",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 3,
+      "module_ref": "M3x",
+      "feature_group": "Blades Issues"
+    },
+    {
+      "telegram_place": 89,
+      "variable_name": "R_Blade_TotalWidth_B3",
+      "display_name": "Blade_TotalWidth_B3",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 3,
+      "module_ref": "M3x",
+      "feature_group": "Blades Issues"
+    },
+    {
+      "telegram_place": 90,
+      "variable_name": "V_Blade_TotalWidth_B3",
+      "display_name": "Blade_TotalWidth_B3",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 3,
+      "module_ref": "M3x",
+      "feature_group": "Blades Issues"
+    },
+    {
+      "telegram_place": 91,
+      "variable_name": "R_Blade_TotalWidth_B4",
+      "display_name": "Blade_TotalWidth_B4",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 3,
+      "module_ref": "M3x",
+      "feature_group": "Blades Issues"
+    },
+    {
+      "telegram_place": 92,
+      "variable_name": "V_Blade_TotalWidth_B4",
+      "display_name": "Blade_TotalWidth_B4",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 3,
+      "module_ref": "M3x",
+      "feature_group": "Blades Issues"
+    },
+    {
+      "telegram_place": 93,
+      "variable_name": "R_Blade_TotalWidth_B5",
+      "display_name": "Blade_TotalWidth_B5",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 3,
+      "module_ref": "M3x",
+      "feature_group": "Blades Issues"
+    },
+    {
+      "telegram_place": 94,
+      "variable_name": "V_Blade_TotalWidth_B5",
+      "display_name": "Blade_TotalWidth_B5",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 3,
+      "module_ref": "M3x",
+      "feature_group": "Blades Issues"
+    }
+  ]
+}

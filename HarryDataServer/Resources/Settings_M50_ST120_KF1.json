@@ -1,0 +1,20 @@
+{
+  "camera": "M50_ST120_KF1",
+  "signal_word": "Settings",
+  "settings": [
+    {
+      "telegram_place": 3,
+      "setting_name": "Trimmer_Defect_Min",
+      "parameter_set": 1,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 4,
+      "setting_name": "Trimmer_Defect_Max",
+      "parameter_set": 1,
+      "limit_type": "Max",
+      "format": "Float"
+    }
+  ]
+}

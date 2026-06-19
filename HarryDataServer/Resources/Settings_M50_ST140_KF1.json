@@ -1,0 +1,48 @@
+{
+  "camera": "M50_ST140_KF1",
+  "signal_word": "Settings",
+  "settings": [
+    {
+      "telegram_place": 3,
+      "setting_name": "Blade_Defect_Min",
+      "parameter_set": 1,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 4,
+      "setting_name": "Blade_Defect_Max",
+      "parameter_set": 1,
+      "limit_type": "Max",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 5,
+      "setting_name": "Blade_UnderAnode_Min",
+      "parameter_set": 2,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 6,
+      "setting_name": "Blade_UnderAnode_Max",
+      "parameter_set": 2,
+      "limit_type": "Max",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 7,
+      "setting_name": "Blade_TotalWidth_Min",
+      "parameter_set": 3,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 8,
+      "setting_name": "Blade_TotalWidth_Max",
+      "parameter_set": 3,
+      "limit_type": "Max",
+      "format": "Float"
+    }
+  ]
+}

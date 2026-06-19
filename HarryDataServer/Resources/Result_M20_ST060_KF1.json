@@ -1,0 +1,86 @@
+{
+  "camera": "M20_ST060_KF1",
+  "signal_word": "Results",
+  "measurements": [
+    {
+      "telegram_place": 71,
+      "variable_name": "R_TrimSubAss_Blade_Dist_1",
+      "display_name": "TrimSubAss_Blade_Dist_1",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 1,
+      "module_ref": "M2x",
+      "feature_group": "Trimmer sub-assembly"
+    },
+    {
+      "telegram_place": 72,
+      "variable_name": "V_TrimSubAss_Blade_Dist_1",
+      "display_name": "TrimSubAss_Blade_Dist_1",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 1,
+      "module_ref": "M2x",
+      "feature_group": "Trimmer sub-assembly"
+    },
+    {
+      "telegram_place": 73,
+      "variable_name": "R_TrimSubAss_Blade_Dist_2",
+      "display_name": "TrimSubAss_Blade_Dist_2",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 1,
+      "module_ref": "M2x",
+      "feature_group": "Trimmer sub-assembly"
+    },
+    {
+      "telegram_place": 74,
+      "variable_name": "V_TrimSubAss_Blade_Dist_2",
+      "display_name": "TrimSubAss_Blade_Dist_2",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 1,
+      "module_ref": "M2x",
+      "feature_group": "Trimmer sub-assembly"
+    },
+    {
+      "telegram_place": 75,
+      "variable_name": "R_TrimSubAss_Blade_Dist_3",
+      "display_name": "TrimSubAss_Blade_Dist_3",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 1,
+      "module_ref": "M2x",
+      "feature_group": "Trimmer sub-assembly"
+    },
+    {
+      "telegram_place": 76,
+      "variable_name": "V_TrimSubAss_Blade_Dist_3",
+      "display_name": "TrimSubAss_Blade_Dist_3",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 1,
+      "module_ref": "M2x",
+      "feature_group": "Trimmer sub-assembly"
+    },
+    {
+      "telegram_place": 77,
+      "variable_name": "R_TrimSubAss_Blade_Dist_4",
+      "display_name": "TrimSubAss_Blade_Dist_4",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 1,
+      "module_ref": "M2x",
+      "feature_group": "Trimmer sub-assembly"
+    },
+    {
+      "telegram_place": 78,
+      "variable_name": "V_TrimSubAss_Blade_Dist_4",
+      "display_name": "TrimSubAss_Blade_Dist_4",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 1,
+      "module_ref": "M2x",
+      "feature_group": "Trimmer sub-assembly"
+    }
+  ]
+}

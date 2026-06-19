@@ -1,0 +1,21 @@
+{
+  "camera": "M10_ST060_KF1",
+  "signal_word": "Settings",
+  "_comment": "STUB - Please fill telegram_place and setting names from camera program documentation",
+  "settings": [
+    {
+      "telegram_place": 3,
+      "setting_name": "TODO_Setting_Min",
+      "parameter_set": 1,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 4,
+      "setting_name": "TODO_Setting_Max",
+      "parameter_set": 1,
+      "limit_type": "Max",
+      "format": "Float"
+    }
+  ]
+}

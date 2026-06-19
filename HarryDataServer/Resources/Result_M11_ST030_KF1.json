@@ -1,0 +1,27 @@
+{
+  "camera": "M11_ST030_KF1",
+  "signal_word": "Results",
+  "_comment": "STUB - Please fill telegram_place and measurement names from camera program documentation",
+  "measurements": [
+    {
+      "telegram_place": 71,
+      "variable_name": "R_TODO_Measurement1",
+      "display_name": "TODO_Measurement1",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 1,
+      "module_ref": "M1X",
+      "feature_group": "TODO_Group"
+    },
+    {
+      "telegram_place": 72,
+      "variable_name": "V_TODO_Measurement1",
+      "display_name": "TODO_Measurement1",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 1,
+      "module_ref": "M1X",
+      "feature_group": "TODO_Group"
+    }
+  ]
+}
