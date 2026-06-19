@@ -55,6 +55,16 @@ public partial class App : Application
             // Start the SPS server (7 channels) — independent of cameras/database.
             var sps = _services.GetRequiredService<ISpsServer>();
             _ = Task.Run(() => sps.StartAsync(_shutdownCts.Token));
+
+            // Start the Phase 6 consumers (each on its own background task).
+            var settings = _services.GetRequiredService<ISettingsProcessor>();
+            _ = Task.Run(() => settings.StartAsync(_shutdownCts.Token));
+
+            var diagnostics = _services.GetRequiredService<IDiagnosticProcessor>();
+            _ = Task.Run(() => diagnostics.StartAsync(_shutdownCts.Token));
+
+            var partExit = _services.GetRequiredService<IPartExitProcessor>();
+            _ = Task.Run(() => partExit.StartAsync(_shutdownCts.Token));
         }
         catch (Exception ex)
         {
@@ -74,14 +84,22 @@ public partial class App : Application
         _log?.Information("HarryDataServer shutting down.");
         _shutdownCts.Cancel();
 
-        // Best-effort final flush of any queued measurements before the process exits.
+        // Best-effort final flush of all queue-backed processors before the process exits.
         try
         {
-            _services?.GetService<IMeasurementProcessor>()?.StopAsync().Wait(TimeSpan.FromSeconds(5));
+            var stopTasks = new[]
+            {
+                _services?.GetService<IMeasurementProcessor>()?.StopAsync(),
+                _services?.GetService<ISettingsProcessor>()?.StopAsync(),
+                _services?.GetService<IDiagnosticProcessor>()?.StopAsync(),
+                _services?.GetService<IPartExitProcessor>()?.StopAsync(),
+            }.Where(t => t is not null).Cast<Task>().ToArray();
+
+            Task.WhenAll(stopTasks).Wait(TimeSpan.FromSeconds(8));
         }
         catch (Exception ex)
         {
-            _log?.Error(ex, "Error during measurement processor shutdown.");
+            _log?.Error(ex, "Error during processor shutdown.");
         }
 
         _log?.Shutdown();
@@ -129,6 +147,12 @@ public partial class App : Application
 
         // --- SPS server (Phase 5): 7-channel PLC TCP server ---
         services.AddSingleton<ISpsServer, TcpSpsServer>();
+
+        // --- Phase 6 consumers: settings, diagnostic, part-exit pipelines ---
+        services.AddSingleton<SettingDefinitionCache>();
+        services.AddSingleton<ISettingsProcessor, SettingsProcessor>();
+        services.AddSingleton<IDiagnosticProcessor, DiagnosticProcessor>();
+        services.AddSingleton<IPartExitProcessor, PartExitProcessor>();
 
         // --- Windows ---
         services.AddSingleton<MainWindow>();

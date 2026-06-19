@@ -80,6 +80,7 @@ public sealed class TelegramParser
         return new ParsedTelegram
         {
             Fields = fields,
+            Raw = line,
             ControllerName = fields[ParsedTelegram.PosController],
             Version = fields.Length > ParsedTelegram.PosVersion ? fields[ParsedTelegram.PosVersion] : string.Empty,
             Signal = signal,

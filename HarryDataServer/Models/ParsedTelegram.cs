@@ -22,6 +22,9 @@ public sealed class ParsedTelegram
 
     public required string[] Fields { get; init; }
 
+    /// <summary>The original telegram line (without the trailing carriage return).</summary>
+    public string Raw { get; init; } = string.Empty;
+
     public string ControllerName { get; init; } = string.Empty;
     public string Version { get; init; } = string.Empty;
     public TelegramSignal Signal { get; init; }
