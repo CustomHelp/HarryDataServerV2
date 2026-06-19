@@ -65,6 +65,9 @@ public partial class App : Application
 
             var partExit = _services.GetRequiredService<IPartExitProcessor>();
             _ = Task.Run(() => partExit.StartAsync(_shutdownCts.Token));
+
+            var csv = _services.GetRequiredService<ICsvService>();
+            _ = Task.Run(() => csv.StartAsync(_shutdownCts.Token));
         }
         catch (Exception ex)
         {
@@ -93,6 +96,7 @@ public partial class App : Application
                 _services?.GetService<ISettingsProcessor>()?.StopAsync(),
                 _services?.GetService<IDiagnosticProcessor>()?.StopAsync(),
                 _services?.GetService<IPartExitProcessor>()?.StopAsync(),
+                _services?.GetService<ICsvService>()?.StopAsync(),
             }.Where(t => t is not null).Cast<Task>().ToArray();
 
             Task.WhenAll(stopTasks).Wait(TimeSpan.FromSeconds(8));
@@ -153,6 +157,9 @@ public partial class App : Application
         services.AddSingleton<ISettingsProcessor, SettingsProcessor>();
         services.AddSingleton<IDiagnosticProcessor, DiagnosticProcessor>();
         services.AddSingleton<IPartExitProcessor, PartExitProcessor>();
+
+        // --- CSV export (Phase 7): main per-part CSV ---
+        services.AddSingleton<ICsvService, CsvExportService>();
 
         // --- Windows ---
         services.AddSingleton<MainWindow>();
