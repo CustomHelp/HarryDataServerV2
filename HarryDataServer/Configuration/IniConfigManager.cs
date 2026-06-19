@@ -41,7 +41,17 @@ public sealed class IniConfigManager
             Collage = ParseCollage(data),
             Sps = ParseSps(data),
             SqlSettings = ParseSqlSettings(data),
+            Msa = ParseMsa(data, configDir),
             Cameras = ParseCameras(data, configDir),
+        };
+    }
+
+    private static MsaConfig ParseMsa(IniData data, string configDir)
+    {
+        var s = data["MSA"];
+        return new MsaConfig
+        {
+            ReferencePath = ResolvePath(Str(s, "ReferencePath", string.Empty), configDir),
         };
     }
 

@@ -68,6 +68,12 @@ public partial class App : Application
 
             var csv = _services.GetRequiredService<ICsvService>();
             _ = Task.Run(() => csv.StartAsync(_shutdownCts.Token));
+
+            var imageCleanup = _services.GetRequiredService<IImageCleanupService>();
+            _ = Task.Run(() => imageCleanup.StartAsync(_shutdownCts.Token));
+
+            var msa = _services.GetRequiredService<IMsaService>();
+            _ = Task.Run(() => msa.StartAsync(_shutdownCts.Token));
         }
         catch (Exception ex)
         {
@@ -97,6 +103,8 @@ public partial class App : Application
                 _services?.GetService<IDiagnosticProcessor>()?.StopAsync(),
                 _services?.GetService<IPartExitProcessor>()?.StopAsync(),
                 _services?.GetService<ICsvService>()?.StopAsync(),
+                _services?.GetService<IMsaService>()?.StopAsync(),
+                _services?.GetService<IImageCleanupService>()?.StopAsync(),
             }.Where(t => t is not null).Cast<Task>().ToArray();
 
             Task.WhenAll(stopTasks).Wait(TimeSpan.FromSeconds(8));
@@ -160,6 +168,11 @@ public partial class App : Application
 
         // --- CSV export (Phase 7): main per-part CSV ---
         services.AddSingleton<ICsvService, CsvExportService>();
+
+        // --- Image cleanup (Phase 8) + MSA engine (Phase 10) ---
+        services.AddSingleton<IImageCleanupService, ImageCleanupService>();
+        services.AddSingleton<MsaReferenceLoader>();
+        services.AddSingleton<IMsaService, MsaService>();
 
         // --- Windows ---
         services.AddSingleton<MainWindow>();

@@ -14,6 +14,7 @@ public sealed class AppConfig
     public CollageConfig Collage { get; init; } = new();
     public SpsConfig Sps { get; init; } = new();
     public SqlSettingsConfig SqlSettings { get; init; } = new();
+    public MsaConfig Msa { get; init; } = new();
     public IReadOnlyList<CameraConfig> Cameras { get; init; } = Array.Empty<CameraConfig>();
 }
 
@@ -81,4 +82,10 @@ public sealed class SqlSettingsConfig
 {
     public int BatchSize { get; init; } = 100;
     public int SaveIntervalSeconds { get; init; } = 1;
+}
+
+public sealed class MsaConfig
+{
+    /// <summary>Folder holding the per-module MSA reference JSON files (relative to the config dir).</summary>
+    public string ReferencePath { get; init; } = string.Empty;
 }
