@@ -17,11 +17,33 @@ The **main server** (`HarryDataServer`) is built through Phase 11b and runs:
 - MSA engine (Cg/Cgk/%Tolerance/LimitSample) + read path for the UI.
 - WPF dashboard (dark theme): Overview, Cameras, SPS, MSA, Database, CSV, Collage, Log.
 
-**Not yet built: the companion tools (this document).** Build them as **separate WPF
-projects in the same solution** (`HarryDataServer.sln`), per CLAUDE.md §16.
+**Built (2026-06-20): all 5 companion tools.** Implemented as **separate WPF projects in
+the same solution** (`HarryDataServer.sln`), per CLAUDE.md §16, sharing a new
+**`HarryShared`** class library (dark theme, converters, logo, read-only `HarryConfig` +
+`QueryService` + `MsaReferenceFile` + `CsvExport`). Projects: `HarryShared`,
+`HarryAnalysis`, `HarryGraph`, `HarryCounter`, `HarryLimitSample`, `HarryCollageCreator`.
+The full solution builds **0 warnings / 0 errors**. What remains is the **on-site
+live-test** (§5) against a populated database / real images — the office build had no
+data, so the queries and renderers are verified by compilation + design, not yet by live
+results.
 
-Build/run: `dotnet build HarryDataServer.sln -c Release` (0 warnings / 0 errors expected,
+Build/run: `dotnet build HarryDataServer.sln -c Release` (0 warnings / 0 errors,
 `net8.0-windows`). Repo: `https://github.com/CustomHelp/HarryDataServerV2`, branch `main`.
+
+### Implementation notes (per tool)
+- **Read-only access:** all four DB tools go through `HarryShared.Data.QueryService` using
+  the **GetData** account. `HarryConfig` reads Server/Database from Harry.ini `[MySQL]`;
+  the read-only user defaults to `GetData`/`1234Get` and is overridable via
+  `[MySQL] GetUser` / `GetPassword` (added keys) so it survives the post-deploy password change.
+- **Limits (HarryAnalysis):** latest Min/Max folded per `(camera_id, parameter_set)` from
+  the `settings` history (matches the MSA engine's tolerance assumption — verify on-site).
+- **HarryGraph:** picks the serial vs trimmer table by module (M20/M21 → trimmer).
+- **HarryLimitSample:** writes `MSA_<module>.json` matching the server's `MsaReferenceFile`
+  schema; merges into an existing file so the `references` (xm) block is preserved.
+- **HarryCollageCreator:** the live preview reuses the **exact** `CollageComposer` geometry
+  (Pos=centre, size = crop × Scale × Zoom, crop→scale→mirror→place). Since that geometry is
+  itself **pending on-site verification** against a V1 collage, re-check the creator's
+  output alongside the server's when that check happens, and keep the two in sync.
 
 ---
 

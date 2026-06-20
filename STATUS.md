@@ -222,12 +222,31 @@ UI-thread `DispatcherTimer` drives all refresh (row counts every 30 s) — backg
 
 ---
 
-## Not yet built
+## Companion tools (Phase 14) — built
 
-- **Phase 14** — Companion tools (HarryAnalysis, HarryGraph, HarryCounter,
-  HarryCollageCreator, HarryLimitSample). **See `COMPANION_TOOLS.md`** for a full,
-  self-contained build guide (conventions, DB schema, per-tool spec, live-test checklist)
-  written so a fresh Claude Code instance can implement them.
+All 5 companion tools are implemented as separate WPF projects in the same solution
+(`HarryDataServer.sln`), sharing a new **`HarryShared`** class library. Full solution
+builds **0 warnings / 0 errors** (`net8.0-windows`). See `COMPANION_TOOLS.md` for the
+per-tool spec and the on-site live-test checklist.
+
+| Project | Scope | Key files |
+|---------|-------|-----------|
+| HarryShared | Shared library: dark theme, converters, CustomHelp logo, `HarryConfig` (Harry.ini → read-only **GetData** connection), `QueryService` (all read queries), `MsaReferenceFile`, `CsvExport` | Themes/DarkTheme.xaml, Converters/CommonConverters.cs, Config/HarryConfig.cs, Data/{QueryService,Models,MsaReferenceFile,CsvExport}.cs |
+| HarryAnalysis | Scan DMC/serial → dmcserial header + all measurements (value/limits/result) in a grid; export CSV | MainViewModel.cs, MainWindow.xaml |
+| HarryGraph | Multi-select definitions → OxyPlot time-series; Live (1 s rolling) / fixed range; save/load config JSON; print | MainViewModel.cs, DefItem.cs, MainWindow.xaml |
+| HarryCounter | NG counts over a range grouped by feature_group / measurement / nest/module/order; grid + bar chart + yield; 5 s live; CSV | MainViewModel.cs, MainWindow.xaml |
+| HarryLimitSample | Scan DMC → mark each measurement Should Pass/Fail/Ignore per module → save `MSA_<module>.json` (limit_sample_expected); preserves references (xm); load/edit existing | MainViewModel.cs, LimitSampleRow.cs, MainWindow.xaml |
+| HarryCollageCreator | Visual Collage.ini editor: add BMPs, place/zoom/crop/mirror, **live GDI+ composite matching `CollageComposer`**, reorder, open/save Collage.ini, export preview PNG | MainViewModel.cs, ImageSlot.cs, CollagePreviewRenderer.cs, CollageIniIo.cs, MainWindow.xaml |
+
+Conventions reused (per `COMPANION_TOOLS.md` §2): `net8.0-windows` + WPF, dark theme
+shared from `HarryShared` (`pack://…/HarryShared;component/Themes/DarkTheme.xaml`),
+CustomHelp logo + per-app `.ico`, CommunityToolkit.Mvvm, MySqlConnector with one
+pooled connection per operation + `ConfigureAwait(false)`, read-only **GetData**
+account (Server/Database from Harry.ini; `GetUser`/`GetPassword` overridable, default
+GetData/1234Get). The customer-owned JSON templates were not touched.
+
+> Build smoke: full solution `dotnet build -c Release` → 0/0; each tool produces its
+> `.exe`. Live verification (real DB with data) is part of the on-site checklist.
 
 > Phase 12 (MSA UI) was folded into the Phase 11 build (`ucMsaControl`).
 > HarryMSA is therefore done (integrated tab); HarrySimulator is the customer's own tool.
