@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Media;
 using HarryDataServer.Services;
 
 namespace HarryDataServer;
@@ -16,6 +17,7 @@ public partial class MainWindow : Window
     private readonly ICameraService _cameras;
     private readonly IMeasurementProcessor _measurements;
     private readonly ISpsServer _sps;
+    private readonly ISystemHealth _health;
 
     public MainWindow(
         IConfigService config,
@@ -23,7 +25,8 @@ public partial class MainWindow : Window
         IDatabaseService database,
         ICameraService cameras,
         IMeasurementProcessor measurements,
-        ISpsServer sps)
+        ISpsServer sps,
+        ISystemHealth health)
     {
         InitializeComponent();
         _config = config;
@@ -32,11 +35,13 @@ public partial class MainWindow : Window
         _cameras = cameras;
         _measurements = measurements;
         _sps = sps;
+        _health = health;
 
         _database.StatusChanged += OnDatabaseStatusChanged;
         _cameras.StatusChanged += OnCameraStatusChanged;
         _measurements.StatsChanged += OnMeasurementStatsChanged;
         _sps.StatusChanged += OnSpsStatusChanged;
+        _health.Changed += OnHealthChanged;
 
         Loaded += OnLoaded;
         Closed += (_, _) =>
@@ -45,6 +50,7 @@ public partial class MainWindow : Window
             _cameras.StatusChanged -= OnCameraStatusChanged;
             _measurements.StatsChanged -= OnMeasurementStatsChanged;
             _sps.StatusChanged -= OnSpsStatusChanged;
+            _health.Changed -= OnHealthChanged;
         };
     }
 
@@ -54,6 +60,7 @@ public partial class MainWindow : Window
         UpdateCameraStatus();
         UpdateMeasurementStatus();
         UpdateSpsStatus();
+        UpdateHealthStatus();
         _log.Information("Main window loaded.");
     }
 
@@ -68,6 +75,9 @@ public partial class MainWindow : Window
 
     private void OnSpsStatusChanged() =>
         Dispatcher.Invoke(UpdateSpsStatus);
+
+    private void OnHealthChanged() =>
+        Dispatcher.Invoke(UpdateHealthStatus);
 
     private void UpdateStatus(DatabaseStatus dbStatus)
     {
@@ -88,4 +98,18 @@ public partial class MainWindow : Window
         SpsStatusText.Text = _sps.IsRunning
             ? $"SPS: {_sps.ListeningChannels}/7 ch, {_sps.ActiveConnections} conn"
             : "SPS: stopped";
+
+    private void UpdateHealthStatus()
+    {
+        var health = _health.Snapshot();
+        if (health.IsHealthy)
+        {
+            HealthStatusText.Text = "Health: OK";
+            HealthStatusText.Foreground = Brushes.Green;
+            return;
+        }
+
+        HealthStatusText.Text = $"Health: {health.SignalWord} — {health.Message}";
+        HealthStatusText.Foreground = health.Worst == HealthSeverity.Error ? Brushes.Red : Brushes.DarkOrange;
+    }
 }

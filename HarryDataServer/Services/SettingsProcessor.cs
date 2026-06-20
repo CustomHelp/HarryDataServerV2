@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Text;
 using HarryDataServer.Communication;
+using HarryDataServer.Infrastructure;
 using HarryDataServer.Models;
 using MySqlConnector;
 
@@ -20,6 +21,7 @@ public sealed class SettingsProcessor : ISettingsProcessor
     private readonly ICameraService _cameras;
     private readonly IDatabaseService _database;
     private readonly SettingDefinitionCache _cache;
+    private readonly ISystemHealth _health;
     private readonly ILogService _log;
 
     private readonly ConcurrentQueue<PendingSetting> _queue = new();
@@ -37,11 +39,13 @@ public sealed class SettingsProcessor : ISettingsProcessor
         IDatabaseService database,
         SettingDefinitionCache cache,
         IConfigService config,
+        ISystemHealth health,
         ILogService log)
     {
         _cameras = cameras;
         _database = database;
         _cache = cache;
+        _health = health;
         _log = log;
 
         _batchSize = Math.Max(1, config.Config.SqlSettings.BatchSize);
@@ -87,6 +91,8 @@ public sealed class SettingsProcessor : ISettingsProcessor
     {
         if (_queue.Count >= MaxQueue)
         {
+            _health.Report(HealthSources.Settings, HealthSeverity.Warning,
+                $"Settings queue full ({MaxQueue}); settings are being dropped", TimeSpan.FromMinutes(5));
             _log.Warning("Settings queue full ({Max}); dropping {Camera} settings.",
                 MaxQueue, e.Telegram.ControllerName);
             return;
@@ -154,7 +160,10 @@ public sealed class SettingsProcessor : ISettingsProcessor
     private async Task FlushAsync(CancellationToken ct)
     {
         if (_queue.IsEmpty)
+        {
+            _health.Clear(HealthSources.Settings);
             return;
+        }
 
         var rows = new List<PendingSetting>();
         while (rows.Count < MaxItemsPerFlush && _queue.TryDequeue(out var item))
@@ -163,14 +172,15 @@ public sealed class SettingsProcessor : ISettingsProcessor
         if (rows.Count == 0)
             return;
 
-        await using var conn = await _database.OpenConnectionAsync(ct).ConfigureAwait(false);
-
-        var inserted = 0;
-        for (var offset = 0; offset < rows.Count; offset += _batchSize)
-        {
-            var chunk = rows.GetRange(offset, Math.Min(_batchSize, rows.Count - offset));
-            inserted += await InsertChunkAsync(conn, chunk, ct).ConfigureAwait(false);
-        }
+        // Same isolation/requeue guard as the measurement pipeline.
+        var inserted = await FlushHelper.WriteAsync(
+            rows,
+            InsertBatchAsync,
+            InsertSingleAsync,
+            Requeue,
+            _health, _log, HealthSources.Settings,
+            r => $"{r.CameraName}/{r.SettingName}",
+            ct).ConfigureAwait(false);
 
         if (inserted > 0)
         {
@@ -180,12 +190,43 @@ public sealed class SettingsProcessor : ISettingsProcessor
         }
     }
 
-    private async Task<int> InsertChunkAsync(MySqlConnection conn, List<PendingSetting> chunk, CancellationToken ct)
+    private async Task<int> InsertBatchAsync(IReadOnlyList<PendingSetting> rows, CancellationToken ct)
+    {
+        await using var conn = await _database.OpenConnectionAsync(ct).ConfigureAwait(false);
+        await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
+
+        var inserted = 0;
+        for (var offset = 0; offset < rows.Count; offset += _batchSize)
+        {
+            var count = Math.Min(_batchSize, rows.Count - offset);
+            var chunk = new List<PendingSetting>(count);
+            for (var i = 0; i < count; i++)
+                chunk.Add(rows[offset + i]);
+            inserted += await InsertChunkAsync(conn, tx, chunk, ct).ConfigureAwait(false);
+        }
+
+        await tx.CommitAsync(ct).ConfigureAwait(false);
+        return inserted;
+    }
+
+    private async Task InsertSingleAsync(PendingSetting row, CancellationToken ct)
+    {
+        await using var conn = await _database.OpenConnectionAsync(ct).ConfigureAwait(false);
+        await InsertChunkAsync(conn, null, new[] { row }, ct).ConfigureAwait(false);
+    }
+
+    private void Requeue(IReadOnlyList<PendingSetting> rows)
+    {
+        foreach (var row in rows)
+            _queue.Enqueue(row);
+    }
+
+    private async Task<int> InsertChunkAsync(MySqlConnection conn, MySqlTransaction? tx, IReadOnlyList<PendingSetting> chunk, CancellationToken ct)
     {
         var sql = new StringBuilder(
             "INSERT INTO `settings` (camera_id, definition_id, parameter_set, limit_value, version, recorded_at) VALUES ");
 
-        await using var cmd = new MySqlCommand { Connection = conn };
+        await using var cmd = new MySqlCommand { Connection = conn, Transaction = tx };
 
         var rowIndex = 0;
         foreach (var row in chunk)

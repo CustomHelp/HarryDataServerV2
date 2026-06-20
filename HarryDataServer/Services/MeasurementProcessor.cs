@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Text;
 using HarryDataServer.Communication;
+using HarryDataServer.Infrastructure;
 using HarryDataServer.Models;
 using MySqlConnector;
 
@@ -21,6 +22,7 @@ public sealed class MeasurementProcessor : IMeasurementProcessor
     private readonly ICameraService _cameras;
     private readonly IDatabaseService _database;
     private readonly MeasurementDefinitionCache _cache;
+    private readonly ISystemHealth _health;
     private readonly ILogService _log;
 
     private readonly ConcurrentQueue<PendingMeasurement> _queue = new();
@@ -40,11 +42,13 @@ public sealed class MeasurementProcessor : IMeasurementProcessor
         IDatabaseService database,
         MeasurementDefinitionCache cache,
         IConfigService config,
+        ISystemHealth health,
         ILogService log)
     {
         _cameras = cameras;
         _database = database;
         _cache = cache;
+        _health = health;
         _log = log;
 
         _batchSize = Math.Max(1, config.Config.SqlSettings.BatchSize);
@@ -110,6 +114,8 @@ public sealed class MeasurementProcessor : IMeasurementProcessor
 
         if (_queue.Count >= MaxQueue)
         {
+            _health.Report(HealthSources.MeasurementQueue, HealthSeverity.Error,
+                $"Measurement queue full ({MaxQueue}); samples are being dropped");
             _log.Warning("Measurement queue full ({Max}); dropping samples from {Camera}.",
                 MaxQueue, telegram.ControllerName);
             return;
@@ -176,7 +182,12 @@ public sealed class MeasurementProcessor : IMeasurementProcessor
     private async Task FlushAsync(CancellationToken ct)
     {
         if (_queue.IsEmpty)
+        {
+            // Nothing pending → no write problem; clear any stale flush fault.
+            _health.Clear(HealthSources.Measurements);
+            UpdateQueueHealth();
             return;
+        }
 
         // Drain a bounded slice, split by destination table.
         var serialRows = new List<PendingMeasurement>();
@@ -190,13 +201,16 @@ public sealed class MeasurementProcessor : IMeasurementProcessor
         }
 
         if (drained == 0)
+        {
+            UpdateQueueHealth();
             return;
+        }
 
-        await using var conn = await _database.OpenConnectionAsync(ct).ConfigureAwait(false);
-
+        // Write each table through the isolation/requeue helper: a single poison row
+        // no longer kills the batch, and a DB outage requeues instead of losing data.
         var inserted = 0;
-        inserted += await InsertRowsAsync(conn, "measurements_serial", "serial_number", serialRows, ct).ConfigureAwait(false);
-        inserted += await InsertRowsAsync(conn, "measurements_serial_trimmer", "serial_trimmer", trimmerRows, ct).ConfigureAwait(false);
+        inserted += await FlushTableAsync("measurements_serial", "serial_number", serialRows, ct).ConfigureAwait(false);
+        inserted += await FlushTableAsync("measurements_serial_trimmer", "serial_trimmer", trimmerRows, ct).ConfigureAwait(false);
 
         if (inserted > 0)
         {
@@ -204,30 +218,82 @@ public sealed class MeasurementProcessor : IMeasurementProcessor
             _log.Debug("Flushed {Inserted} measurement(s); {Pending} pending.", inserted, _queue.Count);
             StatsChanged?.Invoke();
         }
+
+        UpdateQueueHealth();
     }
 
-    private async Task<int> InsertRowsAsync(
-        MySqlConnection conn, string table, string serialColumn, List<PendingMeasurement> rows, CancellationToken ct)
+    private Task<int> FlushTableAsync(
+        string table, string serialColumn, IReadOnlyList<PendingMeasurement> rows, CancellationToken ct) =>
+        FlushHelper.WriteAsync(
+            rows,
+            (batch, c) => InsertBatchAsync(table, serialColumn, batch, c),
+            (row, c) => InsertSingleAsync(table, serialColumn, row, c),
+            Requeue,
+            _health, _log, HealthSources.Measurements,
+            r => $"{r.CameraName}/{r.VariableName} serial={r.Serial}",
+            ct);
+
+    /// <summary>
+    /// Insert all rows for one table atomically (single transaction), chunked by batch
+    /// size. All-or-nothing so the helper's row-by-row retry path starts from a clean
+    /// slate — a mid-batch failure rolls back and cannot double-insert earlier chunks.
+    /// </summary>
+    private async Task<int> InsertBatchAsync(
+        string table, string serialColumn, IReadOnlyList<PendingMeasurement> rows, CancellationToken ct)
     {
-        if (rows.Count == 0)
-            return 0;
+        await using var conn = await _database.OpenConnectionAsync(ct).ConfigureAwait(false);
+        await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
 
         var inserted = 0;
         for (var offset = 0; offset < rows.Count; offset += _batchSize)
         {
-            var chunk = rows.GetRange(offset, Math.Min(_batchSize, rows.Count - offset));
-            inserted += await InsertChunkAsync(conn, table, serialColumn, chunk, ct).ConfigureAwait(false);
+            var count = Math.Min(_batchSize, rows.Count - offset);
+            var chunk = new List<PendingMeasurement>(count);
+            for (var i = 0; i < count; i++)
+                chunk.Add(rows[offset + i]);
+            inserted += await InsertChunkAsync(conn, tx, table, serialColumn, chunk, ct).ConfigureAwait(false);
         }
+
+        await tx.CommitAsync(ct).ConfigureAwait(false);
         return inserted;
     }
 
+    /// <summary>Insert exactly one row on its own connection (isolation path).</summary>
+    private async Task InsertSingleAsync(
+        string table, string serialColumn, PendingMeasurement row, CancellationToken ct)
+    {
+        await using var conn = await _database.OpenConnectionAsync(ct).ConfigureAwait(false);
+        await InsertChunkAsync(conn, null, table, serialColumn, new[] { row }, ct).ConfigureAwait(false);
+    }
+
+    private void Requeue(IReadOnlyList<PendingMeasurement> rows)
+    {
+        foreach (var row in rows)
+            _queue.Enqueue(row);
+    }
+
+    /// <summary>Reflect queue depth in the SPS health signal (filling up → WARNING, near full → ERROR).</summary>
+    private void UpdateQueueHealth()
+    {
+        var count = _queue.Count;
+        if (count >= MaxQueue)
+            _health.Report(HealthSources.MeasurementQueue, HealthSeverity.Error,
+                $"Measurement queue full ({count}/{MaxQueue}); samples are being dropped");
+        else if (count >= MaxQueue / 2)
+            _health.Report(HealthSources.MeasurementQueue, HealthSeverity.Warning,
+                $"Measurement queue filling up ({count}/{MaxQueue})");
+        else
+            _health.Clear(HealthSources.MeasurementQueue);
+    }
+
     private async Task<int> InsertChunkAsync(
-        MySqlConnection conn, string table, string serialColumn, List<PendingMeasurement> chunk, CancellationToken ct)
+        MySqlConnection conn, MySqlTransaction? tx, string table, string serialColumn,
+        IReadOnlyList<PendingMeasurement> chunk, CancellationToken ct)
     {
         var sql = new StringBuilder(
             $"INSERT INTO `{table}` (`{serialColumn}`, definition_id, measurement_value, measurement_string, result_status, run_type, measured_at) VALUES ");
 
-        await using var cmd = new MySqlCommand { Connection = conn };
+        await using var cmd = new MySqlCommand { Connection = conn, Transaction = tx };
 
         var rowIndex = 0;
         for (var i = 0; i < chunk.Count; i++)

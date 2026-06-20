@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using HarryDataServer.Infrastructure;
 using HarryDataServer.Models;
 using MySqlConnector;
 
@@ -17,6 +18,7 @@ public sealed class PartExitProcessor : IPartExitProcessor
 
     private readonly ISpsServer _sps;
     private readonly IDatabaseService _database;
+    private readonly ISystemHealth _health;
     private readonly ILogService _log;
     private readonly TimeSpan _flushInterval;
 
@@ -26,10 +28,11 @@ public sealed class PartExitProcessor : IPartExitProcessor
     private long _totalUpserted;
     private bool _started;
 
-    public PartExitProcessor(ISpsServer sps, IDatabaseService database, IConfigService config, ILogService log)
+    public PartExitProcessor(ISpsServer sps, IDatabaseService database, ISystemHealth health, IConfigService config, ILogService log)
     {
         _sps = sps;
         _database = database;
+        _health = health;
         _log = log;
         _flushInterval = TimeSpan.FromSeconds(Math.Max(1, config.Config.SqlSettings.SaveIntervalSeconds));
     }
@@ -70,6 +73,8 @@ public sealed class PartExitProcessor : IPartExitProcessor
     {
         if (_queue.Count >= MaxQueue)
         {
+            _health.Report(HealthSources.PartExit, HealthSeverity.Error,
+                $"Part Exit queue full ({MaxQueue}); finished parts are being dropped");
             _log.Warning("Part Exit queue full ({Max}); dropping part {Serial}.", MaxQueue, e.Data.Szid);
             return;
         }
@@ -97,7 +102,10 @@ public sealed class PartExitProcessor : IPartExitProcessor
     private async Task FlushAsync(CancellationToken ct)
     {
         if (_queue.IsEmpty)
+        {
+            _health.Clear(HealthSources.PartExit);
             return;
+        }
 
         // Wait until the database is ready before draining (avoids losing the queue).
         if (_database.Status != DatabaseStatus.Ready)
@@ -110,11 +118,15 @@ public sealed class PartExitProcessor : IPartExitProcessor
         if (rows.Count == 0)
             return;
 
-        await using var conn = await _database.OpenConnectionAsync(ct).ConfigureAwait(false);
-
-        var upserted = 0;
-        foreach (var part in rows)
-            upserted += await UpsertAsync(conn, part, ct).ConfigureAwait(false);
+        // Isolation/requeue guard: one bad part no longer blocks the rest, a DB outage requeues.
+        var upserted = await FlushHelper.WriteAsync(
+            rows,
+            UpsertBatchAsync,
+            UpsertSingleAsync,
+            Requeue,
+            _health, _log, HealthSources.PartExit,
+            p => $"part SZID={p.Szid} DMC={p.Dmc}",
+            ct).ConfigureAwait(false);
 
         if (upserted > 0)
         {
@@ -124,7 +136,32 @@ public sealed class PartExitProcessor : IPartExitProcessor
         }
     }
 
-    private static async Task<int> UpsertAsync(MySqlConnection conn, SpsPartExitData part, CancellationToken ct)
+    private async Task<int> UpsertBatchAsync(IReadOnlyList<SpsPartExitData> rows, CancellationToken ct)
+    {
+        await using var conn = await _database.OpenConnectionAsync(ct).ConfigureAwait(false);
+        await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
+
+        var upserted = 0;
+        foreach (var part in rows)
+            upserted += await UpsertAsync(conn, tx, part, ct).ConfigureAwait(false);
+
+        await tx.CommitAsync(ct).ConfigureAwait(false);
+        return upserted;
+    }
+
+    private async Task UpsertSingleAsync(SpsPartExitData part, CancellationToken ct)
+    {
+        await using var conn = await _database.OpenConnectionAsync(ct).ConfigureAwait(false);
+        await UpsertAsync(conn, null, part, ct).ConfigureAwait(false);
+    }
+
+    private void Requeue(IReadOnlyList<SpsPartExitData> rows)
+    {
+        foreach (var row in rows)
+            _queue.Enqueue(row);
+    }
+
+    private static async Task<int> UpsertAsync(MySqlConnection conn, MySqlTransaction? tx, SpsPartExitData part, CancellationToken ct)
     {
         const string sql = @"
 INSERT INTO dmcserial
@@ -145,7 +182,7 @@ ON DUPLICATE KEY UPDATE
   m1x_humidity   = VALUES(m1x_humidity),
   result_status  = VALUES(result_status);";
 
-        await using var cmd = new MySqlCommand(sql, conn);
+        await using var cmd = new MySqlCommand(sql, conn) { Transaction = tx };
         cmd.Parameters.AddWithValue("@serial", part.Szid);
         cmd.Parameters.AddWithValue("@trimmer", Nullable(part.VirtualSerial));
         cmd.Parameters.AddWithValue("@dmc", Nullable(part.Dmc));

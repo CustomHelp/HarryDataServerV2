@@ -16,10 +16,14 @@ public sealed class MySqlDatabaseService : IDatabaseService
     private static readonly TimeSpan InitialBackoff = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan MaxBackoff = TimeSpan.FromSeconds(60);
 
+    // Steady-state connectivity heartbeat interval (after the DB is Ready).
+    private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(5);
+
     private readonly IConfigService _config;
     private readonly MySqlRepository _repo;
     private readonly PartitionManager _partitions;
     private readonly JsonTemplateLoader _templates;
+    private readonly ISystemHealth _health;
     private readonly ILogService _log;
 
     private DatabaseStatus _status = DatabaseStatus.NotStarted;
@@ -29,12 +33,14 @@ public sealed class MySqlDatabaseService : IDatabaseService
         MySqlRepository repo,
         PartitionManager partitions,
         JsonTemplateLoader templates,
+        ISystemHealth health,
         ILogService log)
     {
         _config = config;
         _repo = repo;
         _partitions = partitions;
         _templates = templates;
+        _health = health;
         _log = log;
     }
 
@@ -69,7 +75,12 @@ public sealed class MySqlDatabaseService : IDatabaseService
             await SyncDefinitionsAsync(cameraIds, ct).ConfigureAwait(false);
 
             Status = DatabaseStatus.Ready;
+            _health.Clear(HealthSources.Database);
             _log.Information("Database subsystem ready.");
+
+            // Keep watching the connection so a steady-state outage (and its recovery)
+            // is detected and reflected in health regardless of pipeline traffic.
+            await MonitorConnectionAsync(ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -79,7 +90,48 @@ public sealed class MySqlDatabaseService : IDatabaseService
         catch (Exception ex)
         {
             Status = DatabaseStatus.Failed;
+            _health.Report(HealthSources.Database, HealthSeverity.Error,
+                $"Database startup failed: {ex.Message}");
             _log.Error(ex, "Database startup failed.");
+        }
+    }
+
+    /// <summary>
+    /// Background heartbeat that runs once the DB is Ready: pings the server every
+    /// <see cref="HeartbeatInterval"/> and owns the <see cref="HealthSources.Database"/>
+    /// fault. This makes a mid-operation outage <b>and its recovery</b> self-healing —
+    /// the KeepAlive channel returns to OK on its own when MySQL comes back, even with
+    /// no production traffic to drive a successful flush.
+    /// </summary>
+    private async Task MonitorConnectionAsync(CancellationToken ct)
+    {
+        var wasReachable = true;
+
+        while (!ct.IsCancellationRequested)
+        {
+            try { await Task.Delay(HeartbeatInterval, ct).ConfigureAwait(false); }
+            catch (OperationCanceledException) { break; }
+
+            bool reachable;
+            try { reachable = await _repo.CanConnectAsync(ct).ConfigureAwait(false); }
+            catch (OperationCanceledException) { break; }
+            catch { reachable = false; }
+
+            if (reachable)
+            {
+                _health.Clear(HealthSources.Database);
+                if (!wasReachable)
+                    _log.Information("Database connection restored.");
+            }
+            else
+            {
+                _health.Report(HealthSources.Database, HealthSeverity.Error,
+                    "Database connection lost; reconnecting");
+                if (wasReachable)
+                    _log.Warning("Database connection lost; monitoring for recovery.");
+            }
+
+            wasReachable = reachable;
         }
     }
 
@@ -89,6 +141,8 @@ public sealed class MySqlDatabaseService : IDatabaseService
         while (!await _repo.CanConnectAsync(ct).ConfigureAwait(false))
         {
             ct.ThrowIfCancellationRequested();
+            _health.Report(HealthSources.Database, HealthSeverity.Error,
+                $"MySQL server not reachable; retrying in {backoff.TotalSeconds:0}s");
             _log.Warning("MySQL server not reachable; retrying in {Seconds:0}s.", backoff.TotalSeconds);
             await Task.Delay(backoff, ct).ConfigureAwait(false);
 

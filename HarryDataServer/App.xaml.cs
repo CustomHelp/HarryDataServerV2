@@ -139,6 +139,9 @@ public partial class App : Application
             return new SerilogService(general.LogFilePath, general.LoggingActive);
         });
 
+        // --- System health (central fault registry surfaced on the SPS KeepAlive channel) ---
+        services.AddSingleton<ISystemHealth, SystemHealthService>();
+
         // --- Database (Phase 2): repository, partitions, JSON templates, orchestration ---
         services.AddSingleton<JsonTemplateLoader>();
         services.AddSingleton(sp =>

@@ -27,6 +27,7 @@ public sealed class MsaService : IMsaService
     private readonly ISpsServer _sps;
     private readonly IConfigService _config;
     private readonly MsaReferenceLoader _referenceLoader;
+    private readonly ISystemHealth _health;
     private readonly ILogService _log;
 
     private readonly ConcurrentQueue<PendingMsaMeasurement> _queue = new();
@@ -45,6 +46,7 @@ public sealed class MsaService : IMsaService
         ISpsServer sps,
         IConfigService config,
         MsaReferenceLoader referenceLoader,
+        ISystemHealth health,
         ILogService log)
     {
         _cameras = cameras;
@@ -53,6 +55,7 @@ public sealed class MsaService : IMsaService
         _sps = sps;
         _config = config;
         _referenceLoader = referenceLoader;
+        _health = health;
         _log = log;
         _flushInterval = TimeSpan.FromSeconds(Math.Max(1, config.Config.SqlSettings.SaveIntervalSeconds));
     }
@@ -170,7 +173,10 @@ public sealed class MsaService : IMsaService
     private async Task FlushAsync(CancellationToken ct)
     {
         if (_queue.IsEmpty)
+        {
+            _health.Clear(HealthSources.Msa);
             return;
+        }
 
         var rows = new List<PendingMsaMeasurement>();
         while (rows.Count < MaxItemsPerFlush && _queue.TryDequeue(out var item))
@@ -179,35 +185,70 @@ public sealed class MsaService : IMsaService
         if (rows.Count == 0)
             return;
 
+        // Same isolation/requeue guard as the production pipeline.
+        var stored = await FlushHelper.WriteAsync(
+            rows,
+            InsertBatchAsync,
+            InsertSingleAsync,
+            Requeue,
+            _health, _log, HealthSources.Msa,
+            r => $"{r.ControllerName}/{r.VariableName} base={r.BaseId}",
+            ct).ConfigureAwait(false);
+
+        if (stored > 0)
+            _log.Debug("Stored {Count} MSA measurement(s); {Pending} pending.", stored, _queue.Count);
+    }
+
+    private async Task<int> InsertBatchAsync(IReadOnlyList<PendingMsaMeasurement> rows, CancellationToken ct)
+    {
         await using var conn = await _database.OpenConnectionAsync(ct).ConfigureAwait(false);
+        await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
 
+        var stored = 0;
         foreach (var row in rows)
-        {
-            if (!_cache.TryGet(row.ControllerName, row.VariableName, out var definitionId))
-                continue;
+            stored += await InsertOneAsync(conn, tx, row, ct).ConfigureAwait(false);
 
-            const string sql = @"
+        await tx.CommitAsync(ct).ConfigureAwait(false);
+        return stored;
+    }
+
+    private async Task InsertSingleAsync(PendingMsaMeasurement row, CancellationToken ct)
+    {
+        await using var conn = await _database.OpenConnectionAsync(ct).ConfigureAwait(false);
+        await InsertOneAsync(conn, null, row, ct).ConfigureAwait(false);
+    }
+
+    private async Task<int> InsertOneAsync(MySqlConnection conn, MySqlTransaction? tx, PendingMsaMeasurement row, CancellationToken ct)
+    {
+        if (!_cache.TryGet(row.ControllerName, row.VariableName, out var definitionId))
+            return 0; // unknown definition — not a DB fault
+
+        const string sql = @"
 INSERT INTO msa_measurements
   (dmc, base_id, loop_number, controller_name, definition_id, measurement_value, measurement_string, result_status, msa_type, msa_version, measured_at)
 VALUES
   (@dmc, @base, @loop, @ctrl, @def, @val, @str, @res, @type, @ver, @at);";
 
-            await using var cmd = new MySqlCommand(sql, conn);
-            cmd.Parameters.AddWithValue("@dmc", row.Dmc);
-            cmd.Parameters.AddWithValue("@base", row.BaseId);
-            cmd.Parameters.AddWithValue("@loop", row.LoopNumber);
-            cmd.Parameters.AddWithValue("@ctrl", row.ControllerName);
-            cmd.Parameters.AddWithValue("@def", definitionId);
-            cmd.Parameters.AddWithValue("@val", (object?)row.Value ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("@str", (object?)row.MeasurementString ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("@res", (object?)row.ResultStatus ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("@type", row.MsaType.ToDbString());
-            cmd.Parameters.AddWithValue("@ver", (object?)row.MsaVersion ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("@at", row.MeasuredAt);
-            await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-        }
+        await using var cmd = new MySqlCommand(sql, conn) { Transaction = tx };
+        cmd.Parameters.AddWithValue("@dmc", row.Dmc);
+        cmd.Parameters.AddWithValue("@base", row.BaseId);
+        cmd.Parameters.AddWithValue("@loop", row.LoopNumber);
+        cmd.Parameters.AddWithValue("@ctrl", row.ControllerName);
+        cmd.Parameters.AddWithValue("@def", definitionId);
+        cmd.Parameters.AddWithValue("@val", (object?)row.Value ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@str", (object?)row.MeasurementString ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@res", (object?)row.ResultStatus ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@type", row.MsaType.ToDbString());
+        cmd.Parameters.AddWithValue("@ver", (object?)row.MsaVersion ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@at", row.MeasuredAt);
+        await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        return 1;
+    }
 
-        _log.Debug("Stored {Count} MSA measurement(s); {Pending} pending.", rows.Count, _queue.Count);
+    private void Requeue(IReadOnlyList<PendingMsaMeasurement> rows)
+    {
+        foreach (var row in rows)
+            _queue.Enqueue(row);
     }
 
     // --- Evaluation: SPS handler (sync, poll model) ---

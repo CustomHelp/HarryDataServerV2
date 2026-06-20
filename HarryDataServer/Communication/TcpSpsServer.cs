@@ -19,6 +19,7 @@ public sealed class TcpSpsServer : ISpsServer
 
     private readonly IConfigService _config;
     private readonly ICameraService _cameras;
+    private readonly ISystemHealth _health;
     private readonly ILogService _log;
 
     private readonly List<TcpListener> _listeners = new();
@@ -27,10 +28,11 @@ public sealed class TcpSpsServer : ISpsServer
     private int _listeningChannels;
     private int _activeConnections;
 
-    public TcpSpsServer(IConfigService config, ICameraService cameras, ILogService log)
+    public TcpSpsServer(IConfigService config, ICameraService cameras, ISystemHealth health, ILogService log)
     {
         _config = config;
         _cameras = cameras;
+        _health = health;
         _log = log;
     }
 
@@ -214,14 +216,32 @@ public sealed class TcpSpsServer : ISpsServer
     }
 
     /// <summary>
-    /// Channel 1: mirror the received telegram and append the per-camera status
-    /// string (one 1/0 per camera, in INI order), e.g. "&lt;mirror&gt;;1;1;0;1;...".
+    /// Channel 1: mirror the received telegram, append the per-camera status string
+    /// (one 1/0 per camera, in INI order), then a health signal word and — only when
+    /// not healthy — a plain-English fault description:
+    ///   healthy:  &lt;mirror&gt;;1;1;0;1;...;OK
+    ///   warning:  &lt;mirror&gt;;1;1;0;1;...;WARNING;&lt;text&gt;
+    ///   error:    &lt;mirror&gt;;1;1;0;1;...;ERROR;&lt;text&gt;
+    /// The camera 1/0 list keeps offline cameras visible without flipping the signal
+    /// word; the signal word reflects DB / pipeline faults (CLAUDE.md section 5).
     /// </summary>
     private string BuildKeepAliveResponse(string telegram)
     {
         var status = string.Join(';', _cameras.Clients.Select(c => c.IsConnected ? "1" : "0"));
-        return $"{telegram};{status}";
+        var health = _health.Snapshot();
+
+        if (health.IsHealthy)
+            return $"{telegram};{status};{health.SignalWord}";
+
+        return $"{telegram};{status};{health.SignalWord};{SanitizeForWire(health.Message)}";
     }
+
+    /// <summary>
+    /// Strip delimiters/line breaks from a fault message so it cannot break the
+    /// semicolon-framed telegram the PLC parses (the message is the trailing field).
+    /// </summary>
+    private static string SanitizeForWire(string message) =>
+        message.Replace('\r', ' ').Replace('\n', ' ').Replace(';', ',').Trim();
 
     private string HandlePartExit(string telegram)
     {

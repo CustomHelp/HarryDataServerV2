@@ -20,6 +20,10 @@
             <StatusBarItem>
                 <TextBlock x:Name="SpsStatusText" Text="SPS: stopped" />
             </StatusBarItem>
+            <Separator />
+            <StatusBarItem>
+                <TextBlock x:Name="HealthStatusText" Text="Health: OK" Foreground="Green" />
+            </StatusBarItem>
         </StatusBar>
 
         <TabControl Margin="4">

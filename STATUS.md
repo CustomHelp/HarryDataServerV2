@@ -20,6 +20,44 @@ brought forward; numbering otherwise tracks CLAUDE.md section 18).
 | 7 | Main CSV export | CsvExportService (two-row header, R_/V_ columns) |
 | 8 | Image cleanup + DB partition retention | ImageCleanupService |
 | 10 | MSA engine | MsaCalculator, MsaService, MsaModels, BaseId, MsaReference(+Loader), MsaConfig |
+| 8b | Health reporting on SPS KeepAlive + flush data-loss hardening | ISystemHealth/SystemHealthService, HealthSources, FlushHelper |
+
+---
+
+## Health / Alive reporting (Phase 8b)
+
+The SPS KeepAlive channel (ch 1) now reports the real system state, not just camera
+connectivity. Previously every flush failure was swallowed in a catch and the SPS
+saw "all good" — the software ran blind.
+
+- **Central registry** `ISystemHealth` (singleton): `Report(source, severity, message, ttl?)`,
+  `Clear(source)`, `Snapshot()`. Thread-safe, lock-free reads. Transient events use a
+  TTL (auto-expire); state faults stay until cleared.
+- **KeepAlive wire format** (agreed with customer):
+  `<mirror>;<cam1>;…;<camN>;<SIGNALWORD>[;<plain-text>]`
+  - healthy → `…;OK` (no text)
+  - warning → `…;WARNING;<text>`   (running but degraded)
+  - error   → `…;ERROR;<text>`     (data loss / standstill imminent)
+  - worst severity wins the word; messages joined with ` | `; text sanitized of `;`/CR/LF.
+  - Camera 0/1 list keeps offline cameras visible **without** flipping the signal word.
+- **Report points wired** (previously silent catches): DB unreachable/startup-failed
+  (`MySqlDatabaseService`), flush exceptions + queue depth (Measurement/Settings/PartExit/
+  Csv/Msa). DB up / flush ok / queue drained → `Clear`.
+- **DB connectivity heartbeat:** once Ready, `MySqlDatabaseService` pings MySQL every 5s
+  and owns the `Database` health source, so a *steady-state* outage **and its recovery**
+  self-heal (KeepAlive returns to OK on its own) without needing production traffic.
+  Each pipeline also clears its own fault when its queue is empty (no pending writes).
+- **Severity policy:** ERROR = DB down, flush failing, queue full (dropping). WARNING =
+  single rejected row, queue filling (≥50%), settings drop.
+
+### Flush data-loss hardening (`FlushHelper.WriteAsync`)
+A failed batch INSERT used to lose every already-dequeued row, and one poison row killed
+the whole batch. Now: try batch → on failure retry row-by-row → a single bad row is
+isolated (dropped + WARNING) while the rest land → ≥10 consecutive failures ⇒ DB assumed
+down ⇒ remaining rows **requeued** (no loss) + sticky ERROR. Applied to Measurement,
+Settings, PartExit, MSA; CSV uses an equivalent requeue-on-failure path.
+
+A `Health: OK/WARNING/ERROR` indicator was added to the MainWindow status bar.
 
 ---
 

@@ -27,6 +27,7 @@ public sealed class CsvExportService : ICsvService
 
     private readonly ISpsServer _sps;
     private readonly IDatabaseService _database;
+    private readonly ISystemHealth _health;
     private readonly ILogService _log;
     private readonly bool _enabled;
     private readonly string _basePath;
@@ -53,10 +54,11 @@ public sealed class CsvExportService : ICsvService
     private long _totalRows;
     private bool _started;
 
-    public CsvExportService(ISpsServer sps, IDatabaseService database, IConfigService config, ILogService log)
+    public CsvExportService(ISpsServer sps, IDatabaseService database, ISystemHealth health, IConfigService config, ILogService log)
     {
         _sps = sps;
         _database = database;
+        _health = health;
         _log = log;
 
         var csv = config.Config.Csv;
@@ -110,6 +112,8 @@ public sealed class CsvExportService : ICsvService
     {
         if (_queue.Count >= MaxQueue)
         {
+            _health.Report(HealthSources.Csv, HealthSeverity.Error,
+                $"CSV queue full ({MaxQueue}); part rows are being dropped");
             _log.Warning("CSV queue full ({Max}); dropping part {Serial}.", MaxQueue, e.Data.Szid);
             return;
         }
@@ -237,7 +241,11 @@ ORDER BY c.camera_name, md.telegram_place;";
     private async Task FlushAsync(CancellationToken ct)
     {
         if (_csv is null || _queue.IsEmpty)
+        {
+            if (_queue.IsEmpty)
+                _health.Clear(HealthSources.Csv);
             return;
+        }
         if (_database.Status != DatabaseStatus.Ready)
             return;
 
@@ -251,25 +259,47 @@ ORDER BY c.camera_name, md.telegram_place;";
         await using var conn = await _database.OpenConnectionAsync(ct).ConfigureAwait(false);
 
         var written = 0;
-        foreach (var part in parts)
+        for (var i = 0; i < parts.Count; i++)
         {
-            var row = await BuildRowAsync(conn, part, ct).ConfigureAwait(false);
-
-            // Rotate to a new file when the order changes (CLAUDE.md section 13).
-            if (!string.Equals(part.OrderName, _currentOrder, StringComparison.Ordinal))
+            var part = parts[i];
+            try
             {
-                _csv.Rotate();
-                _csv.Configure(FullHeaderRows(), string.IsNullOrWhiteSpace(part.OrderName) ? "NoOrder" : part.OrderName);
-                _currentOrder = part.OrderName;
-            }
+                var row = await BuildRowAsync(conn, part, ct).ConfigureAwait(false);
 
-            _csv.WriteRow(row);
-            written++;
+                // Rotate to a new file when the order changes (CLAUDE.md section 13).
+                if (!string.Equals(part.OrderName, _currentOrder, StringComparison.Ordinal))
+                {
+                    _csv.Rotate();
+                    _csv.Configure(FullHeaderRows(), string.IsNullOrWhiteSpace(part.OrderName) ? "NoOrder" : part.OrderName);
+                    _currentOrder = part.OrderName;
+                }
+
+                _csv.WriteRow(row);
+                written++;
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                // DB read or file write failed (DB/NAS down). Requeue the unwritten
+                // remainder so no part row is lost, surface it, and retry next cycle.
+                for (var j = i; j < parts.Count; j++)
+                    _queue.Enqueue(parts[j]);
+
+                _health.Report(HealthSources.Csv, HealthSeverity.Error,
+                    $"CSV export failing: {ex.Message}");
+                _log.Error(ex, "CSV export failed for part {Serial}; {Count} row(s) requeued.",
+                    part.Szid, parts.Count - i);
+                break;
+            }
         }
 
         if (written > 0)
         {
             _csv.Flush();
+            _health.Clear(HealthSources.Csv);
             Interlocked.Add(ref _totalRows, written);
             _log.Debug("Wrote {Count} CSV row(s); {Pending} pending.", written, _queue.Count);
             StatsChanged?.Invoke();
