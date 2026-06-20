@@ -64,6 +64,7 @@ public sealed partial class MainViewModel : ObservableObject
         SpsChannels = BuildChannels();
         Msa = new MsaViewModel(_msa);
         Log = new LogViewModel(_log, _config);
+        CollageView = new CollageViewModel(_collage);
 
         _sps.ChannelActivity += OnChannelActivity;
 
@@ -83,6 +84,7 @@ public sealed partial class MainViewModel : ObservableObject
     public ObservableCollection<SpsChannelViewModel> SpsChannels { get; }
     public MsaViewModel Msa { get; }
     public LogViewModel Log { get; }
+    public CollageViewModel CollageView { get; }
     public ObservableCollection<string> HealthFaults { get; } = new();
     public ObservableCollection<TableCountVm> TableRows { get; } = new();
     public ObservableCollection<string> OfflineCameras { get; } = new();

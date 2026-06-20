@@ -62,7 +62,10 @@ Implemented from the written spec (no V1 source on the machine to port literally
      `BackupFolder\YYYY\MM\DD\HH\`, verify size, delete source.
    - **Collage:** match by serial + all KeyName keywords; output `serial_Collage.jpg` to
      `Collage_ResultImages`. (Old NAS keys superseded for this flow.)
-   - Timing shown on the CSV tab: "Last export: CSV Xms | Collage Xms | Images Xms | Total Xms".
+   - Timing shown on the CSV and Collage tabs: "Last export: CSV Xms | Collage Xms | Images Xms | Total Xms".
+   - **Collage tab** (`ucCollageControl`): shows the last 4 generated collages as thumbnails
+     (Queue<BitmapImage>(4), loaded OnLoad + Frozen off-thread, collection updated via
+     Dispatcher.Invoke) in a horizontal WrapPanel with each image's timestamp below it.
 5. **CSV rotation** — already correct (order-name change + `DataSetsPerFile`); now driven
    per-part synchronously via `ICsvService.WritePartAsync`.
 6. **MSA navigation** — "Run X of Y" + Prev/Next, loads the latest run on startup, run

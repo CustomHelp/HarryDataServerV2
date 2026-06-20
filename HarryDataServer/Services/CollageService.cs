@@ -43,6 +43,7 @@ public sealed class CollageService : ICollageService
     public int PendingCount => 0;
     public long TotalGenerated => Interlocked.Read(ref _totalGenerated);
     public event Action? StatsChanged;
+    public event Action<string, DateTime>? CollageGenerated;
 
     public Task StartAsync(CancellationToken ct)
     {
@@ -110,6 +111,8 @@ public sealed class CollageService : ICollageService
             _log.Information("Collage written for {Serial}: {Placed} placed, {Missing} missing → {Path}.",
                 part.Szid, result.Placed, result.Missing, result.OutputPath);
             StatsChanged?.Invoke();
+            if (result.OutputPath is not null)
+                CollageGenerated?.Invoke(result.OutputPath, DateTime.Now);
             return true;
         }
         catch (Exception ex)

@@ -96,6 +96,12 @@
                 <ctrl:ucCsvControl />
             </TabItem>
 
+            <TabItem Header="Collage">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <ctrl:ucCollageControl />
+                </ScrollViewer>
+            </TabItem>
+
             <TabItem Header="Log">
                 <ctrl:ucLogControl DataContext="{Binding Log}" />
             </TabItem>

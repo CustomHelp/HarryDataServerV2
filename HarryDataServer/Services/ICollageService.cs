@@ -17,6 +17,9 @@ public interface ICollageService
     /// <summary>Raised when counters change (for UI binding).</summary>
     event Action? StatsChanged;
 
+    /// <summary>Raised after a collage JPG is written: (outputPath, generatedAt).</summary>
+    event Action<string, DateTime>? CollageGenerated;
+
     /// <summary>Compose the collage for one OK part. Returns false only on a genuine failure.</summary>
     Task<bool> ComposeForPartAsync(SpsPartExitData part, CancellationToken ct);
 
