@@ -5,6 +5,9 @@ using CommunityToolkit.Mvvm.Input;
 using HarryShared.Config;
 using HarryShared.Data;
 using Microsoft.Win32;
+using OxyPlot;
+using OxyPlot.Axes;
+using OxyPlot.Series;
 
 namespace HarryCounter;
 
@@ -65,6 +68,7 @@ public partial class MainViewModel : ObservableObject
     };
 
     public ObservableCollection<ErrorTreeNode> Tree { get; } = new();
+    public PlotModel Model { get; } = BuildEmptyChart();
 
     [ObservableProperty] private GroupDimension _level1;
     [ObservableProperty] private GroupDimension _level2;
@@ -123,6 +127,66 @@ public partial class MainViewModel : ObservableObject
         // First level expanded so the structure is visible at a glance.
         foreach (var node in BuildNodes(_rows, ActiveDimensions, 0, expandThisLevel: true))
             Tree.Add(node);
+
+        BuildChart();
+    }
+
+    /// <summary>Bar chart of the top-level groups' NG counts (the first chosen dimension).</summary>
+    private void BuildChart()
+    {
+        Model.Series.Clear();
+        Model.Axes.Clear();
+
+        var fg = OxyColor.FromRgb(0xE5, 0xE7, 0xEB);
+        var grid = OxyColor.FromArgb(0x40, 0x9C, 0xA3, 0xAF);
+        var top = Tree.Take(25).ToList();
+        var firstDim = ActiveDimensions.FirstOrDefault()?.Name ?? "Result";
+
+        var category = new CategoryAxis
+        {
+            Position = AxisPosition.Left,
+            TextColor = fg, TitleColor = fg, TicklineColor = grid,
+        };
+        // Largest bar on top: reverse for the bottom-up category axis.
+        foreach (var n in Enumerable.Reverse(top))
+            category.Labels.Add(n.Key);
+        Model.Axes.Add(category);
+
+        Model.Axes.Add(new LinearAxis
+        {
+            Position = AxisPosition.Bottom,
+            MinimumPadding = 0, AbsoluteMinimum = 0,
+            TextColor = fg, TitleColor = fg, TicklineColor = grid,
+            MajorGridlineStyle = LineStyle.Dot, MajorGridlineColor = grid,
+            Title = "NG count",
+        });
+
+        var series = new BarSeries
+        {
+            FillColor = OxyColor.FromRgb(0x8B, 0x5C, 0xF6),
+            LabelPlacement = LabelPlacement.Outside,
+            LabelFormatString = "{0}",
+            TextColor = fg,
+        };
+        foreach (var n in Enumerable.Reverse(top))
+            series.Items.Add(new BarItem { Value = n.Count });
+        Model.Series.Add(series);
+
+        Model.Title = $"Top {top.Count} — {firstDim} (NG)";
+        Model.InvalidatePlot(true);
+    }
+
+    private static PlotModel BuildEmptyChart()
+    {
+        var fg = OxyColor.FromRgb(0xE5, 0xE7, 0xEB);
+        return new PlotModel
+        {
+            Title = "NG counts",
+            Background = OxyColor.FromRgb(0x23, 0x27, 0x30),
+            PlotAreaBackground = OxyColor.FromRgb(0x1A, 0x1D, 0x23),
+            TextColor = fg, TitleColor = fg,
+            PlotAreaBorderColor = OxyColor.FromArgb(0x40, 0x9C, 0xA3, 0xAF),
+        };
     }
 
     /// <summary>Recursively group rows; the deepest level appends OK/NG result leaves.</summary>

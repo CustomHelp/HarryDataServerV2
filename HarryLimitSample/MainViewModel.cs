@@ -139,13 +139,15 @@ public partial class MainViewModel : ObservableObject
             MsaVersion = string.IsNullOrWhiteSpace(existing.MsaVersion) ? MsaVersion : existing.MsaVersion;
 
             // Apply expectations to the loaded rows; add rows for entries not currently loaded.
-            var byName = _allRows.Where(r => r.Module == module)
-                                 .ToDictionary(r => r.DisplayName, r => r, StringComparer.OrdinalIgnoreCase);
+            // A display_name can repeat (same measurement on several cameras) — apply to all matches.
             foreach (var (name, expected) in existing.LimitSampleExpected)
             {
                 var exp = expected ? Expectation.ShouldFail : Expectation.ShouldPass;
-                if (byName.TryGetValue(name, out var row))
-                    row.Expectation = exp;
+                var matches = _allRows.Where(r => r.Module == module &&
+                    string.Equals(r.DisplayName, name, StringComparison.OrdinalIgnoreCase)).ToList();
+                if (matches.Count > 0)
+                    foreach (var row in matches)
+                        row.Expectation = exp;
                 else
                     _allRows.Add(new LimitSampleRow(name, module, exp));
             }
@@ -199,14 +201,27 @@ public partial class MainViewModel : ObservableObject
             var file = MsaReferenceFile.Load(_config.MsaReferencePath, module) ?? new MsaReferenceFile();
             file.Module = module;
             file.MsaVersion = MsaVersion.Trim();
-            file.LimitSampleExpected = marked.ToDictionary(
-                r => r.DisplayName,
-                r => r.Expectation == Expectation.ShouldFail,
-                StringComparer.OrdinalIgnoreCase);
+
+            // The reference is keyed by display_name, which can repeat across cameras —
+            // collapse duplicates into one entry (ShouldFail wins) and flag any conflicts.
+            var expected = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+            var conflicts = new List<string>();
+            foreach (var group in marked.GroupBy(r => r.DisplayName, StringComparer.OrdinalIgnoreCase))
+            {
+                var anyFail = group.Any(r => r.Expectation == Expectation.ShouldFail);
+                var anyPass = group.Any(r => r.Expectation == Expectation.ShouldPass);
+                if (anyFail && anyPass)
+                    conflicts.Add(group.Key);
+                expected[group.Key] = anyFail; // prepared error (reject) wins over accept
+            }
+            file.LimitSampleExpected = expected;
 
             var path = file.Save(_config.MsaReferencePath);
-            var fails = marked.Count(r => r.Expectation == Expectation.ShouldFail);
-            StatusMessage = $"Saved {Path.GetFileName(path)} — {marked.Count} entries ({fails} should-fail).";
+            var fails = expected.Count(kv => kv.Value);
+            var conflictNote = conflicts.Count == 0
+                ? string.Empty
+                : $"  ⚠ {conflicts.Count} duplicate name(s) had mixed marks → set to ShouldFail: {string.Join(", ", conflicts.Take(5))}";
+            StatusMessage = $"Saved {Path.GetFileName(path)} — {expected.Count} entries ({fails} should-fail).{conflictNote}";
         }
         catch (Exception ex)
         {

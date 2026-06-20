@@ -280,6 +280,35 @@ Customer feedback applied across the tools (`fix: companion tools UX review pass
   still individually editable.
 - **HarryCollageCreator** — unchanged this pass (per request; revisit on-site with real images).
 
+### UX review pass 2 (2026-06-20)
+
+Second round of customer feedback (`fix: companion tools UX review pass 2`):
+
+- **Shared theme** — added readable dark **ContextMenu/MenuItem** (was grey-on-grey) and
+  **DatePicker / DatePickerTextBox / Calendar** styles (fixes the grey-in-grey date fields in
+  HarryGraph + HarryCounter).
+- **HarryAnalysis** — added **Export All** (one CSV across every scanned part, with leading
+  part-identity columns) next to Clear All; single-part Export still available.
+- **HarryCounter** — **bar chart is back**, now shown beside the tree (top-level groups' NG
+  counts); OxyPlot re-added.
+- **HarryGraph** — each panel is **multi-measurement again** (checkable popup list with filter,
+  one colour per series + matching dashed envelope); the **detail window is a normal resizable
+  window** (title-bar maximize/restore, no longer force-maximized; its own ↗ button hidden);
+  panels **re-layout on app maximize/restore** (StateChanged + dispatched recompute).
+- **HarryCollageCreator** — **Open/Save no longer throw** `ArgumentException` ("Value does not
+  fall within the expected range"): the dialog `InitialDirectory` is only set when it points at
+  an existing directory.
+- **HarryLimitSample** — **Save no longer crashes** on duplicate `display_name` (same
+  measurement on several cameras). Entries are keyed by display_name (server requirement), so
+  duplicates collapse to one entry — **ShouldFail wins** and any mixed-mark conflicts are
+  reported in the status line.
+
+> **LimitSample reference model:** one file per module, `MSA_<module>.json`, in
+> `[MSA] ReferencePath`. Each module's file accumulates entries keyed by measurement
+> `display_name`. To **remove** an entry: *Load existing* → set its row to **Ignore** → *Save*
+> (Save writes only the non-Ignore rows, replacing the module's `limit_sample_expected`); the
+> `references` (xm) block is preserved.
+
 > Phase 12 (MSA UI) was folded into the Phase 11 build (`ucMsaControl`).
 > HarryMSA is therefore done (integrated tab); HarrySimulator is the customer's own tool.
 

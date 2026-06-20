@@ -193,6 +193,55 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
+    [RelayCommand]
+    private void ExportAll()
+    {
+        if (History.Count == 0)
+        {
+            StatusMessage = "Nothing to export — the history is empty.";
+            return;
+        }
+
+        var defaultDir = Directory.Exists(_config.CsvBasePath) ? _config.CsvBasePath : string.Empty;
+        var dialog = new SaveFileDialog
+        {
+            Filter = "CSV files (*.csv)|*.csv",
+            FileName = $"Analysis_All_{DateTime.Now:yyyy-MM-dd_HH-mm}.csv",
+            InitialDirectory = defaultDir,
+        };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        try
+        {
+            // One CSV with every scanned part's measurements; leading columns identify the part.
+            var header = new[]
+            {
+                "Scanned", "DMC", "SZID", "VirtualSerial", "PartResult",
+                "Measurement", "Camera", "Module", "FeatureGroup", "Value", "Min", "Max", "Result", "MeasuredAt",
+            };
+            var rows = History.SelectMany(entry => entry.Measurements.Select(m => new string?[]
+            {
+                entry.TimestampText,
+                entry.Part.Dmc ?? "-",
+                entry.Part.SerialNumber,
+                entry.Part.SerialTrimmer ?? "-",
+                entry.Part.ResultText,
+                m.DisplayName, m.CameraName, m.Module, m.FeatureGroup,
+                m.ValueText, m.MinText, m.MaxText, m.ResultText,
+                m.MeasuredAt.ToString("yyyy-MM-dd HH:mm:ss"),
+            }));
+            CsvExport.Write(dialog.FileName, header, rows);
+            var total = History.Sum(h => h.Measurements.Count);
+            StatusMessage = $"Exported {History.Count} part(s) / {total} measurement(s) to {Path.GetFileName(dialog.FileName)}.";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = "Export failed: " + ex.Message;
+            MessageBox.Show(ex.Message, "Export Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
     private static string Sanitize(string s) =>
         string.Concat(s.Where(c => !Path.GetInvalidFileNameChars().Contains(c)));
 }

@@ -200,8 +200,9 @@ public partial class MainViewModel : ObservableObject
     private void Open()
     {
         var dialog = new OpenFileDialog { Filter = "Collage.ini (*.ini)|*.ini|All files|*.*" };
-        if (!string.IsNullOrWhiteSpace(CurrentFile))
-            dialog.InitialDirectory = Path.GetDirectoryName(CurrentFile);
+        var dir = SafeDir(CurrentFile);
+        if (dir is not null)
+            dialog.InitialDirectory = dir;
         if (dialog.ShowDialog() != true)
             return;
 
@@ -252,8 +253,9 @@ public partial class MainViewModel : ObservableObject
             Filter = "Collage.ini (*.ini)|*.ini|All files|*.*",
             FileName = string.IsNullOrWhiteSpace(CurrentFile) ? "Collage.ini" : Path.GetFileName(CurrentFile),
         };
-        if (!string.IsNullOrWhiteSpace(CurrentFile))
-            dialog.InitialDirectory = Path.GetDirectoryName(CurrentFile);
+        var dir = SafeDir(CurrentFile);
+        if (dir is not null)
+            dialog.InitialDirectory = dir;
         if (dialog.ShowDialog() != true)
             return;
 
@@ -296,6 +298,26 @@ public partial class MainViewModel : ObservableObject
         catch (Exception ex)
         {
             StatusMessage = "Export failed: " + ex.Message;
+        }
+    }
+
+    /// <summary>
+    /// A valid, existing directory to seed a file dialog's InitialDirectory, or null. The
+    /// Win32 file dialog throws ArgumentException ("Value does not fall within the expected
+    /// range") if InitialDirectory is empty, relative, or non-existent — so guard it.
+    /// </summary>
+    private static string? SafeDir(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return null;
+        try
+        {
+            var dir = Path.GetDirectoryName(Path.GetFullPath(path));
+            return !string.IsNullOrWhiteSpace(dir) && Directory.Exists(dir) ? dir : null;
+        }
+        catch
+        {
+            return null;
         }
     }
 }

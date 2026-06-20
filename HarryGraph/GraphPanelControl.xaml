@@ -9,11 +9,32 @@
             <StackPanel DockPanel.Dock="Top" Margin="0,0,0,4">
                 <DockPanel Margin="0,0,0,4">
                     <Button DockPanel.Dock="Right" Content="↗" Command="{Binding MaximizeCommand}"
-                            Width="28" ToolTip="Open in a full-screen window" Margin="4,0,0,0" />
+                            Width="28" ToolTip="Open in a resizable detail window" Margin="4,0,0,0"
+                            Visibility="{Binding ShowMaximize, Converter={StaticResource BoolToVisible}}" />
                     <Button DockPanel.Dock="Right" Content="Reset Zoom" Command="{Binding ResetZoomCommand}"
-                            Width="90" />
-                    <ComboBox ItemsSource="{Binding Definitions}" SelectedItem="{Binding SelectedDefinition}"
-                              DisplayMemberPath="Label" />
+                            Width="90" Margin="4,0,0,0" />
+
+                    <!-- Multi-select measurement picker -->
+                    <ToggleButton x:Name="PickerToggle" Content="{Binding SelectionSummary}"
+                                  IsChecked="{Binding PickerOpen}" HorizontalContentAlignment="Left" Padding="8,4" />
+                    <Popup IsOpen="{Binding PickerOpen}" PlacementTarget="{Binding ElementName=PickerToggle}"
+                           Placement="Bottom" StaysOpen="False" AllowsTransparency="True" MinWidth="320" MaxHeight="380">
+                        <Border Background="#FF22262F" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                                CornerRadius="4" Padding="6">
+                            <DockPanel>
+                                <TextBox DockPanel.Dock="Top" Margin="0,0,0,4"
+                                         Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}" />
+                                <ListBox ItemsSource="{Binding VisibleItems}" MaxHeight="320" BorderThickness="0"
+                                         Background="Transparent" ScrollViewer.VerticalScrollBarVisibility="Auto">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <CheckBox Content="{Binding Label}" IsChecked="{Binding IsSelected}" />
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                            </DockPanel>
+                        </Border>
+                    </Popup>
                 </DockPanel>
                 <WrapPanel>
                     <CheckBox Content="Live" IsChecked="{Binding LiveMode}" Margin="0,0,12,0" />

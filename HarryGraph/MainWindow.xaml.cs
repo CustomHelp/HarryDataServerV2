@@ -9,9 +9,15 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         Loaded += OnLoaded;
-        SizeChanged += (_, _) => LayoutPanels();
+        SizeChanged += (_, _) => QueueLayout();
+        StateChanged += (_, _) => QueueLayout();
         PanelScroller.SizeChanged += (_, _) => LayoutPanels();
     }
+
+    /// <summary>Recompute after the layout pass so the ScrollViewer viewport is up to date
+    /// (e.g. right after the window is maximized/restored).</summary>
+    private void QueueLayout() =>
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, new Action(LayoutPanels));
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {

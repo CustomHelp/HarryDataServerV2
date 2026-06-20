@@ -64,6 +64,22 @@ Build/run: `dotnet build HarryDataServer.sln -c Release` (0 warnings / 0 errors,
 - New shared helpers: `HarryConfig.CsvBasePath`, `QueryService.GetErrorTreeRowsAsync` +
   `GetLimitHistoryAsync`, models `ErrorAggRow` / `LimitHistory`.
 
+### UX review pass 2 (2026-06-20)
+- **Theme:** added dark `ContextMenu`/`MenuItem` and `DatePicker`/`DatePickerTextBox`/`Calendar`
+  styles (the right-click menu and date fields were grey-on-grey).
+- **HarryAnalysis:** **Export All** — every scanned part into one CSV (part-identity columns +
+  measurements).
+- **HarryCounter:** bar chart restored beside the tree (top-level NG counts).
+- **HarryGraph:** multi-measurement per panel (checkable popup + filter, per-series colour and
+  dashed envelope); detail window is a normal **resizable** window (no forced maximize); panels
+  re-layout on app maximize/restore.
+- **HarryCollageCreator:** `Open`/`Save` guard `InitialDirectory` (only set when the directory
+  exists) — fixes the `ArgumentException` on Open.
+- **HarryLimitSample:** Save dedupes `display_name` keys (ShouldFail wins, conflicts reported)
+  so it no longer crashes. **Reference model:** one `MSA_<module>.json` per module in
+  `[MSA] ReferencePath`, keyed by `display_name`; remove an entry via *Load existing → set row to
+  Ignore → Save* (the `references`/xm block is preserved).
+
 ---
 
 ## 2. Conventions to reuse (match the main app)
