@@ -248,6 +248,38 @@ GetData/1234Get). The customer-owned JSON templates were not touched.
 > Build smoke: full solution `dotnet build -c Release` → 0/0; each tool produces its
 > `.exe`. Live verification (real DB with data) is part of the on-site checklist.
 
+### UX review pass 1 (2026-06-20)
+
+Customer feedback applied across the tools (`fix: companion tools UX review pass 1`):
+
+- **Shared theme** — templated `ComboBox` so the drop-down popup is dark (`#22262F`) with a
+  readable `ComboBoxItem` style (light `#E2E8F0` text, blue `#3B82F6` selection, slate
+  `#334155` hover). Fixes the low-contrast dropdowns in **all** tools.
+- **HarryAnalysis — reworked.** Search now matches DMC **or** SZID **or** VirtualSerial and
+  shows which field hit. Split layout: top = in-memory **scan history** (last 20: Timestamp |
+  DMC | SZID | Result, colour-coded; click to load; Clear All; right-click → remove); bottom =
+  detail (header card + measurement grid). Measurement grid is **sortable** (click headers,
+  numeric Value/Min/Max). Export uses a `SaveFileDialog` defaulting to `[CSV] CSV_BasePath`
+  with `Analysis_<DMC>_<yyyy-MM-dd>.csv`.
+- **HarryCounter — multi-level tree.** Replaced the bar chart with a `TreeView` built from a
+  recursive `ErrorTreeNode` hierarchy (ported from the RazorErrorCount pattern — *no original
+  source was found on the machine, implemented from the spec*). Grouping order is chosen via
+  three ComboBoxes (Feature Group / Measurement / M1x·M3x·M50 Nest / none); the deepest level
+  is an OK/NG result breakdown. Title format `"<Key> – <Count>"`. New shared query
+  `GetErrorTreeRowsAsync` (DB-side aggregation, folded client-side). OxyPlot dropped from this tool.
+- **HarryGraph — multiple windows + UX.** 1–6 graph panels in a responsive `WrapPanel` (`+`/`–`
+  buttons; each panel its own measurement ComboBox); a `↗` button opens a panel full-screen in
+  its own live window. Dark **tracker tooltip** (`#1E2128`/`#E2E8F0`/`#3B82F6`, 12px). Zoom is
+  **X-only** by default with a **Lock Y** toggle (Y auto-fits the data extent) and a **Reset
+  Zoom** button. **Show limits** draws the time-varying Min/Max envelope **point-by-point**
+  (dashed red `#EF4444`, 0.5px) using `GetLimitHistoryAsync` (latest setting ≤ each timestamp),
+  so limit changes render as steps.
+- **HarryLimitSample.** The full save path is shown under the Save button
+  (`Saving to: …\MSA_<module>.json`, from `[MSA] ReferencePath`). The Expected column is now
+  pre-populated from each measurement's result (1→ShouldPass, 0→ShouldFail, else Ignore),
+  still individually editable.
+- **HarryCollageCreator** — unchanged this pass (per request; revisit on-site with real images).
+
 > Phase 12 (MSA UI) was folded into the Phase 11 build (`ucMsaControl`).
 > HarryMSA is therefore done (integrated tab); HarrySimulator is the customer's own tool.
 

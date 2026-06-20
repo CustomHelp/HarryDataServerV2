@@ -88,3 +88,57 @@ public sealed record SeriesPoint(DateTime MeasuredAt, double Value, int? ResultS
 
 /// <summary>One grouped NG count for HarryCounter.</summary>
 public sealed record CountRow(string GroupKey, int Count);
+
+/// <summary>
+/// One aggregated measurement-result row for the HarryCounter error tree: a distinct
+/// combination of grouping dimensions with its OK (1) / NG (0) count.
+/// </summary>
+public sealed record ErrorAggRow(
+    string FeatureGroup,
+    string Measurement,
+    string? M1xNest,
+    string? M3xNest,
+    string? M50Nest,
+    int ResultStatus,
+    int Count);
+
+/// <summary>
+/// Time-varying limit history for a (camera, parameter_set), used by HarryGraph to draw a
+/// per-point Min/Max envelope (the limit at a measurement's timestamp = the latest setting
+/// recorded at or before it).
+/// </summary>
+public sealed class LimitHistory
+{
+    private readonly List<(DateTime At, double Value)> _min;
+    private readonly List<(DateTime At, double Value)> _max;
+
+    public LimitHistory(List<(DateTime At, double Value)> min, List<(DateTime At, double Value)> max)
+    {
+        _min = min;
+        _max = max;
+    }
+
+    public bool HasAny => _min.Count > 0 || _max.Count > 0;
+
+    public double? MinAt(DateTime t) => ValueAt(_min, t);
+    public double? MaxAt(DateTime t) => ValueAt(_max, t);
+
+    /// <summary>The most recent value with At &lt;= t (step function); null if none precedes t.</summary>
+    private static double? ValueAt(List<(DateTime At, double Value)> series, DateTime t)
+    {
+        if (series.Count == 0)
+            return null;
+
+        // Series is ascending by At — walk back to the latest entry at or before t.
+        double? result = null;
+        foreach (var (at, value) in series)
+        {
+            if (at <= t)
+                result = value;
+            else
+                break;
+        }
+        // If every entry is after t, fall back to the earliest known limit so the line still draws.
+        return result ?? series[0].Value;
+    }
+}

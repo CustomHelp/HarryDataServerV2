@@ -36,6 +36,20 @@ public partial class MainViewModel : ObservableObject
     public string ConfigFile { get; }
     public string ReferenceFolder { get; }
 
+    /// <summary>Full path the current module's reference file will be written to.</summary>
+    public string SavePathPreview
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(_config.MsaReferencePath))
+                return "Saving to: (set [MSA] ReferencePath in Harry.ini)";
+            var module = ResolveTargetModule();
+            if (module is null)
+                return "Saving to: select a single module to see the path";
+            return "Saving to: " + Path.Combine(_config.MsaReferencePath, MsaReferenceFile.FileName(module));
+        }
+    }
+
     public ObservableCollection<LimitSampleRow> Rows { get; } = new();
     public ObservableCollection<string> Modules { get; } = new();
     public Array Expectations => Enum.GetValues(typeof(Expectation));
@@ -46,7 +60,11 @@ public partial class MainViewModel : ObservableObject
 
     [ObservableProperty] private string? _selectedModule;
 
-    partial void OnSelectedModuleChanged(string? value) => ApplyModuleFilter();
+    partial void OnSelectedModuleChanged(string? value)
+    {
+        ApplyModuleFilter();
+        OnPropertyChanged(nameof(SavePathPreview));
+    }
 
     private void ApplyModuleFilter()
     {

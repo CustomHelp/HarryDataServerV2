@@ -35,6 +35,9 @@ public sealed class HarryConfig
     /// <summary>Folder with the individual single images ([Collage] Collage_SingleImages).</summary>
     public string CollageSingleImagesPath { get; }
 
+    /// <summary>Base folder for CSV exports ([CSV] CSV_BasePath) — used as the export default dir.</summary>
+    public string CsvBasePath { get; }
+
     private HarryConfig(string iniPath, IniData data)
     {
         IniPath = iniPath;
@@ -49,6 +52,7 @@ public sealed class HarryConfig
         MsaReferencePath = ResolvePath(Str(data["MSA"], "ReferencePath", string.Empty));
         CollageIniPath = ResolvePath(Str(data["Collage"], "Collage_IniPath", string.Empty));
         CollageSingleImagesPath = Str(data["Collage"], "Collage_SingleImages", string.Empty);
+        CsvBasePath = Str(data["CSV"], "CSV_BasePath", string.Empty);
     }
 
     /// <summary>Read-only (GetData) connection string for the application database.</summary>

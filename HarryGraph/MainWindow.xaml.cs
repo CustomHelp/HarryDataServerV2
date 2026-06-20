@@ -1,5 +1,5 @@
+using System.Collections.Specialized;
 using System.Windows;
-using System.Windows.Controls;
 
 namespace HarryGraph;
 
@@ -8,26 +8,50 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        Loaded += OnLoaded;
+        SizeChanged += (_, _) => LayoutPanels();
+        PanelScroller.SizeChanged += (_, _) => LayoutPanels();
     }
 
-    /// <summary>Print the current plot via the standard print dialog (fit to page).</summary>
-    private void OnPrint(object sender, RoutedEventArgs e)
+    private void OnLoaded(object sender, RoutedEventArgs e)
     {
-        var dialog = new PrintDialog();
-        if (dialog.ShowDialog() != true)
+        if (DataContext is MainViewModel vm)
+        {
+            vm.MaximizeRequested += OnMaximizeRequested;
+            vm.Panels.CollectionChanged += OnPanelsChanged;
+        }
+        LayoutPanels();
+    }
+
+    private void OnPanelsChanged(object? sender, NotifyCollectionChangedEventArgs e) => LayoutPanels();
+
+    private static void OnMaximizeRequested(GraphPanelViewModel panel)
+    {
+        var clone = panel.CloneForWindow();
+        new GraphWindow(clone).Show();
+    }
+
+    /// <summary>Size each panel so the graphs share the available area proportionally.</summary>
+    private void LayoutPanels()
+    {
+        if (DataContext is not MainViewModel vm || vm.Panels.Count == 0)
             return;
 
-        var area = new Size(dialog.PrintableAreaWidth, dialog.PrintableAreaHeight);
+        var count = vm.Panels.Count;
+        var cols = (int)Math.Ceiling(Math.Sqrt(count));
+        var rows = (int)Math.Ceiling((double)count / cols);
 
-        // Snapshot the plot's current size, lay it out to the page, print, then restore.
-        var original = new Size(Plot.ActualWidth, Plot.ActualHeight);
-        Plot.Measure(area);
-        Plot.Arrange(new Rect(area));
-        dialog.PrintVisual(Plot, "HarryGraph");
+        var available = PanelScroller.ViewportWidth > 0 ? PanelScroller.ViewportWidth : ActualWidth;
+        var availableH = PanelScroller.ViewportHeight > 0 ? PanelScroller.ViewportHeight : ActualHeight - 160;
 
-        // Restore the on-screen layout.
-        Plot.Measure(original);
-        Plot.Arrange(new Rect(original));
-        Plot.UpdateLayout();
+        // Account for the 4px margin on each side of every panel control.
+        var w = Math.Max(360, available / cols - 12);
+        var h = Math.Max(260, availableH / rows - 12);
+
+        foreach (var panel in vm.Panels)
+        {
+            panel.PanelWidth = w;
+            panel.PanelHeight = h;
+        }
     }
 }

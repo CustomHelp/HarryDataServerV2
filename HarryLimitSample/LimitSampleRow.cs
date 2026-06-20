@@ -24,6 +24,14 @@ public partial class LimitSampleRow : ObservableObject
         CameraName = source.CameraName;
         ValueText = source.ValueText;
         ResultText = source.ResultText;
+        // Pre-populate the expectation from the measurement's actual result:
+        //   1 (GOOD) → ShouldPass, 0 (BAD) → ShouldFail, anything else → Ignore.
+        _expectation = source.ResultStatus switch
+        {
+            1 => Expectation.ShouldPass,
+            0 => Expectation.ShouldFail,
+            _ => Expectation.Ignore,
+        };
     }
 
     /// <summary>Construct a row directly (used when loading an existing reference file).</summary>

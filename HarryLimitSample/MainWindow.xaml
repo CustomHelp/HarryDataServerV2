@@ -56,7 +56,11 @@
 
                     <Button Content="Load existing" Command="{Binding LoadExistingCommand}" Margin="0,0,4,0" />
                     <Button Content="Clear marks" Command="{Binding ClearMarksCommand}" Margin="0,0,4,0" />
-                    <Button Content="Save MSA_module.json" Command="{Binding SaveCommand}" Width="170" />
+                    <StackPanel Orientation="Vertical">
+                        <Button Content="Save MSA_module.json" Command="{Binding SaveCommand}" Width="170" />
+                        <TextBlock Text="{Binding SavePathPreview}" Foreground="{StaticResource TextDimBrush}"
+                                   FontSize="11" Margin="0,3,0,0" TextTrimming="CharacterEllipsis" MaxWidth="360" />
+                    </StackPanel>
                 </WrapPanel>
             </Border>
 

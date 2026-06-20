@@ -45,6 +45,25 @@ Build/run: `dotnet build HarryDataServer.sln -c Release` (0 warnings / 0 errors,
   itself **pending on-site verification** against a V1 collage, re-check the creator's
   output alongside the server's when that check happens, and keep the two in sync.
 
+### UX review pass 1 (2026-06-20)
+- **All tools:** `DarkTheme.xaml` now templates the `ComboBox` (dark `#22262F` popup) and adds a
+  readable `ComboBoxItem` style — fixes the low-contrast dropdowns everywhere.
+- **HarryAnalysis:** 3-field search (DMC / SZID / VirtualSerial) with matched-field display;
+  in-memory scan-history list (last 20, click-to-load, clear-all, right-click remove) over a
+  detail panel; sortable measurement grid; export via `SaveFileDialog` defaulting to
+  `[CSV] CSV_BasePath` as `Analysis_<DMC>_<date>.csv`.
+- **HarryCounter:** multi-level `TreeView` (`ErrorTreeNode`) with grouping order chosen by three
+  ComboBoxes and an OK/NG leaf breakdown — *RazorErrorCount source was not present on the
+  machine (not in git history or on disk), so the hierarchy was built from the written spec.*
+  New shared query `GetErrorTreeRowsAsync`.
+- **HarryGraph:** 1–6 panels (WrapPanel, `+`/`–`), per-panel measurement selector, full-screen
+  maximize window, dark tracker tooltip, X-only zoom + Lock-Y + Reset Zoom, and a point-by-point
+  time-varying Min/Max envelope via `GetLimitHistoryAsync` (`LimitHistory.MinAt/MaxAt`).
+- **HarryLimitSample:** shows the full `MSA_<module>.json` save path; default Expected derived
+  from each measurement's `result_status`.
+- New shared helpers: `HarryConfig.CsvBasePath`, `QueryService.GetErrorTreeRowsAsync` +
+  `GetLimitHistoryAsync`, models `ErrorAggRow` / `LimitHistory`.
+
 ---
 
 ## 2. Conventions to reuse (match the main app)

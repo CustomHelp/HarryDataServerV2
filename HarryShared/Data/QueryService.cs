@@ -325,4 +325,80 @@ ORDER BY cnt DESC;";
             list.Add(new CountRow(r.IsDBNull(0) ? "(none)" : r.GetString(0), r.GetInt32(1)));
         return list;
     }
+
+    /// <summary>
+    /// Aggregated OK/NG measurement counts in the range with every grouping dimension the
+    /// HarryCounter tree can use (feature_group, measurement, the part's nests). The DB does
+    /// the grouping; the small result set is folded into a tree client-side. Includes both
+    /// run_type-0 (normal) results 0 (NG) and 1 (OK).
+    /// </summary>
+    public async Task<List<ErrorAggRow>> GetErrorTreeRowsAsync(DateTime from, DateTime to, CancellationToken ct = default)
+    {
+        const string sql = @"
+SELECT d.feature_group,
+       CONCAT(c.camera_name, ' · ', d.display_name) AS measurement,
+       CAST(ds.m1x_nest AS CHAR) AS m1x_nest,
+       CAST(ds.m3x_nest AS CHAR) AS m3x_nest,
+       CAST(ds.m50_nest AS CHAR) AS m50_nest,
+       m.result_status,
+       COUNT(*) AS cnt
+FROM measurements_serial m
+JOIN measurement_definitions d ON d.id = m.definition_id
+JOIN cameras c ON c.id = d.camera_id
+LEFT JOIN dmcserial ds ON ds.serial_number = m.serial_number
+WHERE m.run_type = 0
+  AND m.result_status IN (0, 1)
+  AND m.measured_at >= @from AND m.measured_at <= @to
+GROUP BY d.feature_group, measurement, m1x_nest, m3x_nest, m50_nest, m.result_status;";
+
+        var list = new List<ErrorAggRow>();
+        await using var conn = await _config.OpenAsync(ct).ConfigureAwait(false);
+        await using var cmd = new MySqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@from", from);
+        cmd.Parameters.AddWithValue("@to", to);
+        await using var r = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        while (await r.ReadAsync(ct).ConfigureAwait(false))
+        {
+            list.Add(new ErrorAggRow(
+                r.IsDBNull(0) ? "(none)" : r.GetString(0),
+                r.IsDBNull(1) ? "(none)" : r.GetString(1),
+                r.IsDBNull(2) ? null : r.GetString(2),
+                r.IsDBNull(3) ? null : r.GetString(3),
+                r.IsDBNull(4) ? null : r.GetString(4),
+                r.GetInt32(5),
+                r.GetInt32(6)));
+        }
+        return list;
+    }
+
+    /// <summary>Time-varying Min/Max limit history for a (camera, parameter_set) — for HarryGraph's envelope.</summary>
+    public async Task<LimitHistory> GetLimitHistoryAsync(int cameraId, int parameterSet, CancellationToken ct = default)
+    {
+        const string sql = @"
+SELECT sd.limit_type, s.recorded_at, s.limit_value
+FROM settings s
+JOIN setting_definitions sd ON sd.id = s.definition_id
+WHERE s.camera_id = @cam AND sd.parameter_set = @ps
+ORDER BY s.recorded_at;";
+
+        var min = new List<(DateTime, double)>();
+        var max = new List<(DateTime, double)>();
+
+        await using var conn = await _config.OpenAsync(ct).ConfigureAwait(false);
+        await using var cmd = new MySqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@cam", cameraId);
+        cmd.Parameters.AddWithValue("@ps", parameterSet);
+        await using var r = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        while (await r.ReadAsync(ct).ConfigureAwait(false))
+        {
+            var type = r.GetString(0);
+            var at = r.GetDateTime(1);
+            var value = r.GetDouble(2);
+            if (type.Equals("Min", StringComparison.OrdinalIgnoreCase))
+                min.Add((at, value));
+            else if (type.Equals("Max", StringComparison.OrdinalIgnoreCase))
+                max.Add((at, value));
+        }
+        return new LimitHistory(min, max);
+    }
 }
