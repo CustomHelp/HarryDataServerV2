@@ -2,6 +2,9 @@
 
 *Last updated: 2026-06-20*
 
+> **Companion tools:** see **`COMPANION_TOOLS.md`** for the build guide (status, conventions,
+> DB schema, per-tool spec, and the on-site live-test checklist).
+
 > ## ⚠️ Pending on-site (live) verification
 > - **Collage + part-exit image handling** are implemented from the **written spec**, not a
 >   literal V1 port — **no V1 source (`ucCollage.cs`) exists on this machine**. Verify on-site:
@@ -221,9 +224,13 @@ UI-thread `DispatcherTimer` drives all refresh (row counts every 30 s) — backg
 
 ## Not yet built
 
-- **Phase 14** — Companion tools (HarryAnalysis, HarryGraph, HarryCounter, etc.).
+- **Phase 14** — Companion tools (HarryAnalysis, HarryGraph, HarryCounter,
+  HarryCollageCreator, HarryLimitSample). **See `COMPANION_TOOLS.md`** for a full,
+  self-contained build guide (conventions, DB schema, per-tool spec, live-test checklist)
+  written so a fresh Claude Code instance can implement them.
 
 > Phase 12 (MSA UI) was folded into the Phase 11 build (`ucMsaControl`).
+> HarryMSA is therefore done (integrated tab); HarrySimulator is the customer's own tool.
 
 ---
 
