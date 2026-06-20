@@ -1,0 +1,90 @@
+namespace HarryShared.Data;
+
+/// <summary>An active measurement definition joined with its camera (display row).</summary>
+public sealed record MeasurementDefinitionRow(
+    int Id,
+    int CameraId,
+    string CameraName,
+    string Module,
+    int TelegramPlace,
+    string VariableName,
+    string DisplayName,
+    string VarType,
+    int ParameterSet,
+    string FeatureGroup)
+{
+    /// <summary>M20/M21 measurements live in measurements_serial_trimmer; everything else in measurements_serial.</summary>
+    public bool IsTrimmer => QueryService.IsTrimmerModule(Module);
+
+    /// <summary>Label shown in pick lists: "M50_ST110_KF1 · Anode_Flatness_L".</summary>
+    public string Label => $"{CameraName} · {DisplayName}";
+}
+
+/// <summary>One finished-part header row from <c>dmcserial</c>.</summary>
+public sealed record PartInfo(
+    int Id,
+    string SerialNumber,
+    string? SerialTrimmer,
+    string? Dmc,
+    int? M1xModule,
+    int? M1xNest,
+    int? M2xModule,
+    int? M2xNest,
+    string? M3xModule,
+    string? M3xNest,
+    string? M50Nest,
+    string? OrderName,
+    double? M1xTemperature,
+    double? M1xHumidity,
+    int ResultStatus,
+    DateTime CreatedAt)
+{
+    public string ResultText => ResultStatus switch
+    {
+        1 => "OK",
+        0 => "NG",
+        -1 => "Deleted",
+        _ => ResultStatus.ToString(),
+    };
+}
+
+/// <summary>One measurement of a part joined with its definition + limits (for HarryAnalysis).</summary>
+public sealed record PartMeasurementRow(
+    string DisplayName,
+    string CameraName,
+    string Module,
+    string FeatureGroup,
+    int ParameterSet,
+    double? Value,
+    string? ValueString,
+    int? ResultStatus,
+    double? Min,
+    double? Max,
+    DateTime MeasuredAt)
+{
+    public string ResultText => ResultStatus switch
+    {
+        1 => "OK",
+        0 => "NG",
+        -1 => "PosAdjErr",
+        -2 => "NotValidated",
+        2 => "NotEvaluated",
+        null => string.Empty,
+        _ => ResultStatus.Value.ToString(),
+    };
+
+    /// <summary>True when the result code is a "good" measurement (1).</summary>
+    public bool IsOk => ResultStatus == 1;
+
+    public string ValueText => Value?.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)
+                               ?? ValueString ?? string.Empty;
+
+    public string MinText => Min?.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty;
+    public string MaxText => Max?.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty;
+}
+
+/// <summary>One time-series sample for HarryGraph.</summary>
+public sealed record SeriesPoint(DateTime MeasuredAt, double Value, int? ResultStatus, string SerialNumber);
+
+/// <summary>One grouped NG count for HarryCounter.</summary>
+public sealed record CountRow(string GroupKey, int Count);
