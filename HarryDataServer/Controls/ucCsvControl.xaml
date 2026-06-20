@@ -24,9 +24,18 @@
             </Grid>
         </Border>
 
+        <Border Style="{StaticResource Card}" Margin="0,12,0,0">
+            <StackPanel>
+                <TextBlock Text="Part-exit timing" FontWeight="Bold" Margin="0,0,0,4" />
+                <TextBlock Text="{Binding ExportTiming}" FontFamily="Consolas" />
+            </StackPanel>
+        </Border>
+
         <TextBlock Margin="0,12,0,0" TextWrapping="Wrap" Foreground="{StaticResource TextDimBrush}">
             One row per finished part with every measurement value from every camera (two-row
-            header), rotated on order change or row limit.
+            header), rotated on order change or when DataSetsPerFile rows are reached. After
+            dmcserial is saved, CSV / Collage / image handling run in parallel, then the SPS
+            channel-2 ACK is sent.
         </TextBlock>
     </StackPanel>
 </UserControl>

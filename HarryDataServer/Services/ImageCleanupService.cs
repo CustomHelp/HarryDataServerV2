@@ -16,7 +16,6 @@ public sealed class ImageCleanupService : IImageCleanupService
     private static readonly TimeSpan StartupDelay = TimeSpan.FromMinutes(1);
 
     private readonly IConfigService _config;
-    private readonly ISpsServer _sps;
     private readonly PartitionManager _partitions;
     private readonly IDatabaseService _database;
     private readonly ILogService _log;
@@ -27,13 +26,11 @@ public sealed class ImageCleanupService : IImageCleanupService
 
     public ImageCleanupService(
         IConfigService config,
-        ISpsServer sps,
         PartitionManager partitions,
         IDatabaseService database,
         ILogService log)
     {
         _config = config;
-        _sps = sps;
         _partitions = partitions;
         _database = database;
         _log = log;
@@ -45,16 +42,14 @@ public sealed class ImageCleanupService : IImageCleanupService
             return Task.CompletedTask;
         _started = true;
 
-        _sps.PartExitReceived += OnPartExitReceived;
         _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         _task = Task.Run(() => RunAsync(_cts.Token), CancellationToken.None);
-        _log.Information("Image cleanup service started.");
+        _log.Information("Image cleanup service started (daily retention).");
         return Task.CompletedTask;
     }
 
     public async Task StopAsync()
     {
-        _sps.PartExitReceived -= OnPartExitReceived;
         _cts?.Cancel();
         if (_task is not null)
         {
@@ -123,37 +118,6 @@ public sealed class ImageCleanupService : IImageCleanupService
         if (deleted > 0)
             _log.Information("Retention: deleted {Count} file(s) older than {Days} days in {Dir}.",
                 deleted, retentionDays, directory);
-    }
-
-    /// <summary>
-    /// When a part leaves as NG, its intermediate OK images (M10/M20 etc.) are
-    /// orphaned — delete them by the first 12 chars of the serial (CLAUDE.md section 11).
-    /// </summary>
-    private void OnPartExitReceived(object? sender, SpsPartExitEventArgs e)
-    {
-        if (e.Data.Result != PartResult.Ng)
-            return;
-
-        var serial = e.Data.Szid;
-        if (string.IsNullOrWhiteSpace(serial) || serial.Length < 12)
-            return;
-
-        var prefix = serial[..12];
-        var dir = _config.Config.Nas.LowResIndividualPath;
-        if (string.IsNullOrWhiteSpace(dir) || !Directory.Exists(dir))
-            return;
-
-        var deleted = 0;
-        foreach (var file in EnumerateFilesSafe(dir))
-        {
-            if (!Path.GetFileName(file).StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-                continue;
-            try { File.Delete(file); deleted++; }
-            catch (Exception ex) { _log.Debug("Could not delete orphaned {File}: {Message}", file, ex.Message); }
-        }
-
-        if (deleted > 0)
-            _log.Information("Deleted {Count} orphaned OK image(s) for NG part {Serial}.", deleted, serial);
     }
 
     private IEnumerable<string> EnumerateFilesSafe(string directory)

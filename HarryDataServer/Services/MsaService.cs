@@ -260,7 +260,7 @@ VALUES
             return runs;
 
         const string sql = @"
-SELECT base_id, controller_name, evaluated_at, display_name, cg_value, cgk_value, pct_tolerance, passed
+SELECT base_id, controller_name, evaluated_at, display_name, cg_value, cgk_value, pct_tolerance, expected_value, actual_value, passed
 FROM msa_results
 WHERE msa_type = @type AND controller_name LIKE @mod
 ORDER BY evaluated_at, base_id, id;";
@@ -292,7 +292,9 @@ ORDER BY evaluated_at, base_id, id;";
                     Cg = reader.IsDBNull(4) ? null : reader.GetDouble(4),
                     Cgk = reader.IsDBNull(5) ? null : reader.GetDouble(5),
                     PctTolerance = reader.IsDBNull(6) ? null : reader.GetDouble(6),
-                    Passed = reader.GetInt32(7) != 0,
+                    Expected = reader.IsDBNull(7) ? null : reader.GetString(7),
+                    Actual = reader.IsDBNull(8) ? null : reader.GetString(8),
+                    Passed = reader.GetInt32(9) != 0,
                 });
             }
 
@@ -419,6 +421,8 @@ ORDER BY evaluated_at, base_id, id;";
                 return new MsaMeasurementResult
                 {
                     DefinitionId = first.DefinitionId, DisplayName = first.DisplayName, Passed = passed,
+                    Expected = shouldFail ? "reject" : "accept",
+                    Actual = wasRejected ? "rejected" : "accepted",
                 };
             }
             default:
@@ -505,9 +509,9 @@ ORDER BY s.recorded_at DESC;";
     {
         const string sql = @"
 INSERT INTO msa_results
-  (controller_name, dmc, base_id, msa_type, msa_version, definition_id, display_name, cg_value, cgk_value, pct_tolerance, passed)
+  (controller_name, dmc, base_id, msa_type, msa_version, definition_id, display_name, cg_value, cgk_value, pct_tolerance, expected_value, actual_value, passed)
 VALUES
-  (@ctrl, @dmc, @base, @type, @ver, @def, @name, @cg, @cgk, @pct, @passed);";
+  (@ctrl, @dmc, @base, @type, @ver, @def, @name, @cg, @cgk, @pct, @expected, @actual, @passed);";
 
         foreach (var r in results)
         {
@@ -522,6 +526,8 @@ VALUES
             cmd.Parameters.AddWithValue("@cg", (object?)r.Cg ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@cgk", (object?)r.Cgk ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@pct", (object?)r.PctTolerance ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@expected", (object?)r.Expected ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@actual", (object?)r.Actual ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@passed", r.Passed ? 1 : 0);
             await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
         }

@@ -12,6 +12,9 @@ public enum DatabaseStatus
     Failed,
 }
 
+/// <summary>Live production figures for the Overview tab (from <c>dmcserial</c>).</summary>
+public sealed record ProductionSnapshot(long TodayOk, long TodayNg, DateTime? LastPartExit, string ActiveOrder);
+
 /// <summary>
 /// High-level database orchestration. Runs the full startup logic from CLAUDE.md
 /// section 8 (connect with backoff, create schema, provision partitions, sync
@@ -38,4 +41,7 @@ public interface IDatabaseService
     /// enough for a live UI counter). Returns an empty map if the DB is not ready.
     /// </summary>
     Task<IReadOnlyDictionary<string, long>> GetRowCountsAsync(CancellationToken ct = default);
+
+    /// <summary>Today's OK/NG counts, last part-exit time and current order for the Overview tab.</summary>
+    Task<ProductionSnapshot> GetProductionSnapshotAsync(CancellationToken ct = default);
 }

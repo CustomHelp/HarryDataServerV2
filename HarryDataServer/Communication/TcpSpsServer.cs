@@ -45,6 +45,7 @@ public sealed class TcpSpsServer : ISpsServer
     public event EventHandler<SpsPartExitEventArgs>? PartExitReceived;
     public event Action<SpsChannel, bool, string>? ChannelActivity;
     public Func<string, string, string>? MsaRequestHandler { get; set; }
+    public Func<SpsPartExitData, Task<bool>>? PartExitHandler { get; set; }
 
     public int ConnectionsOn(SpsChannel channel) => _connectionsByChannel.GetValueOrDefault(channel);
 
@@ -187,6 +188,16 @@ public sealed class TcpSpsServer : ISpsServer
 
                 ChannelActivity?.Invoke(channel, false, text);
 
+                // Channel 2: when an orchestrator is registered, defer the response —
+                // run the full part pipeline, then send the V1 ACK.
+                if (channel == SpsChannel.PartExit && PartExitHandler is { } partHandler)
+                {
+                    var ack = await HandlePartExitAckAsync(partHandler, text).ConfigureAwait(false);
+                    await stream.WriteAsync(Encoding.Latin1.GetBytes(ack), token).ConfigureAwait(false);
+                    ChannelActivity?.Invoke(channel, true, ack.TrimEnd('\r', '\n'));
+                    continue;
+                }
+
                 var response = Dispatch(channel, text);
                 if (response is not null)
                 {
@@ -266,6 +277,37 @@ public sealed class TcpSpsServer : ISpsServer
 
         PartExitReceived?.Invoke(this, new SpsPartExitEventArgs(data));
         return "OK";
+    }
+
+    /// <summary>
+    /// Run the registered part-exit orchestrator and format the V1 ACK:
+    /// <c>serial.PadRight(32,'0') + ";" + true|false + "\r\n"</c>.
+    /// </summary>
+    private async Task<string> HandlePartExitAckAsync(Func<SpsPartExitData, Task<bool>> handler, string telegram)
+    {
+        var data = SpsPartExitData.TryParse(telegram);
+        if (data is null)
+        {
+            _log.Warning("SPS PartExit: malformed telegram '{Telegram}'.", telegram);
+            return new string('0', 32) + ";false\r\n";
+        }
+
+        _log.Information("Part Exit: DMC={Dmc} SZID={Szid} order={Order} mode={Mode} result={Result}.",
+            data.Dmc, data.Szid, data.OrderName, data.Mode, data.Result);
+
+        bool success;
+        try
+        {
+            success = await handler(data).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _log.Error(ex, "Part exit orchestration failed for {Serial}.", data.Szid);
+            success = false;
+        }
+
+        var serial = (data.Szid ?? string.Empty).PadRight(32, '0');
+        return $"{serial};{(success ? "true" : "false")}\r\n";
     }
 
     /// <summary>Channels 3–7: "Request;&lt;BaseID&gt;" → Wait / OK / NG / Error;&lt;desc&gt;.</summary>

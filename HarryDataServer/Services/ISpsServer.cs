@@ -47,6 +47,14 @@ public interface ISpsServer
     /// </summary>
     Func<string, string, string>? MsaRequestHandler { get; set; }
 
+    /// <summary>
+    /// Async handler for Part Exit (channel 2). When set, the server defers the
+    /// response: it runs the handler (orchestrated CSV/Collage/Images), then sends the
+    /// V1 ACK <c>serial.PadRight(32,'0') + ";" + true|false + "\r\n"</c>. When null,
+    /// the server falls back to an immediate "OK". Set by the part-exit orchestrator.
+    /// </summary>
+    Func<SpsPartExitData, Task<bool>>? PartExitHandler { get; set; }
+
     Task StartAsync(CancellationToken ct);
     Task StopAsync();
 }

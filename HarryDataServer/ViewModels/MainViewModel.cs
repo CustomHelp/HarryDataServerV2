@@ -27,7 +27,7 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly IMeasurementProcessor _measurements;
     private readonly ISettingsProcessor _settings;
     private readonly IDiagnosticProcessor _diagnostics;
-    private readonly IPartExitProcessor _partExit;
+    private readonly IPartExitOrchestrator _partExit;
     private readonly ICsvService _csv;
     private readonly ICollageService _collage;
     private readonly IMsaService _msa;
@@ -40,15 +40,16 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly DateTime _startUtc = DateTime.UtcNow;
 
     private string _lastHealthKey = string.Empty;
-    private volatile bool _logDirty = true;
     private bool _rowCountsBusy;
     private DateTime _lastRowCountsUtc = DateTime.MinValue;
     private bool _msaLoaded;
+    private bool _productionBusy;
+    private DateTime _lastProductionUtc = DateTime.MinValue;
 
     public MainViewModel(
         IConfigService config, ICameraService cameras, IDatabaseService database,
         IMeasurementProcessor measurements, ISettingsProcessor settings, IDiagnosticProcessor diagnostics,
-        IPartExitProcessor partExit, ICsvService csv, ICollageService collage, IMsaService msa,
+        IPartExitOrchestrator partExit, ICsvService csv, ICollageService collage, IMsaService msa,
         ISpsServer sps, ISystemHealth health, ILogBuffer log)
     {
         _config = config; _cameras = cameras; _database = database;
@@ -62,9 +63,9 @@ public sealed partial class MainViewModel : ObservableObject
         Cameras = new ObservableCollection<CameraViewModel>(_cameras.Clients.Select(c => new CameraViewModel(c)));
         SpsChannels = BuildChannels();
         Msa = new MsaViewModel(_msa);
+        Log = new LogViewModel(_log, _config);
 
         _sps.ChannelActivity += OnChannelActivity;
-        _log.Changed += () => _logDirty = true;
 
         Refresh();
 
@@ -81,9 +82,19 @@ public sealed partial class MainViewModel : ObservableObject
     public ObservableCollection<CameraViewModel> Cameras { get; }
     public ObservableCollection<SpsChannelViewModel> SpsChannels { get; }
     public MsaViewModel Msa { get; }
+    public LogViewModel Log { get; }
     public ObservableCollection<string> HealthFaults { get; } = new();
-    public ObservableCollection<string> LogLines { get; } = new();
     public ObservableCollection<TableCountVm> TableRows { get; } = new();
+    public ObservableCollection<string> OfflineCameras { get; } = new();
+
+    // --- Overview ---
+    [ObservableProperty] private string _overviewCameras = "0 / 0 cameras online";
+    [ObservableProperty] private Brush _overviewCamerasBrush = Brushes.Gray;
+    [ObservableProperty] private string _todayOk = "0";
+    [ObservableProperty] private string _todayNg = "0";
+    [ObservableProperty] private string _lastPartExit = "—";
+    [ObservableProperty] private string _activeOrder = "—";
+    [ObservableProperty] private bool _hasActiveErrors;
 
     [ObservableProperty] private string _systemStatus = "Starting…";
     [ObservableProperty] private Brush _systemStatusBrush = Brushes.Gray;
@@ -110,6 +121,7 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty] private string _csvActivePath = "(no file yet)";
     [ObservableProperty] private string _csvRows = "0 rows";
     [ObservableProperty] private string _csvLastWrite = "never";
+    [ObservableProperty] private string _exportTiming = "Last export: —";
 
     // --- Pipelines (Database tab) ---
     [ObservableProperty] private string _measurementsText = "—";
@@ -160,9 +172,45 @@ public sealed partial class MainViewModel : ObservableObject
         RefreshPipelines();
         RefreshHealth();
         RefreshTopBar();
-        RefreshLog();
+        RefreshOverviewCameras();
+        Log.Tick();
         MaybeRefreshRowCounts();
+        MaybeRefreshProduction();
         MaybeLoadMsa();
+    }
+
+    private void RefreshOverviewCameras()
+    {
+        var connected = _cameras.ConnectedCount;
+        var total = _cameras.TotalCount;
+        OverviewCameras = $"{connected} / {total} cameras online";
+        OverviewCamerasBrush = connected == total ? Led.Green : connected == 0 ? Led.Red : Led.Orange;
+
+        OfflineCameras.Clear();
+        foreach (var cam in Cameras)
+            if (!cam.ConnectedBrush.Equals(Led.Green))
+                OfflineCameras.Add($"{cam.Name} ({cam.StateText})");
+    }
+
+    private async void MaybeRefreshProduction()
+    {
+        if (_productionBusy || _database.Status != DatabaseStatus.Ready)
+            return;
+        if ((DateTime.UtcNow - _lastProductionUtc).TotalSeconds < 5)
+            return;
+
+        _productionBusy = true;
+        try
+        {
+            var snap = await _database.GetProductionSnapshotAsync().ConfigureAwait(true);
+            TodayOk = snap.TodayOk.ToString("N0");
+            TodayNg = snap.TodayNg.ToString("N0");
+            LastPartExit = snap.LastPartExit is { } t ? t.ToString("yyyy-MM-dd HH:mm:ss") : "—";
+            ActiveOrder = string.IsNullOrWhiteSpace(snap.ActiveOrder) ? "—" : snap.ActiveOrder;
+            _lastProductionUtc = DateTime.UtcNow;
+        }
+        catch { /* non-critical */ }
+        finally { _productionBusy = false; }
     }
 
     private void RefreshDatabase()
@@ -192,7 +240,8 @@ public sealed partial class MainViewModel : ObservableObject
     {
         MeasurementsText = Stat(_measurements.TotalInserted, _measurements.PendingCount, "written");
         SettingsText = Stat(_settings.TotalInserted, _settings.PendingCount, "written");
-        PartExitText = Stat(_partExit.TotalUpserted, _partExit.PendingCount, "parts");
+        PartExitText = $"{_partExit.TotalProcessed:N0} parts processed";
+        ExportTiming = "Last export: " + _partExit.LastTiming;
         DiagnosticsText = Stat(_diagnostics.TotalWritten, _diagnostics.PendingCount, "written");
         var collageState = _config.Config.Collage.Generate ? "enabled" : "disabled";
         CollageText = $"{_collage.TotalGenerated:N0} generated  ·  queue {_collage.PendingCount:N0}  ·  {collageState}";
@@ -204,6 +253,7 @@ public sealed partial class MainViewModel : ObservableObject
     {
         var snapshot = _health.Snapshot();
         IsHealthy = snapshot.IsHealthy;
+        HasActiveErrors = !snapshot.IsHealthy;
         HealthWord = snapshot.SignalWord;
         HealthMessage = snapshot.Message;
         HealthBrush = snapshot.Worst switch
@@ -237,18 +287,6 @@ public sealed partial class MainViewModel : ObservableObject
 
         var up = DateTime.UtcNow - _startUtc;
         UptimeText = $"{(int)up.TotalHours}:{up.Minutes:00}:{up.Seconds:00}";
-    }
-
-    private void RefreshLog()
-    {
-        if (!_logDirty)
-            return;
-        _logDirty = false;
-
-        var lines = _log.Snapshot();
-        LogLines.Clear();
-        for (var i = lines.Count - 1; i >= 0; i--) // newest on top
-            LogLines.Add(lines[i]);
     }
 
     private async void MaybeRefreshRowCounts()

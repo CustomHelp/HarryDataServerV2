@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.IO;
 using HarryDataServer.Configuration;
 using HarryDataServer.Infrastructure;
@@ -7,54 +6,41 @@ using HarryDataServer.Models;
 namespace HarryDataServer.Services;
 
 /// <summary>
-/// Phase 9 collage generator. On Part Exit = OK (production parts only) it queues the
-/// part, composes a collage from its individual camera images per Collage.ini, writes
-/// it to the NAS collage input folder, and — if configured — deletes the now-consumed
-/// OK source images (CLAUDE.md sections 11–12). All work happens on a background task.
+/// Collage generator (CLAUDE.md section 12). Driven by the part-exit orchestrator via
+/// <see cref="ComposeForPartAsync"/> for OK parts when <c>Collage_Generate=true</c>.
+/// Composes from the individual images per Collage.ini and writes a JPG to
+/// <c>Collage_ResultImages</c>. Image deletion/backup is handled separately by the
+/// orchestrator's image task.
 /// </summary>
 public sealed class CollageService : ICollageService
 {
-    private const int MaxQueue = 50_000;
-    private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan TransientTtl = TimeSpan.FromMinutes(5);
 
     private readonly IConfigService _config;
-    private readonly ISpsServer _sps;
     private readonly ISystemHealth _health;
     private readonly CollageIniReader _reader;
     private readonly CollageComposer _composer;
     private readonly ILogService _log;
 
-    private readonly ConcurrentQueue<SpsPartExitData> _queue = new();
-
     private CollageLayout? _layout;
     private bool _enabled;
     private string _sourceDir = string.Empty;
     private string _outputDir = string.Empty;
-    private bool _deleteAfter;
-
-    private CancellationTokenSource? _cts;
-    private Task? _task;
     private long _totalGenerated;
     private bool _started;
 
     public CollageService(
-        IConfigService config,
-        ISpsServer sps,
-        ISystemHealth health,
-        CollageIniReader reader,
-        CollageComposer composer,
-        ILogService log)
+        IConfigService config, ISystemHealth health,
+        CollageIniReader reader, CollageComposer composer, ILogService log)
     {
         _config = config;
-        _sps = sps;
         _health = health;
         _reader = reader;
         _composer = composer;
         _log = log;
     }
 
-    public int PendingCount => _queue.Count;
+    public int PendingCount => 0;
     public long TotalGenerated => Interlocked.Read(ref _totalGenerated);
     public event Action? StatsChanged;
 
@@ -65,12 +51,11 @@ public sealed class CollageService : ICollageService
         _started = true;
 
         var collage = _config.Config.Collage;
-        var nas = _config.Config.Nas;
-        _sourceDir = nas.LowResIndividualPath;
-        _outputDir = nas.CollagePath;
-        _deleteAfter = nas.DeleteAfterCollage;
+        _enabled = collage.Generate;
+        _sourceDir = collage.SingleImagesPath;
+        _outputDir = collage.ResultImagesPath;
 
-        if (!collage.Generate)
+        if (!_enabled)
         {
             _log.Information("Collage generation disabled; service idle.");
             return Task.CompletedTask;
@@ -78,115 +63,46 @@ public sealed class CollageService : ICollageService
 
         if (string.IsNullOrWhiteSpace(_sourceDir) || string.IsNullOrWhiteSpace(_outputDir))
         {
-            _log.Warning("Collage: source or output path not configured; service idle.");
+            _enabled = false;
+            _log.Warning("Collage: source/output path not configured; collage disabled.");
             return Task.CompletedTask;
         }
 
-        if (!TryLoadLayout(collage.IniPath))
-            return Task.CompletedTask;
-
-        _enabled = true;
-        _sps.PartExitReceived += OnPartExitReceived;
-        _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        _task = Task.Run(() => RunAsync(_cts.Token), CancellationToken.None);
-        _log.Information("Collage service started; layout '{Ini}' ({Count} image(s)) → {Out}.",
-            collage.IniPath, _layout!.Images.Count, _outputDir);
+        TryLoadLayout(collage.IniPath);
+        _log.Information("Collage service ready; layout '{Ini}' ({Count} image(s)) → {Out}.",
+            collage.IniPath, _layout?.Images.Count ?? 0, _outputDir);
         return Task.CompletedTask;
     }
 
-    public async Task StopAsync()
-    {
-        if (!_enabled)
-            return;
+    public Task StopAsync() => Task.CompletedTask;
 
-        _sps.PartExitReceived -= OnPartExitReceived;
-        _cts?.Cancel();
-        if (_task is not null)
-        {
-            try { await _task.ConfigureAwait(false); }
-            catch (OperationCanceledException) { /* expected */ }
-        }
-    }
-
-    private bool TryLoadLayout(string iniPath)
+    /// <summary>
+    /// Compose the collage for one OK part. Returns true on success or when disabled;
+    /// false only on a genuine failure (exception). Missing images log a warning but do
+    /// not fail the part (the collage is a best-effort artifact).
+    /// </summary>
+    public async Task<bool> ComposeForPartAsync(SpsPartExitData part, CancellationToken ct)
     {
-        try
-        {
-            _layout = _reader.Load(iniPath);
-            if (!_layout.IsValid)
-            {
-                _health.Report(HealthSources.Collage, HealthSeverity.Warning,
-                    "Collage.ini has no usable canvas/images; collages disabled");
-                _log.Warning("Collage: layout '{Ini}' is empty or invalid; service idle.", iniPath);
-                return false;
-            }
+        if (!_enabled || _layout is null)
             return true;
-        }
-        catch (Exception ex)
-        {
-            _health.Report(HealthSources.Collage, HealthSeverity.Warning,
-                $"Collage.ini could not be loaded: {ex.Message}");
-            _log.Error(ex, "Collage: failed to load layout '{Ini}'; service idle.", iniPath);
-            return false;
-        }
-    }
 
-    // --- Receive side (SPS thread; in-memory only) ---
+        var serials = FormattedSerials(part);
+        if (serials.Count == 0)
+            return true;
 
-    private void OnPartExitReceived(object? sender, SpsPartExitEventArgs e)
-    {
-        var data = e.Data;
-
-        // Collages are produced for good production parts only (not NG, not MSA runs).
-        if (data.Result != PartResult.Ok || data.IsMsa)
-            return;
-
-        if (_queue.Count >= MaxQueue)
-        {
-            _health.Report(HealthSources.Collage, HealthSeverity.Warning,
-                $"Collage queue full ({MaxQueue}); some collages skipped", TransientTtl);
-            _log.Warning("Collage queue full ({Max}); skipping part {Serial}.", MaxQueue, data.Szid);
-            return;
-        }
-
-        _queue.Enqueue(data);
-    }
-
-    // --- Compose side (dedicated background task; all file/image I/O) ---
-
-    private async Task RunAsync(CancellationToken ct)
-    {
-        while (!ct.IsCancellationRequested)
-        {
-            try { await Task.Delay(PollInterval, ct).ConfigureAwait(false); }
-            catch (OperationCanceledException) { break; }
-
-            while (!ct.IsCancellationRequested && _queue.TryDequeue(out var part))
-                ProcessPart(part);
-        }
-    }
-
-    private void ProcessPart(SpsPartExitData part)
-    {
-        if (_layout is null || string.IsNullOrWhiteSpace(part.Szid))
-            return;
-
-        var prefixes = SerialPrefixes(part);
-        if (prefixes.Count == 0)
-            return;
-
-        var outputPath = Path.Combine(_outputDir, $"{Sanitize(part.Szid)}_collage.png");
+        var outputPath = Path.Combine(_outputDir, $"{Sanitize(part.Szid)}_Collage.jpg");
 
         try
         {
-            var result = _composer.Compose(_layout, prefixes, _sourceDir, outputPath);
+            var result = await Task.Run(() => _composer.Compose(_layout, serials, _sourceDir, outputPath), ct)
+                .ConfigureAwait(false);
 
             if (!result.Success)
             {
                 _health.Report(HealthSources.Collage, HealthSeverity.Warning,
                     $"No source images found for part {part.Szid}", TransientTtl);
                 _log.Warning("Collage: no source images for part {Serial}; nothing written.", part.Szid);
-                return;
+                return true;
             }
 
             Interlocked.Increment(ref _totalGenerated);
@@ -194,48 +110,58 @@ public sealed class CollageService : ICollageService
             _log.Information("Collage written for {Serial}: {Placed} placed, {Missing} missing → {Path}.",
                 part.Szid, result.Placed, result.Missing, result.OutputPath);
             StatsChanged?.Invoke();
-
-            if (_deleteAfter)
-                DeleteSources(result.UsedSourceFiles, part.Szid);
+            return true;
         }
         catch (Exception ex)
         {
             _health.Report(HealthSources.Collage, HealthSeverity.Warning,
                 $"Collage generation failing: {ex.Message}", TransientTtl);
             _log.Error(ex, "Collage generation failed for part {Serial}.", part.Szid);
+            return false;
         }
     }
 
-    /// <summary>12-char search prefixes: SZID, plus the trimmer serial when present.</summary>
-    private static List<string> SerialPrefixes(SpsPartExitData part)
+    private void TryLoadLayout(string iniPath)
     {
-        var prefixes = new List<string>(2);
-        if (part.Szid.Length >= 12)
-            prefixes.Add(part.Szid[..12]);
-        if (part.VirtualSerial.Length >= 12)
-            prefixes.Add(part.VirtualSerial[..12]);
-        return prefixes;
-    }
-
-    private void DeleteSources(IReadOnlyList<string> files, string serial)
-    {
-        var deleted = 0;
-        foreach (var file in files)
+        try
         {
-            try { File.Delete(file); deleted++; }
-            catch (Exception ex) { _log.Debug("Collage: could not delete source {File}: {Message}", file, ex.Message); }
+            _layout = _reader.Load(iniPath);
+            if (!_layout.IsValid)
+            {
+                _enabled = false;
+                _health.Report(HealthSources.Collage, HealthSeverity.Warning,
+                    "Collage.ini has no usable canvas/images; collages disabled");
+                _log.Warning("Collage: layout '{Ini}' is empty or invalid; service idle.", iniPath);
+            }
         }
+        catch (Exception ex)
+        {
+            _enabled = false;
+            _health.Report(HealthSources.Collage, HealthSeverity.Warning,
+                $"Collage.ini could not be loaded: {ex.Message}");
+            _log.Error(ex, "Collage: failed to load layout '{Ini}'; service idle.", iniPath);
+        }
+    }
 
-        if (deleted > 0)
-            _log.Information("Collage: deleted {Count} consumed OK image(s) for part {Serial}.", deleted, serial);
+    /// <summary>Serials with "_" inserted after character 12 (SZID + trimmer, when present).</summary>
+    internal static List<string> FormattedSerials(SpsPartExitData part)
+    {
+        var list = new List<string>(2);
+        AddFormatted(list, part.Szid);
+        AddFormatted(list, part.VirtualSerial);
+        return list;
+    }
+
+    internal static void AddFormatted(List<string> list, string serial)
+    {
+        if (string.IsNullOrWhiteSpace(serial))
+            return;
+        list.Add(serial.Length > 12 ? serial[..12] + "_" + serial[12..] : serial);
     }
 
     private static string Sanitize(string serial)
     {
-        Span<char> buffer = stackalloc char[serial.Length];
         var invalid = Path.GetInvalidFileNameChars();
-        for (var i = 0; i < serial.Length; i++)
-            buffer[i] = Array.IndexOf(invalid, serial[i]) >= 0 ? '_' : serial[i];
-        return new string(buffer);
+        return new string(serial.Select(c => Array.IndexOf(invalid, c) >= 0 ? '_' : c).ToArray());
     }
 }

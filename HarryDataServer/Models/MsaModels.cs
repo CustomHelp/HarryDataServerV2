@@ -60,5 +60,12 @@ public sealed class MsaMeasurementResult
     public double? Cg { get; init; }
     public double? Cgk { get; init; }
     public double? PctTolerance { get; init; }
+
+    /// <summary>LimitSample only: the prepared expectation ("reject"/"accept").</summary>
+    public string? Expected { get; init; }
+
+    /// <summary>LimitSample only: what actually happened ("rejected"/"accepted").</summary>
+    public string? Actual { get; init; }
+
     public bool Passed { get; init; }
 }

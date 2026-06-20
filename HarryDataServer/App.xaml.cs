@@ -63,9 +63,6 @@ public partial class App : Application
             var diagnostics = _services.GetRequiredService<IDiagnosticProcessor>();
             _ = Task.Run(() => diagnostics.StartAsync(_shutdownCts.Token));
 
-            var partExit = _services.GetRequiredService<IPartExitProcessor>();
-            _ = Task.Run(() => partExit.StartAsync(_shutdownCts.Token));
-
             var csv = _services.GetRequiredService<ICsvService>();
             _ = Task.Run(() => csv.StartAsync(_shutdownCts.Token));
 
@@ -77,6 +74,10 @@ public partial class App : Application
 
             var collage = _services.GetRequiredService<ICollageService>();
             _ = Task.Run(() => collage.StartAsync(_shutdownCts.Token));
+
+            // Part-exit orchestrator: registers the channel-2 handler (CSV/Collage/Images + ACK).
+            var partExit = _services.GetRequiredService<IPartExitOrchestrator>();
+            _ = Task.Run(() => partExit.StartAsync(_shutdownCts.Token));
         }
         catch (Exception ex)
         {
@@ -104,7 +105,7 @@ public partial class App : Application
                 _services?.GetService<IMeasurementProcessor>()?.StopAsync(),
                 _services?.GetService<ISettingsProcessor>()?.StopAsync(),
                 _services?.GetService<IDiagnosticProcessor>()?.StopAsync(),
-                _services?.GetService<IPartExitProcessor>()?.StopAsync(),
+                _services?.GetService<IPartExitOrchestrator>()?.StopAsync(),
                 _services?.GetService<ICsvService>()?.StopAsync(),
                 _services?.GetService<IMsaService>()?.StopAsync(),
                 _services?.GetService<IImageCleanupService>()?.StopAsync(),
@@ -170,11 +171,10 @@ public partial class App : Application
         // --- SPS server (Phase 5): 7-channel PLC TCP server ---
         services.AddSingleton<ISpsServer, TcpSpsServer>();
 
-        // --- Phase 6 consumers: settings, diagnostic, part-exit pipelines ---
+        // --- Phase 6 consumers: settings, diagnostic ---
         services.AddSingleton<SettingDefinitionCache>();
         services.AddSingleton<ISettingsProcessor, SettingsProcessor>();
         services.AddSingleton<IDiagnosticProcessor, DiagnosticProcessor>();
-        services.AddSingleton<IPartExitProcessor, PartExitProcessor>();
 
         // --- CSV export (Phase 7): main per-part CSV ---
         services.AddSingleton<ICsvService, CsvExportService>();
@@ -188,6 +188,10 @@ public partial class App : Application
         services.AddSingleton<CollageIniReader>();
         services.AddSingleton<CollageComposer>();
         services.AddSingleton<ICollageService, CollageService>();
+
+        // --- Part-exit orchestrator + image handler (parallel sequence + ACK) ---
+        services.AddSingleton<ImageHandler>();
+        services.AddSingleton<IPartExitOrchestrator, PartExitOrchestrator>();
 
         // --- UI (Phase 11): main view model + window ---
         services.AddSingleton<ViewModels.MainViewModel>();

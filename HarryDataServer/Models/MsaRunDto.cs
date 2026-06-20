@@ -7,6 +7,8 @@ public sealed class MsaResultRow
     public double? Cg { get; init; }
     public double? Cgk { get; init; }
     public double? PctTolerance { get; init; }
+    public string? Expected { get; init; }
+    public string? Actual { get; init; }
     public bool Passed { get; init; }
 }
 

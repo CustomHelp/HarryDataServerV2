@@ -82,7 +82,7 @@ public sealed partial class MsaRunsViewModel : ObservableObject
             foreach (var row in run.Rows)
                 Rows.Add(row);
 
-            RunInfo = $"Run {_index + 1}/{_runs.Count}  ·  {run.EvaluatedAt:yyyy-MM-dd HH:mm:ss}  ·  {run.Controller}  ·  BaseID {run.BaseId}";
+            RunInfo = $"Run {_index + 1} of {_runs.Count}  ·  {run.EvaluatedAt:yyyy-MM-dd HH:mm:ss}  ·  {run.Controller}  ·  BaseID {run.BaseId}";
             OverallText = run.OverallPass ? "PASS" : "FAIL";
             OverallBrush = run.OverallPass ? Led.Green : Led.Red;
         }
@@ -107,13 +107,15 @@ public sealed partial class MsaRunsViewModel : ObservableObject
             return;
 
         var sb = new StringBuilder();
-        sb.AppendLine("MeasurementName;Cg;Cgk;PctTolerance;Passed");
+        sb.AppendLine("MeasurementName;Cg;Cgk;PctTolerance;Expected;Actual;Passed");
         foreach (var r in run.Rows)
         {
             sb.Append(r.DisplayName).Append(';')
               .Append(Fmt(r.Cg)).Append(';')
               .Append(Fmt(r.Cgk)).Append(';')
               .Append(Fmt(r.PctTolerance)).Append(';')
+              .Append(r.Expected ?? string.Empty).Append(';')
+              .Append(r.Actual ?? string.Empty).Append(';')
               .Append(r.Passed ? "PASS" : "FAIL")
               .AppendLine();
         }

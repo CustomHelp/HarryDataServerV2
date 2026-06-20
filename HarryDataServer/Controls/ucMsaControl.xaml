@@ -114,6 +114,8 @@
                             <DataGrid Grid.Row="1" ItemsSource="{Binding Rows}">
                                 <DataGrid.Columns>
                                     <DataGridTextColumn Header="Measurement" Binding="{Binding DisplayName}" Width="2*" />
+                                    <DataGridTextColumn Header="Expected" Binding="{Binding Expected}" Width="*" />
+                                    <DataGridTextColumn Header="Actual" Binding="{Binding Actual}" Width="*" />
                                     <DataGridTemplateColumn Header="Result" Width="90">
                                         <DataGridTemplateColumn.CellTemplate>
                                             <DataTemplate>
@@ -128,7 +130,7 @@
                                 </DataGrid.Columns>
                             </DataGrid>
                             <TextBlock Grid.Row="2" Margin="0,6,0,0" FontSize="11" Foreground="{StaticResource TextDimBrush}"
-                                       Text="LimitSample stores pass/fail per measurement; Expected/Actual values are not persisted in msa_results." />
+                                       Text="Expected = prepared error (reject/accept); Actual = observed outcome." />
                         </Grid>
                     </TabItem>
 

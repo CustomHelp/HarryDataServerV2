@@ -1,3 +1,5 @@
+using HarryDataServer.Models;
+
 namespace HarryDataServer.Services;
 
 /// <summary>
@@ -17,6 +19,10 @@ public interface ICsvService
     DateTime? LastWriteTime { get; }
 
     event Action? StatsChanged;
+
+    /// <summary>Write one finished part's CSV row (called by the part-exit orchestrator).
+    /// Returns false on failure so the SPS ACK can report it.</summary>
+    Task<bool> WritePartAsync(SpsPartExitData part, CancellationToken ct = default);
 
     Task StartAsync(CancellationToken ct);
     Task StopAsync();

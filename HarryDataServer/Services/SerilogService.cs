@@ -47,7 +47,7 @@ public sealed class SerilogService : ILogService
             .WriteTo.File(
                 filePattern,
                 rollingInterval: RollingInterval.Day,
-                retainedFileCountLimit: 90,
+                retainedFileCountLimit: 30, // daily rolling, 30-day retention (CLAUDE.md / spec)
                 shared: true,
                 outputTemplate: template)
             .WriteTo.Console(outputTemplate: template);

@@ -57,12 +57,24 @@ public sealed class NasConfig
     public int RetentionDiagnosticDays { get; init; } = 30;
     public int RetentionGoldenSampleDays { get; init; } = 30;
     public bool DeleteAfterCollage { get; init; } = true;
+
+    /// <summary>Part-exit image handling: true = delete source images; false = backup then delete.</summary>
+    public bool DeletePictures { get; init; } = true;
+
+    /// <summary>Root backup folder (used when DeletePictures = false). Structure: \YYYY\MM\DD\HH\.</summary>
+    public string BackupFolder { get; init; } = string.Empty;
 }
 
 public sealed class CollageConfig
 {
     public string IniPath { get; init; } = string.Empty;
     public bool Generate { get; init; } = true;
+
+    /// <summary>Folder holding the individual single images to search (Collage_SingleImages).</summary>
+    public string SingleImagesPath { get; init; } = string.Empty;
+
+    /// <summary>Output folder for finished collages (Collage_ResultImages).</summary>
+    public string ResultImagesPath { get; init; } = string.Empty;
 }
 
 public sealed class SpsConfig

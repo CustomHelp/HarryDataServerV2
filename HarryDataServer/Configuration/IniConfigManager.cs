@@ -118,6 +118,8 @@ public sealed class IniConfigManager
             RetentionDiagnosticDays = Int(s, "RetentionDiagnosticDays", 30),
             RetentionGoldenSampleDays = Int(s, "RetentionGoldenSampleDays", 30),
             DeleteAfterCollage = Bool(s, "DeleteAfterCollage", true),
+            DeletePictures = Bool(s, "DeletePictures", true),
+            BackupFolder = Str(s, "BackupFolder", string.Empty),
         };
     }
 
@@ -128,6 +130,8 @@ public sealed class IniConfigManager
         {
             IniPath = ResolvePath(Str(s, "Collage_IniPath", string.Empty), configDir),
             Generate = Bool(s, "Collage_Generate", true),
+            SingleImagesPath = Str(s, "Collage_SingleImages", string.Empty),
+            ResultImagesPath = Str(s, "Collage_ResultImages", string.Empty),
         };
     }
 

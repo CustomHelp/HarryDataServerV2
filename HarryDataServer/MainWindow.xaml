@@ -54,6 +54,10 @@
 
         <!-- ===== Tabs ===== -->
         <TabControl Margin="6">
+            <TabItem Header="Overview">
+                <ctrl:ucOverviewControl />
+            </TabItem>
+
             <TabItem Header="Cameras">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <ItemsControl ItemsSource="{Binding Cameras}" Margin="6">
@@ -93,7 +97,7 @@
             </TabItem>
 
             <TabItem Header="Log">
-                <ListBox ItemsSource="{Binding LogLines}" Margin="6" FontFamily="Consolas" FontSize="12" />
+                <ctrl:ucLogControl DataContext="{Binding Log}" />
             </TabItem>
         </TabControl>
     </DockPanel>

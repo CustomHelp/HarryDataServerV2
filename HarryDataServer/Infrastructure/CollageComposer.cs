@@ -23,16 +23,17 @@ public sealed class CollageComposer
         bool Success, string? OutputPath, IReadOnlyList<string> UsedSourceFiles, int Placed, int Missing);
 
     /// <summary>
-    /// Build the collage for one part. <paramref name="serialPrefixes"/> are the
-    /// 12-char serial prefixes to search by (SZID and/or VirtualSerial).
+    /// Build the collage for one part. <paramref name="formattedSerials"/> are the
+    /// serials with "_" inserted after char 12 (SZID and/or TrimmerSerial). Each image
+    /// slot matches a *.bmp whose filename contains a serial AND all KeyName keywords.
     /// </summary>
     public CollageResult Compose(
         CollageLayout layout,
-        IReadOnlyList<string> serialPrefixes,
+        IReadOnlyList<string> formattedSerials,
         string sourceDir,
         string outputPath)
     {
-        var candidates = FindCandidateFiles(serialPrefixes, sourceDir);
+        var candidates = FindCandidateFiles(formattedSerials, sourceDir);
 
         using var canvas = new Bitmap(layout.CanvasWidth, layout.CanvasHeight, PixelFormat.Format24bppRgb);
         using (var g = Graphics.FromImage(canvas))
@@ -48,7 +49,7 @@ public sealed class CollageComposer
 
             foreach (var spec in layout.Images)
             {
-                var file = MatchFile(candidates, spec.FileSuffix);
+                var file = MatchByKeyName(candidates, spec.KeyName);
                 if (file is null)
                 {
                     missing++;
@@ -96,46 +97,49 @@ public sealed class CollageComposer
     }
 
     /// <summary>
-    /// Find all source files for this part by serial prefix. Files live in date
-    /// subfolders, so we search recursively with an OS-level "prefix*" filter to
-    /// avoid walking the whole NAS tree.
+    /// Find all *.bmp under the source whose filename contains one of the formatted
+    /// serials (serial with "_" after char 12). Searched recursively.
     /// </summary>
-    private static List<string> FindCandidateFiles(IReadOnlyList<string> serialPrefixes, string sourceDir)
+    private static List<string> FindCandidateFiles(IReadOnlyList<string> formattedSerials, string sourceDir)
     {
         var result = new List<string>();
         if (string.IsNullOrWhiteSpace(sourceDir) || !Directory.Exists(sourceDir))
             return result;
 
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var prefix in serialPrefixes)
+        var serials = formattedSerials.Where(s => !string.IsNullOrWhiteSpace(s)).ToList();
+        if (serials.Count == 0)
+            return result;
+
+        try
         {
-            if (string.IsNullOrWhiteSpace(prefix))
-                continue;
-            try
+            foreach (var file in Directory.EnumerateFiles(sourceDir, "*.bmp", SearchOption.AllDirectories))
             {
-                foreach (var file in Directory.EnumerateFiles(sourceDir, prefix + "*", SearchOption.AllDirectories))
-                {
-                    if (seen.Add(file))
-                        result.Add(file);
-                }
+                var name = Path.GetFileName(file);
+                if (serials.Any(s => name.Contains(s, StringComparison.OrdinalIgnoreCase)))
+                    result.Add(file);
             }
-            catch
-            {
-                // Tree may be partially unavailable; skip silently (caller reports health).
-            }
+        }
+        catch
+        {
+            // Tree may be partially unavailable; caller reports health.
         }
         return result;
     }
 
-    /// <summary>Pick the first candidate whose filename ends with the template's fixed suffix.</summary>
-    private static string? MatchFile(List<string> candidates, string suffix)
+    /// <summary>
+    /// Pick the first candidate whose filename contains ALL keywords of the KeyName
+    /// (V1 matching; KeyName split on whitespace). Returns null if KeyName is empty.
+    /// </summary>
+    private static string? MatchByKeyName(List<string> candidates, string keyName)
     {
-        if (string.IsNullOrEmpty(suffix))
+        var tokens = (keyName ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (tokens.Length == 0)
             return null;
 
         foreach (var file in candidates)
         {
-            if (Path.GetFileName(file).EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+            var name = Path.GetFileName(file);
+            if (tokens.All(t => name.Contains(t, StringComparison.OrdinalIgnoreCase)))
                 return file;
         }
         return null;

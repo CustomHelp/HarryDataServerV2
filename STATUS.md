@@ -3,14 +3,15 @@
 *Last updated: 2026-06-20*
 
 > ## ⚠️ Pending on-site (live) verification
-> - **Phase 9 — Collage generator** is implemented and compiles but has **not** been
->   tested against real images / a real V1 collage. The compositing semantics
->   (Pos = centre, size = crop × Scale × Zoom, crop→scale→mirror→place, PNG output)
->   are **assumptions** — verify them on-site and adjust `CollageComposer` if needed.
-> - Ships **OFF by default** so go-live is safe: in `Harry.ini`,
->   `Collage_Generate=false` and `DeleteAfterCollage=false`. Enable both only after the
->   on-site collage output looks correct.
-> - **When the customer goes live, the collage must be re-tested** before enabling it.
+> - **Collage + part-exit image handling** are implemented from the **written spec**, not a
+>   literal V1 port — **no V1 source (`ucCollage.cs`) exists on this machine**. Verify on-site:
+>   compositing (Pos = centre, size = crop × Scale × Zoom, crop→scale→mirror→place, JPG out),
+>   file matching (serial with `_` after char 12 + all KeyName keywords in filename), and the
+>   image delete/backup logic.
+> - Ships **safe by default** in `Harry.ini`: `Collage_Generate=false`, `DeleteAfterCollage=false`,
+>   and **`DeletePictures=false`** (backup-then-delete, so no image is lost before verification).
+> - **The channel-2 ACK timing must be checked under load** (450 ms budget): the part-exit
+>   sequence logs a WARNING if a part exceeds 450 ms; watch the "Part-exit timing" line.
 
 Phase numbers follow the execution order used in this project (SPS server was
 brought forward; numbering otherwise tracks CLAUDE.md section 18).
@@ -33,6 +34,42 @@ brought forward; numbering otherwise tracks CLAUDE.md section 18).
 | 11 | WPF dashboard UI (MVVM, dark theme) | MainViewModel, CameraViewModel, SpsChannelViewModel, Msa{,Module,Runs}ViewModel, Controls\uc{Camera,SpsChannel,Msa,Database,Csv}Control, Themes\DarkTheme.xaml |
 | 10 | MSA engine | MsaCalculator, MsaService, MsaModels, BaseId, MsaReference(+Loader), MsaConfig |
 | 8b | Health reporting on SPS KeepAlive + flush data-loss hardening | ISystemHealth/SystemHealthService, HealthSources, FlushHelper |
+| 11b | Part-exit orchestration (parallel + ACK) + UI extensions | PartExitOrchestrator, ImageHandler, LimitSample schema, Overview/Log tabs |
+
+---
+
+## Part-exit orchestration + UI extensions (Phase 11b)
+
+Implemented from the written spec (no V1 source on the machine to port literally).
+
+1. **LimitSample schema** — `msa_results` gained `expected_value`/`actual_value` (VARCHAR(50));
+   the startup ADD-COLUMN check applies them automatically (verified live). LimitSample tab
+   now shows MeasurementName | Expected | Actual | Pass/Fail.
+2. **Overview tab** (first tab) — cameras online/offline at a glance, today's OK/NG counts
+   (from `dmcserial`, 5 s), last part exit, active order, active errors.
+3. **Log tab** — in-memory ring buffer (max 1000); level toggles ALL/INFO/WARNING/ERROR;
+   multi-select source toggles CAMERA/SPS/DATABASE/CSV/COLLAGE/MSA/SYSTEM; colour coding
+   (white/amber/red); Export to `LogFilePath\Log_Export_yyyy-MM-dd_HH-mm.txt`. Serilog
+   daily rolling files now retained **30 days**.
+4. **Part-exit parallel sequence** — `PartExitOrchestrator` replaces the decoupled queues for
+   channel 2. Saves `dmcserial`, then `Task.WhenAll`: OK → CSV ‖ Collage(if `Collage_Generate`)
+   ‖ Images; NG → CSV ‖ Images. Each task timed (Stopwatch). ACK
+   `serial.PadRight(32,'0') + ";" + true|false + "\r\n"` after all complete; `true` only if
+   every task succeeded. Images for OK parts wait (untimed) for the collage to read first
+   (no delete/compose race). 450 ms budget — a WARNING is logged if exceeded.
+   - **Image handling:** search `Collage_SingleImages` recursively for `*.bmp` matching the
+     serial (`_` after char 12, SZID + trimmer); `DeletePictures=true` → delete, else copy to
+     `BackupFolder\YYYY\MM\DD\HH\`, verify size, delete source.
+   - **Collage:** match by serial + all KeyName keywords; output `serial_Collage.jpg` to
+     `Collage_ResultImages`. (Old NAS keys superseded for this flow.)
+   - Timing shown on the CSV tab: "Last export: CSV Xms | Collage Xms | Images Xms | Total Xms".
+5. **CSV rotation** — already correct (order-name change + `DataSetsPerFile`); now driven
+   per-part synchronously via `ICsvService.WritePartAsync`.
+6. **MSA navigation** — "Run X of Y" + Prev/Next, loads the latest run on startup, run
+   timestamp + PASS/FAIL badge (built in Phase 11; wording aligned).
+
+New INI keys: `[NAS] DeletePictures`, `BackupFolder`; `[Collage] Collage_SingleImages`,
+`Collage_ResultImages`.
 
 ---
 
@@ -83,12 +120,13 @@ A `Health: OK/WARNING/ERROR` indicator was added to the MainWindow status bar.
 | MeasurementProcessor | ✅ | dedicated Task | ConcurrentQueue |
 | SettingsProcessor | ✅ | dedicated Task | ConcurrentQueue |
 | DiagnosticProcessor | ✅ | dedicated Task | ConcurrentQueue (→ CSV, no DB) |
-| PartExitProcessor | ✅ | dedicated Task | ConcurrentQueue (→ dmcserial) |
-| CsvExportService | ✅ | dedicated Task | ConcurrentQueue (→ main CSV) |
+| PartExitOrchestrator | ✅ | channel-2 receive task (awaits the per-part pipeline) | — |
+| CsvExportService | ✅ | called per part (SemaphoreSlim-serialized) | — |
 | TcpSpsServer | ✅ | one Task per channel + per client | — |
-| ImageCleanupService | ✅ | daily background Task | — |
+| ImageCleanupService | ✅ | daily background Task (retention only) | — |
+| ImageHandler | ✅ | called per part (Task.Run) | — |
 | MsaService | ✅ | dedicated Task (storage) + per-eval Task | ConcurrentQueue (→ msa_measurements) |
-| CollageService | ✅ | dedicated Task | ConcurrentQueue (→ collage image + delete OK sources) |
+| CollageService | ✅ | called per part (Task.Run, GDI+) | — |
 
 All processors: receive threads only enqueue; per-operation MySqlConnection
 (never shared); `ConfigureAwait(false)` on every async I/O op.
@@ -102,10 +140,11 @@ Cameras ─Results(Normal)──▶ MeasurementProcessor ─▶ measurements_ser
         ─Results(MSA)─────▶ MsaService(storage)   ─▶ msa_measurements
         ─Settings─────────▶ SettingsProcessor     ─▶ settings
         ─Diagnostic───────▶ DiagnosticProcessor   ─▶ Diagnostic CSV
-SPS Ch2 ─PartExit─┬▶ PartExitProcessor  ─▶ dmcserial
-                  ├▶ CsvExportService   ─▶ main CSV (all measurements/part, 2-row header)
-                  ├▶ CollageService (OK+Normal → compose collage, delete consumed OK images)
-                  └▶ ImageCleanupService (NG → delete orphaned OK images)
+SPS Ch2 ─PartExit─▶ PartExitOrchestrator:
+                     1. save dmcserial
+                     2. Task.WhenAll  (OK: CSV ‖ Collage[if enabled] ‖ Images)
+                                      (NG: CSV ‖ Images)            [≤450ms budget]
+                     3. ACK  serial.PadRight(32,'0');true|false\r\n
 SPS Ch3-7 ─Request;BaseID─▶ MsaService.HandleMsaRequest ─▶ Wait → (eval) → OK/NG
                                                           └▶ msa_results + MSA CSV
 Daily ─▶ ImageCleanupService ─▶ delete aged NG/Diag/Golden images + DROP old partitions

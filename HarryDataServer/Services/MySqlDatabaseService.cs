@@ -60,6 +60,49 @@ public sealed class MySqlDatabaseService : IDatabaseService
 
     public Task<MySqlConnection> OpenConnectionAsync(CancellationToken ct = default) => _repo.OpenAsync(ct);
 
+    public async Task<ProductionSnapshot> GetProductionSnapshotAsync(CancellationToken ct = default)
+    {
+        if (_status != DatabaseStatus.Ready)
+            return new ProductionSnapshot(0, 0, null, string.Empty);
+
+        try
+        {
+            await using var conn = await _repo.OpenAsync(ct).ConfigureAwait(false);
+
+            long ok = 0, ng = 0;
+            DateTime? lastExit = null;
+            await using (var cmd = new MySqlCommand(@"
+SELECT
+  SUM(result_status = 1 AND DATE(created_at) = CURDATE()),
+  SUM(result_status = 0 AND DATE(created_at) = CURDATE()),
+  MAX(created_at)
+FROM dmcserial;", conn))
+            await using (var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false))
+            {
+                if (await reader.ReadAsync(ct).ConfigureAwait(false))
+                {
+                    ok = reader.IsDBNull(0) ? 0 : reader.GetInt64(0);
+                    ng = reader.IsDBNull(1) ? 0 : reader.GetInt64(1);
+                    lastExit = reader.IsDBNull(2) ? null : reader.GetDateTime(2);
+                }
+            }
+
+            var order = string.Empty;
+            await using (var cmd = new MySqlCommand("SELECT order_name FROM dmcserial ORDER BY id DESC LIMIT 1;", conn))
+            {
+                var result = await cmd.ExecuteScalarAsync(ct).ConfigureAwait(false);
+                order = result is string s ? s : string.Empty;
+            }
+
+            return new ProductionSnapshot(ok, ng, lastExit, order);
+        }
+        catch (Exception ex)
+        {
+            _log.Debug("Production snapshot query failed: {Message}", ex.Message);
+            return new ProductionSnapshot(0, 0, null, string.Empty);
+        }
+    }
+
     public async Task<IReadOnlyDictionary<string, long>> GetRowCountsAsync(CancellationToken ct = default)
     {
         var counts = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
