@@ -1,0 +1,84 @@
+<Window x:Class="HarryLimitSample.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="HarryLimitSample" Height="760" Width="1100"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource WindowBg}">
+    <DockPanel>
+        <!-- ===== Top bar ===== -->
+        <Border DockPanel.Dock="Top" Background="{StaticResource PanelBg}" Padding="14,8"
+                BorderBrush="{StaticResource Accent}" BorderThickness="0,0,0,2">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Image Grid.Column="0" Height="32" HorizontalAlignment="Left"
+                       Source="pack://application:,,,/HarryShared;component/Assets/CustomHelpLogo.png" />
+                <TextBlock Grid.Column="1" Text="{Binding AppName}" FontSize="18" FontWeight="Bold"
+                           VerticalAlignment="Center" />
+                <TextBlock Grid.Column="2" Text="{Binding AppVersion}" Foreground="{StaticResource TextDimBrush}"
+                           HorizontalAlignment="Right" VerticalAlignment="Center" />
+            </Grid>
+        </Border>
+
+        <!-- ===== Status bar ===== -->
+        <StatusBar DockPanel.Dock="Bottom">
+            <StatusBarItem><TextBlock Text="{Binding StatusMessage}" /></StatusBarItem>
+            <Separator />
+            <StatusBarItem><TextBlock Text="{Binding ReferenceFolder, StringFormat=Ref folder: {0}}" /></StatusBarItem>
+        </StatusBar>
+
+        <Grid Margin="10">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <!-- Toolbar -->
+            <Border Grid.Row="0" Style="{StaticResource Card}" Margin="0,0,0,8">
+                <WrapPanel Orientation="Horizontal">
+                    <TextBlock Text="Scan / Serial:" VerticalAlignment="Center" Margin="0,0,8,0" FontWeight="SemiBold" />
+                    <TextBox x:Name="ScanBox" Width="300" VerticalAlignment="Center"
+                             Text="{Binding ScanText, UpdateSourceTrigger=PropertyChanged}">
+                        <TextBox.InputBindings>
+                            <KeyBinding Key="Return" Command="{Binding SearchCommand}" />
+                        </TextBox.InputBindings>
+                    </TextBox>
+                    <Button Content="Search" Command="{Binding SearchCommand}" Margin="8,0,16,0" Width="80" />
+
+                    <TextBlock Text="Module:" VerticalAlignment="Center" Margin="0,0,6,0" />
+                    <ComboBox Width="120" ItemsSource="{Binding Modules}" SelectedItem="{Binding SelectedModule}"
+                              VerticalAlignment="Center" Margin="0,0,16,0" />
+                    <TextBlock Text="MSA version:" VerticalAlignment="Center" Margin="0,0,6,0" />
+                    <TextBox Width="80" Text="{Binding MsaVersion}" VerticalAlignment="Center" Margin="0,0,16,0" />
+
+                    <Button Content="Load existing" Command="{Binding LoadExistingCommand}" Margin="0,0,4,0" />
+                    <Button Content="Clear marks" Command="{Binding ClearMarksCommand}" Margin="0,0,4,0" />
+                    <Button Content="Save MSA_module.json" Command="{Binding SaveCommand}" Width="170" />
+                </WrapPanel>
+            </Border>
+
+            <!-- Measurement grid -->
+            <DataGrid Grid.Row="1" ItemsSource="{Binding Rows}">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Measurement" Binding="{Binding DisplayName}" Width="2*" />
+                    <DataGridTextColumn Header="Module" Binding="{Binding Module}" Width="80" />
+                    <DataGridTextColumn Header="Camera" Binding="{Binding CameraName}" Width="*" />
+                    <DataGridTextColumn Header="Value" Binding="{Binding ValueText}" Width="90" />
+                    <DataGridTextColumn Header="Result" Binding="{Binding ResultText}" Width="90" />
+                    <DataGridTemplateColumn Header="Expectation" Width="160">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <ComboBox SelectedItem="{Binding Expectation, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                          ItemsSource="{Binding DataContext.Expectations, RelativeSource={RelativeSource AncestorType=Window}}"
+                                          Margin="2" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                </DataGrid.Columns>
+            </DataGrid>
+        </Grid>
+    </DockPanel>
+</Window>

@@ -1,0 +1,209 @@
+using System.Collections.ObjectModel;
+using System.IO;
+using System.Windows;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using HarryShared.Config;
+using HarryShared.Data;
+
+namespace HarryLimitSample;
+
+/// <summary>
+/// HarryLimitSample editor: scan a part DMC, load its measurements, mark each as
+/// should-pass / should-fail / ignore, and save a per-module LimitSample reference
+/// (MSA_&lt;module&gt;.json — the limit_sample_expected map keyed by display name) that
+/// the MSA engine uses to evaluate LimitSample runs. Existing references can be
+/// loaded to view/edit/delete entries; the references (xm) block is preserved on save.
+/// </summary>
+public partial class MainViewModel : ObservableObject
+{
+    private readonly QueryService _query;
+    private readonly HarryConfig _config;
+    private readonly List<LimitSampleRow> _allRows = new();
+
+    public MainViewModel(QueryService query, HarryConfig config)
+    {
+        _query = query;
+        _config = config;
+        ConfigFile = config.IniPath;
+        ReferenceFolder = string.IsNullOrWhiteSpace(config.MsaReferencePath)
+            ? "(not set in Harry.ini [MSA] ReferencePath)"
+            : config.MsaReferencePath;
+    }
+
+    public string AppName => "HarryLimitSample — Reference Editor";
+    public string AppVersion => "v" + (GetType().Assembly.GetName().Version?.ToString(3) ?? "2.0.0");
+    public string ConfigFile { get; }
+    public string ReferenceFolder { get; }
+
+    public ObservableCollection<LimitSampleRow> Rows { get; } = new();
+    public ObservableCollection<string> Modules { get; } = new();
+    public Array Expectations => Enum.GetValues(typeof(Expectation));
+
+    [ObservableProperty] private string _scanText = string.Empty;
+    [ObservableProperty] private string _msaVersion = "v1";
+    [ObservableProperty] private string _statusMessage = "Scan a part DMC to load its measurements.";
+
+    [ObservableProperty] private string? _selectedModule;
+
+    partial void OnSelectedModuleChanged(string? value) => ApplyModuleFilter();
+
+    private void ApplyModuleFilter()
+    {
+        Rows.Clear();
+        foreach (var r in _allRows)
+        {
+            if (SelectedModule is null || SelectedModule == "(all)" || r.Module == SelectedModule)
+                Rows.Add(r);
+        }
+    }
+
+    [RelayCommand]
+    private async Task SearchAsync()
+    {
+        var scan = ScanText.Trim();
+        if (scan.Length == 0)
+        {
+            StatusMessage = "Enter a DMC or serial number first.";
+            return;
+        }
+
+        StatusMessage = $"Searching for '{scan}' …";
+        _allRows.Clear();
+        Rows.Clear();
+        Modules.Clear();
+
+        try
+        {
+            var part = await _query.FindPartAsync(scan);
+            if (part is null)
+            {
+                StatusMessage = $"No part found for '{scan}'.";
+                return;
+            }
+
+            var measurements = await _query.GetPartMeasurementsAsync(part);
+            foreach (var m in measurements)
+                _allRows.Add(new LimitSampleRow(m));
+
+            var modules = _allRows.Select(r => r.Module).Distinct().OrderBy(m => m).ToList();
+            Modules.Add("(all)");
+            foreach (var m in modules)
+                Modules.Add(m);
+            SelectedModule = modules.Count == 1 ? modules[0] : "(all)";
+
+            StatusMessage = $"Loaded {_allRows.Count} measurement(s) across {modules.Count} module(s). " +
+                            "Mark each as Should Pass / Should Fail / Ignore, then Save.";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = "Query failed: " + ex.Message;
+        }
+    }
+
+    /// <summary>Pre-fill expectations from an existing MSA_&lt;module&gt;.json for the selected module.</summary>
+    [RelayCommand]
+    private void LoadExisting()
+    {
+        var module = ResolveTargetModule();
+        if (module is null)
+            return;
+
+        try
+        {
+            var existing = MsaReferenceFile.Load(_config.MsaReferencePath, module);
+            if (existing is null)
+            {
+                StatusMessage = $"No existing MSA_{module}.json found.";
+                return;
+            }
+
+            MsaVersion = string.IsNullOrWhiteSpace(existing.MsaVersion) ? MsaVersion : existing.MsaVersion;
+
+            // Apply expectations to the loaded rows; add rows for entries not currently loaded.
+            var byName = _allRows.Where(r => r.Module == module)
+                                 .ToDictionary(r => r.DisplayName, r => r, StringComparer.OrdinalIgnoreCase);
+            foreach (var (name, expected) in existing.LimitSampleExpected)
+            {
+                var exp = expected ? Expectation.ShouldFail : Expectation.ShouldPass;
+                if (byName.TryGetValue(name, out var row))
+                    row.Expectation = exp;
+                else
+                    _allRows.Add(new LimitSampleRow(name, module, exp));
+            }
+
+            ApplyModuleFilter();
+            StatusMessage = $"Loaded {existing.LimitSampleExpected.Count} expectation(s) from MSA_{module}.json.";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = "Load failed: " + ex.Message;
+        }
+    }
+
+    /// <summary>Reset every visible row to Ignore (remove from the reference).</summary>
+    [RelayCommand]
+    private void ClearMarks()
+    {
+        foreach (var r in Rows)
+            r.Expectation = Expectation.Ignore;
+        StatusMessage = "Cleared all marks on the visible rows.";
+    }
+
+    [RelayCommand]
+    private void Save()
+    {
+        if (string.IsNullOrWhiteSpace(_config.MsaReferencePath))
+        {
+            StatusMessage = "Cannot save: [MSA] ReferencePath is not set in Harry.ini.";
+            MessageBox.Show("Set [MSA] ReferencePath in Harry.ini before saving.", "No reference folder",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var module = ResolveTargetModule();
+        if (module is null)
+        {
+            StatusMessage = "Select a single module (not '(all)') before saving.";
+            return;
+        }
+
+        var marked = _allRows.Where(r => r.Module == module && r.Expectation != Expectation.Ignore).ToList();
+        if (marked.Count == 0)
+        {
+            StatusMessage = $"No measurements marked for module {module}.";
+            return;
+        }
+
+        try
+        {
+            // Preserve the existing references (xm) block if a file already exists.
+            var file = MsaReferenceFile.Load(_config.MsaReferencePath, module) ?? new MsaReferenceFile();
+            file.Module = module;
+            file.MsaVersion = MsaVersion.Trim();
+            file.LimitSampleExpected = marked.ToDictionary(
+                r => r.DisplayName,
+                r => r.Expectation == Expectation.ShouldFail,
+                StringComparer.OrdinalIgnoreCase);
+
+            var path = file.Save(_config.MsaReferencePath);
+            var fails = marked.Count(r => r.Expectation == Expectation.ShouldFail);
+            StatusMessage = $"Saved {Path.GetFileName(path)} — {marked.Count} entries ({fails} should-fail).";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = "Save failed: " + ex.Message;
+            MessageBox.Show(ex.Message, "Save Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    /// <summary>The concrete module to act on: the selected one, or the only loaded module.</summary>
+    private string? ResolveTargetModule()
+    {
+        if (!string.IsNullOrEmpty(SelectedModule) && SelectedModule != "(all)")
+            return SelectedModule;
+
+        var distinct = _allRows.Select(r => r.Module).Distinct().ToList();
+        return distinct.Count == 1 ? distinct[0] : null;
+    }
+}
