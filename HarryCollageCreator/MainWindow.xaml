@@ -1,0 +1,159 @@
+<Window x:Class="HarryCollageCreator.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="HarryCollageCreator" Height="860" Width="1320"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource WindowBg}">
+    <DockPanel>
+        <!-- ===== Top bar ===== -->
+        <Border DockPanel.Dock="Top" Background="{StaticResource PanelBg}" Padding="14,8"
+                BorderBrush="{StaticResource Accent}" BorderThickness="0,0,0,2">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Image Grid.Column="0" Height="32" HorizontalAlignment="Left"
+                       Source="pack://application:,,,/HarryShared;component/Assets/CustomHelpLogo.png" />
+                <TextBlock Grid.Column="1" Text="{Binding AppName}" FontSize="18" FontWeight="Bold"
+                           VerticalAlignment="Center" />
+                <TextBlock Grid.Column="2" Text="{Binding AppVersion}" Foreground="{StaticResource TextDimBrush}"
+                           HorizontalAlignment="Right" VerticalAlignment="Center" />
+            </Grid>
+        </Border>
+
+        <!-- ===== Status bar ===== -->
+        <StatusBar DockPanel.Dock="Bottom">
+            <StatusBarItem><TextBlock Text="{Binding StatusMessage}" /></StatusBarItem>
+            <Separator />
+            <StatusBarItem><TextBlock Text="{Binding CurrentFile, StringFormat=File: {0}}" /></StatusBarItem>
+        </StatusBar>
+
+        <!-- ===== Toolbar ===== -->
+        <Border DockPanel.Dock="Top" Style="{StaticResource Card}" Margin="8,8,8,0">
+            <WrapPanel>
+                <Button Content="New" Command="{Binding NewCommand}" Margin="0,0,4,0" Width="60" />
+                <Button Content="Open…" Command="{Binding OpenCommand}" Margin="0,0,4,0" Width="70" />
+                <Button Content="Save…" Command="{Binding SaveCommand}" Margin="0,0,16,0" Width="70" />
+                <Button Content="Add images…" Command="{Binding AddImagesCommand}" Margin="0,0,4,0" />
+                <Button Content="Export preview…" Command="{Binding ExportPreviewCommand}" Margin="0,0,16,0" />
+            </WrapPanel>
+        </Border>
+
+        <Grid Margin="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="240" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="300" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Left: slot list -->
+            <Border Grid.Column="0" Style="{StaticResource Card}" Margin="0,0,8,0">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="Image slots (draw order)" FontWeight="Bold" Margin="0,0,0,6" />
+                    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,6,0,0">
+                        <Button Content="↑" Command="{Binding MoveUpCommand}" Width="36" Margin="0,0,4,0" />
+                        <Button Content="↓" Command="{Binding MoveDownCommand}" Width="36" Margin="0,0,4,0" />
+                        <Button Content="Remove" Command="{Binding RemoveSlotCommand}" Width="80" />
+                    </StackPanel>
+                    <ListBox ItemsSource="{Binding Slots}" SelectedItem="{Binding SelectedSlot}"
+                             BorderThickness="0">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+            </Border>
+
+            <!-- Center: live composite -->
+            <Border Grid.Column="1" Style="{StaticResource Card}" Margin="0,0,8,0">
+                <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                    <Border Background="#FF111317" Padding="20" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <Image Source="{Binding Preview}" Stretch="None"
+                               RenderOptions.BitmapScalingMode="HighQuality" />
+                    </Border>
+                </ScrollViewer>
+            </Border>
+
+            <!-- Right: properties -->
+            <Border Grid.Column="2" Style="{StaticResource Card}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <TextBlock Text="Canvas" FontWeight="Bold" Margin="0,0,0,6" />
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Width" Margin="0,0,4,2" />
+                            <TextBlock Grid.Row="0" Grid.Column="1" Text="Height" Margin="0,0,0,2" />
+                            <TextBox Grid.Row="1" Grid.Column="0" Margin="0,0,4,6"
+                                     Text="{Binding CanvasWidth, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBox Grid.Row="1" Grid.Column="1" Margin="0,0,0,6"
+                                     Text="{Binding CanvasHeight, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Background" VerticalAlignment="Center" />
+                            <TextBox Grid.Row="2" Grid.Column="1"
+                                     Text="{Binding BackgroundColor, UpdateSourceTrigger=PropertyChanged}" />
+                        </Grid>
+
+                        <Separator Margin="0,0,0,8" />
+                        <TextBlock Text="Selected image" FontWeight="Bold" Margin="0,0,0,6" />
+                        <StackPanel DataContext="{Binding SelectedSlot}">
+                            <TextBlock Text="KeyName (controller match)" Margin="0,0,0,2" />
+                            <TextBox Text="{Binding KeyName, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6" />
+                            <TextBlock Text="TemplateName" Margin="0,0,0,2" />
+                            <TextBox Text="{Binding TemplateName, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6" />
+
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Pos X" />
+                                <TextBlock Grid.Row="0" Grid.Column="1" Text="Pos Y" />
+                                <TextBox Grid.Row="1" Grid.Column="0" Margin="0,0,4,6" Text="{Binding PosX, UpdateSourceTrigger=PropertyChanged}" />
+                                <TextBox Grid.Row="1" Grid.Column="1" Margin="0,0,0,6" Text="{Binding PosY, UpdateSourceTrigger=PropertyChanged}" />
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Scale" />
+                                <TextBlock Grid.Row="2" Grid.Column="1" Text="Zoom" />
+                                <TextBox Grid.Row="3" Grid.Column="0" Margin="0,0,4,6" Text="{Binding Scale, UpdateSourceTrigger=PropertyChanged}" />
+                                <TextBox Grid.Row="3" Grid.Column="1" Margin="0,0,0,6" Text="{Binding Zoom, UpdateSourceTrigger=PropertyChanged}" />
+                                <TextBlock Grid.Row="4" Grid.Column="0" Text="Crop X" />
+                                <TextBlock Grid.Row="4" Grid.Column="1" Text="Crop Y" />
+                                <TextBox Grid.Row="5" Grid.Column="0" Margin="0,0,4,6" Text="{Binding CropX, UpdateSourceTrigger=PropertyChanged}" />
+                                <TextBox Grid.Row="5" Grid.Column="1" Margin="0,0,0,6" Text="{Binding CropY, UpdateSourceTrigger=PropertyChanged}" />
+                                <TextBlock Grid.Row="6" Grid.Column="0" Text="Crop W" />
+                                <TextBlock Grid.Row="6" Grid.Column="1" Text="Crop H" />
+                                <TextBox Grid.Row="7" Grid.Column="0" Margin="0,0,4,6" Text="{Binding CropWidth, UpdateSourceTrigger=PropertyChanged}" />
+                                <TextBox Grid.Row="7" Grid.Column="1" Margin="0,0,0,6" Text="{Binding CropHeight, UpdateSourceTrigger=PropertyChanged}" />
+                                <CheckBox Grid.Row="8" Grid.Column="0" Content="Mirror X" IsChecked="{Binding MirrorX}" Margin="0,0,0,6" />
+                                <CheckBox Grid.Row="8" Grid.Column="1" Content="Mirror Y" IsChecked="{Binding MirrorY}" Margin="0,0,0,6" />
+                            </Grid>
+                        </StackPanel>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                            <Button Content="Center" Command="{Binding CenterCommand}" Width="70" Margin="0,0,4,0" />
+                            <Button Content="Fit" Command="{Binding FitToCanvasCommand}" Width="60" Margin="0,0,4,0" />
+                            <Button Content="Image…" Command="{Binding AssignImageCommand}" Width="80" />
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+        </Grid>
+    </DockPanel>
+</Window>

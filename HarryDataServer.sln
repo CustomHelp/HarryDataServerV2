@@ -15,6 +15,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HarryCounter", "HarryCounte
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HarryLimitSample", "HarryLimitSample\HarryLimitSample.csproj", "{5E680AD8-D15F-4917-9707-C42E7200D2E5}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HarryCollageCreator", "HarryCollageCreator\HarryCollageCreator.csproj", "{AD622385-0522-4F62-9028-4FB0448B8904}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -97,6 +99,18 @@ Global
 		{5E680AD8-D15F-4917-9707-C42E7200D2E5}.Release|x64.Build.0 = Release|Any CPU
 		{5E680AD8-D15F-4917-9707-C42E7200D2E5}.Release|x86.ActiveCfg = Release|Any CPU
 		{5E680AD8-D15F-4917-9707-C42E7200D2E5}.Release|x86.Build.0 = Release|Any CPU
+		{AD622385-0522-4F62-9028-4FB0448B8904}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AD622385-0522-4F62-9028-4FB0448B8904}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AD622385-0522-4F62-9028-4FB0448B8904}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{AD622385-0522-4F62-9028-4FB0448B8904}.Debug|x64.Build.0 = Debug|Any CPU
+		{AD622385-0522-4F62-9028-4FB0448B8904}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{AD622385-0522-4F62-9028-4FB0448B8904}.Debug|x86.Build.0 = Debug|Any CPU
+		{AD622385-0522-4F62-9028-4FB0448B8904}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AD622385-0522-4F62-9028-4FB0448B8904}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AD622385-0522-4F62-9028-4FB0448B8904}.Release|x64.ActiveCfg = Release|Any CPU
+		{AD622385-0522-4F62-9028-4FB0448B8904}.Release|x64.Build.0 = Release|Any CPU
+		{AD622385-0522-4F62-9028-4FB0448B8904}.Release|x86.ActiveCfg = Release|Any CPU
+		{AD622385-0522-4F62-9028-4FB0448B8904}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
