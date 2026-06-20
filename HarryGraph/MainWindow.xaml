@@ -1,0 +1,90 @@
+<Window x:Class="HarryGraph.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:oxy="http://oxyplot.org/wpf"
+        Title="HarryGraph" Height="800" Width="1280"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource WindowBg}">
+    <DockPanel>
+        <!-- ===== Top bar ===== -->
+        <Border DockPanel.Dock="Top" Background="{StaticResource PanelBg}" Padding="14,8"
+                BorderBrush="{StaticResource Accent}" BorderThickness="0,0,0,2">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Image Grid.Column="0" Height="32" HorizontalAlignment="Left"
+                       Source="pack://application:,,,/HarryShared;component/Assets/CustomHelpLogo.png" />
+                <TextBlock Grid.Column="1" Text="{Binding AppName}" FontSize="18" FontWeight="Bold"
+                           VerticalAlignment="Center" />
+                <TextBlock Grid.Column="2" Text="{Binding AppVersion}" Foreground="{StaticResource TextDimBrush}"
+                           HorizontalAlignment="Right" VerticalAlignment="Center" />
+            </Grid>
+        </Border>
+
+        <!-- ===== Status bar ===== -->
+        <StatusBar DockPanel.Dock="Bottom">
+            <StatusBarItem><TextBlock Text="{Binding StatusMessage}" /></StatusBarItem>
+            <Separator />
+            <StatusBarItem><TextBlock Text="{Binding ConfigFile, StringFormat=Config: {0}}" /></StatusBarItem>
+        </StatusBar>
+
+        <Grid Margin="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="320" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Left: measurement picker + controls -->
+            <Border Grid.Column="0" Style="{StaticResource Card}" Margin="0,0,8,0">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="Measurements" FontWeight="Bold" Margin="0,0,0,6" />
+                    <TextBox DockPanel.Dock="Top" Margin="0,0,0,6"
+                             Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <!-- Mode + range controls (bottom) -->
+                    <Border DockPanel.Dock="Bottom" Style="{StaticResource Card}" Margin="0,6,0,0">
+                        <StackPanel>
+                            <CheckBox Content="Live mode (1 s refresh)" IsChecked="{Binding LiveMode}" Margin="0,0,0,6" />
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <TextBlock Text="Live window (min):" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                <TextBox Width="60" Text="{Binding LiveWindowMinutes}" />
+                            </StackPanel>
+                            <TextBlock Text="Fixed range" FontWeight="SemiBold" Margin="0,4,0,4" />
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                <TextBlock Text="From:" Width="44" VerticalAlignment="Center" />
+                                <DatePicker SelectedDate="{Binding FromDate}" Width="160" />
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <TextBlock Text="To:" Width="44" VerticalAlignment="Center" />
+                                <DatePicker SelectedDate="{Binding ToDate}" Width="160" />
+                            </StackPanel>
+                            <Button Content="Refresh / Plot" Command="{Binding RefreshCommand}" Margin="0,0,0,6" />
+                            <StackPanel Orientation="Horizontal">
+                                <Button Content="Save" Command="{Binding SaveConfigCommand}" Width="70" Margin="0,0,4,0" />
+                                <Button Content="Load" Command="{Binding LoadConfigCommand}" Width="70" Margin="0,0,4,0" />
+                                <Button Content="Print" Click="OnPrint" Width="70" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Definition checkbox list -->
+                    <ListBox ItemsSource="{Binding Definitions}" BorderThickness="0">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <CheckBox Content="{Binding Label}" IsChecked="{Binding IsSelected}" />
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+            </Border>
+
+            <!-- Right: plot -->
+            <Border Grid.Column="1" Style="{StaticResource Card}">
+                <oxy:PlotView x:Name="Plot" Model="{Binding Model}" Background="Transparent" />
+            </Border>
+        </Grid>
+    </DockPanel>
+</Window>
