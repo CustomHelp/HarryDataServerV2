@@ -10,7 +10,14 @@
     <AssemblyName>HarryDataServer</AssemblyName>
     <LangVersion>latest</LangVersion>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Version>2.0.0</Version>
+    <ApplicationIcon>F:\001_CHP\Programme\HarrySuite_Icons\HarryDataServer.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Shared CustomHelp logo (top-left of the main window), embedded as a WPF resource. -->
+    <Resource Include="F:\001_CHP\Programme\CUSTOMHELP_Logo-links_lila.png" Link="Assets\CustomHelpLogo.png" />
+  </ItemGroup>
 
   <ItemGroup>
     <!-- Phase 1 dependencies. Additional packages are added per implementation phase. -->
@@ -24,6 +31,8 @@
     <PackageReference Include="MySqlConnector" Version="2.3.7" />
     <!-- Phase 9: collage image composition (GDI+, Windows-only — matches net8.0-windows) -->
     <PackageReference Include="System.Drawing.Common" Version="8.0.10" />
+    <!-- Phase 11: MVVM helpers for the WPF dashboard -->
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
   </ItemGroup>
 
   <ItemGroup>

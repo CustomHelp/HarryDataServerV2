@@ -32,4 +32,10 @@ public interface IDatabaseService
 
     /// <summary>Open a pooled connection to the application database.</summary>
     Task<MySqlConnection> OpenConnectionAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Approximate row counts per owned table (from INFORMATION_SCHEMA — cheap, good
+    /// enough for a live UI counter). Returns an empty map if the DB is not ready.
+    /// </summary>
+    Task<IReadOnlyDictionary<string, long>> GetRowCountsAsync(CancellationToken ct = default);
 }

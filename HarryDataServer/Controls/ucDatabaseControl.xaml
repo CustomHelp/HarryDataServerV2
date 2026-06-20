@@ -1,0 +1,39 @@
+<UserControl x:Class="HarryDataServer.Controls.ucDatabaseControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="Database" FontSize="18" FontWeight="Bold" Margin="0,0,0,10" />
+
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,14">
+            <Ellipse Width="13" Height="13" Fill="{Binding ConnectionLed}" VerticalAlignment="Center" />
+            <TextBlock Text="Connection" Margin="6,0,20,0" VerticalAlignment="Center" />
+            <Ellipse Width="13" Height="13" Fill="{Binding TablesLed}" VerticalAlignment="Center" />
+            <TextBlock Text="Tables initialized" Margin="6,0,20,0" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding DatabaseStatusText}" VerticalAlignment="Center"
+                       Foreground="{StaticResource TextDimBrush}" />
+        </StackPanel>
+
+        <DataGrid Grid.Row="2" ItemsSource="{Binding TableRows}" MaxWidth="520" HorizontalAlignment="Left">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Table" Binding="{Binding Name}" Width="2*" />
+                <DataGridTextColumn Header="Rows (approx)" Binding="{Binding Rows}" Width="*" />
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <Border Grid.Row="3" Style="{StaticResource Card}" Margin="0,14,0,0" HorizontalAlignment="Left" MaxWidth="700">
+            <StackPanel>
+                <TextBlock Text="Retention" FontWeight="Bold" Margin="0,0,0,4" />
+                <TextBlock Text="{Binding RetentionInfo}" TextWrapping="Wrap" Foreground="{StaticResource TextDimBrush}" />
+                <TextBlock Text="Row counts refresh every 30 s (approximate, from INFORMATION_SCHEMA)."
+                           Foreground="{StaticResource TextDimBrush}" FontSize="11" Margin="0,6,0,0" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

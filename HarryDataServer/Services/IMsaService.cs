@@ -1,3 +1,5 @@
+using HarryDataServer.Models;
+
 namespace HarryDataServer.Services;
 
 /// <summary>
@@ -9,6 +11,12 @@ namespace HarryDataServer.Services;
 public interface IMsaService
 {
     int PendingCount { get; }
+
+    /// <summary>
+    /// Load the stored MSA runs for a module ("M10".."M50") and type, oldest first,
+    /// from <c>msa_results</c> (grouped by BaseID). Empty if the DB is not ready.
+    /// </summary>
+    Task<IReadOnlyList<MsaRunDto>> GetRunsAsync(string module, MsaType type, CancellationToken ct = default);
 
     Task StartAsync(CancellationToken ct);
     Task StopAsync();

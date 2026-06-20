@@ -70,6 +70,8 @@ public sealed class CsvExportService : ICsvService
 
     public int PendingCount => _queue.Count;
     public long TotalRows => Interlocked.Read(ref _totalRows);
+    public string? ActiveFilePath { get; private set; }
+    public DateTime? LastWriteTime { get; private set; }
     public event Action? StatsChanged;
 
     public Task StartAsync(CancellationToken ct)
@@ -300,6 +302,8 @@ ORDER BY c.camera_name, md.telegram_place;";
         {
             _csv.Flush();
             _health.Clear(HealthSources.Csv);
+            ActiveFilePath = _csv.CurrentPath;
+            LastWriteTime = DateTime.Now;
             Interlocked.Add(ref _totalRows, written);
             _log.Debug("Wrote {Count} CSV row(s); {Pending} pending.", written, _queue.Count);
             StatsChanged?.Invoke();

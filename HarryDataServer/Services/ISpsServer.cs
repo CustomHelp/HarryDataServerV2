@@ -31,6 +31,15 @@ public interface ISpsServer
     event EventHandler<SpsPartExitEventArgs>? PartExitReceived;
 
     /// <summary>
+    /// Raised for every received request and every sent response on any channel
+    /// (channel, isResponse, text). Used by the UI for per-channel telemetry.
+    /// </summary>
+    event Action<SpsChannel, bool, string>? ChannelActivity;
+
+    /// <summary>Number of PLC clients currently connected on a specific channel.</summary>
+    int ConnectionsOn(SpsChannel channel);
+
+    /// <summary>
     /// Handler for MSA trigger requests (channels 3–7): given the module key
     /// ("M10".."M50") and the BaseID, returns the response word
     /// ("Wait" / "OK" / "NG" / "Error;&lt;desc&gt;"). Set by the MSA engine in Phase 10;

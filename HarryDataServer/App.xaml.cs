@@ -136,11 +136,14 @@ public partial class App : Application
         var iniPath = ResolveIniPath();
         services.AddSingleton<IConfigService>(_ => new IniConfigService(iniPath));
 
-        // --- Logging (Serilog), configured from [General] section ---
+        // --- Logging (Serilog) + in-memory buffer for the UI Log tab ---
+        services.AddSingleton<InMemoryLogSink>();
+        services.AddSingleton<ILogBuffer>(sp => sp.GetRequiredService<InMemoryLogSink>());
         services.AddSingleton<ILogService>(sp =>
         {
             var general = sp.GetRequiredService<IConfigService>().Config.General;
-            return new SerilogService(general.LogFilePath, general.LoggingActive);
+            return new SerilogService(general.LogFilePath, general.LoggingActive,
+                sp.GetRequiredService<InMemoryLogSink>());
         });
 
         // --- System health (central fault registry surfaced on the SPS KeepAlive channel) ---
@@ -186,7 +189,8 @@ public partial class App : Application
         services.AddSingleton<CollageComposer>();
         services.AddSingleton<ICollageService, CollageService>();
 
-        // --- Windows ---
+        // --- UI (Phase 11): main view model + window ---
+        services.AddSingleton<ViewModels.MainViewModel>();
         services.AddSingleton<MainWindow>();
 
         return services.BuildServiceProvider();

@@ -39,9 +39,11 @@ public sealed class TcpCameraClient
     private readonly ILogService _log;
 
     private CancellationTokenSource? _cts;
+    private CancellationTokenSource? _connCts;
     private Task? _runTask;
     private CameraConnectionState _state = CameraConnectionState.Disconnected;
     private int _failedPings;
+    private long _telegramCount;
     private DateTime _lastPingUtc;
 
     public TcpCameraClient(CameraConfig config, CameraTemplates templates, TelegramParser parser, ILogService log)
@@ -53,7 +55,26 @@ public sealed class TcpCameraClient
     }
 
     public string CameraName => _config.CameraName;
+    public string Module => _config.Module;
+    public string Ip => _config.Ip;
+    public int Port => _config.Port;
     public string Endpoint => $"{_config.Ip}:{_config.Port}";
+
+    /// <summary>True when at least one JSON template (result/settings) was loaded for this camera.</summary>
+    public bool JsonLoaded => _templates.Result is not null || _templates.Settings is not null;
+
+    /// <summary>True while the connect/reconnect loop is active (auto-reconnect running).</summary>
+    public bool AutoReconnectActive => _runTask is not null && _cts is { IsCancellationRequested: false };
+
+    /// <summary>Total telegrams received and dispatched since start.</summary>
+    public long TelegramCount => Interlocked.Read(ref _telegramCount);
+
+    /// <summary>Force an immediate reconnect by dropping the current connection (UI button).</summary>
+    public void RequestReconnect()
+    {
+        try { _connCts?.Cancel(); }
+        catch { /* connection already being torn down */ }
+    }
 
     public CameraConnectionState State
     {
@@ -160,6 +181,7 @@ public sealed class TcpCameraClient
     private async Task CommunicateAsync(NetworkStream stream, CancellationToken ct)
     {
         using var connCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        _connCts = connCts;
         var token = connCts.Token;
 
         Task? keepAlive = string.IsNullOrEmpty(KeepAliveCommand)
@@ -172,6 +194,7 @@ public sealed class TcpCameraClient
         }
         finally
         {
+            _connCts = null;
             connCts.Cancel();
             if (keepAlive is not null)
             {
@@ -247,6 +270,7 @@ public sealed class TcpCameraClient
             if (telegram is null)
                 return;
 
+            Interlocked.Increment(ref _telegramCount);
             TelegramReceived?.Invoke(this, telegram);
 
             switch (telegram.Signal)

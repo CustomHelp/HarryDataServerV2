@@ -14,7 +14,7 @@ public sealed class SerilogService : ILogService
 {
     private readonly Logger _logger;
 
-    public SerilogService(string logFilePath, bool loggingActive)
+    public SerilogService(string logFilePath, bool loggingActive, ILogEventSink? uiSink = null)
     {
         // Ensure the log directory exists before Serilog opens the file sink.
         if (!string.IsNullOrWhiteSpace(logFilePath))
@@ -42,7 +42,7 @@ public sealed class SerilogService : ILogService
         const string template =
             "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] {Message:lj}{NewLine}{Exception}";
 
-        _logger = new LoggerConfiguration()
+        var config = new LoggerConfiguration()
             .MinimumLevel.Is(minLevel)
             .WriteTo.File(
                 filePattern,
@@ -50,8 +50,13 @@ public sealed class SerilogService : ILogService
                 retainedFileCountLimit: 90,
                 shared: true,
                 outputTemplate: template)
-            .WriteTo.Console(outputTemplate: template)
-            .CreateLogger();
+            .WriteTo.Console(outputTemplate: template);
+
+        // Mirror into the in-memory buffer that backs the UI Log tab.
+        if (uiSink is not null)
+            config = config.WriteTo.Sink(uiSink);
+
+        _logger = config.CreateLogger();
 
         _logger.Information("Logging initialized. Path={LogFilePath} Active={Active}", logFilePath, loggingActive);
     }

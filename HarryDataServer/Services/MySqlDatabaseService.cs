@@ -60,6 +60,34 @@ public sealed class MySqlDatabaseService : IDatabaseService
 
     public Task<MySqlConnection> OpenConnectionAsync(CancellationToken ct = default) => _repo.OpenAsync(ct);
 
+    public async Task<IReadOnlyDictionary<string, long>> GetRowCountsAsync(CancellationToken ct = default)
+    {
+        var counts = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        if (_status != DatabaseStatus.Ready)
+            return counts;
+
+        try
+        {
+            await using var conn = await _repo.OpenAsync(ct).ConfigureAwait(false);
+            await using var cmd = new MySqlCommand(
+                "SELECT table_name, table_rows FROM information_schema.tables WHERE table_schema = @db;", conn);
+            cmd.Parameters.AddWithValue("@db", _config.Config.MySql.Database);
+            await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+            while (await reader.ReadAsync(ct).ConfigureAwait(false))
+            {
+                var name = reader.GetString(0);
+                var rows = reader.IsDBNull(1) ? 0L : reader.GetInt64(1);
+                counts[name] = rows;
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.Debug("Row-count query failed: {Message}", ex.Message);
+        }
+
+        return counts;
+    }
+
     public async Task StartAsync(CancellationToken ct)
     {
         try

@@ -30,6 +30,7 @@ brought forward; numbering otherwise tracks CLAUDE.md section 18).
 | 7 | Main CSV export | CsvExportService (two-row header, R_/V_ columns) |
 | 8 | Image cleanup + DB partition retention | ImageCleanupService |
 | 9 | Collage generator | ICollageService/CollageService, CollageIniReader, CollageComposer, CollageLayout(+CollageImageSpec) |
+| 11 | WPF dashboard UI (MVVM, dark theme) | MainViewModel, CameraViewModel, SpsChannelViewModel, Msa{,Module,Runs}ViewModel, Controls\uc{Camera,SpsChannel,Msa,Database,Csv}Control, Themes\DarkTheme.xaml |
 | 10 | MSA engine | MsaCalculator, MsaService, MsaModels, BaseId, MsaReference(+Loader), MsaConfig |
 | 8b | Health reporting on SPS KeepAlive + flush data-loss hardening | ISystemHealth/SystemHealthService, HealthSources, FlushHelper |
 
@@ -145,10 +146,42 @@ GDI+ (`System.Drawing.Common`, Windows-only) composition on a background task.
 
 ---
 
+## UI notes (Phase 11)
+
+Dark theme (`#1A1D23` bg, purple `#6B21A8` accent) via `Themes/DarkTheme.xaml` (implicit
+styles, merged in App.xaml). App icon (`HarrySuite_Icons\HarryDataServer.ico`) + CustomHelp
+logo (top-left, 32px, embedded WPF resource). MVVM via CommunityToolkit.Mvvm; one 1 s
+UI-thread `DispatcherTimer` drives all refresh (row counts every 30 s) — background events
+(SPS activity, log) captured into thread-safe buffers, synced on the tick.
+
+- **Top bar:** logo · app name · version + system-status LED. **Status bar:** status,
+  error/warning count, uptime, health message, config file.
+- **Cameras tab:** `ucCameraControl` per camera in a WrapPanel (dynamic from INI) — JSON/
+  Connected/Auto-reconnect LEDs, IP:Port, telegram counter, last 3 telegrams (Queue, no DB),
+  Reconnect button (`TcpCameraClient.RequestReconnect`).
+- **SPS tab:** `ucSpsChannelControl` ×7 — connected LED, port, message counter, last 2
+  requests + last 2 responses (fed by `ISpsServer.ChannelActivity`).
+- **MSA tab:** `ucMsaControl` — 5 module sub-tabs × {MSA1, MSA3, LimitSample}, each a
+  DataGrid loaded from `msa_results` (`IMsaService.GetRunsAsync`), Prev/Next run navigation,
+  run datetime, PASS/FAIL badge, Export CSV. LimitSample shows pass/fail only (Expected/
+  Actual are not persisted in `msa_results`).
+- **Database tab:** `ucDatabaseControl` — connection + tables-initialized LEDs, per-table
+  approximate row counts (INFORMATION_SCHEMA, 30 s), retention info.
+- **CSV tab:** `ucCsvControl` — active file path, rows written, last write time.
+- **Log tab:** live tail from an in-memory Serilog sink (`InMemoryLogSink`/`ILogBuffer`).
+- Backend added for the UI: camera telegram counter + `RequestReconnect`/`JsonLoaded`/
+  `AutoReconnectActive`; SPS per-channel activity event + connection counts; CSV active
+  path/last-write; `IDatabaseService.GetRowCountsAsync`; MSA read path; in-memory log sink.
+- Smoke-tested: launches, window renders (title "HarryDataServer V2"), dark theme + logo
+  load, no startup crash. Visual polish can be iterated live on the server.
+
+---
+
 ## Not yet built
 
-- **Phase 11/12** — WPF UI (per-subsystem UserControls, MSA view).
 - **Phase 14** — Companion tools (HarryAnalysis, HarryGraph, HarryCounter, etc.).
+
+> Phase 12 (MSA UI) was folded into the Phase 11 build (`ucMsaControl`).
 
 ---
 

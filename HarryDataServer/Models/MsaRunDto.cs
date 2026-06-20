@@ -1,0 +1,27 @@
+namespace HarryDataServer.Models;
+
+/// <summary>One measurement line of a stored MSA run (from <c>msa_results</c>).</summary>
+public sealed class MsaResultRow
+{
+    public string DisplayName { get; init; } = string.Empty;
+    public double? Cg { get; init; }
+    public double? Cgk { get; init; }
+    public double? PctTolerance { get; init; }
+    public bool Passed { get; init; }
+}
+
+/// <summary>
+/// One stored MSA evaluation run (all <c>msa_results</c> rows sharing a BaseID),
+/// used by the MSA UI to page through historical runs per module and type.
+/// </summary>
+public sealed class MsaRunDto
+{
+    public string Module { get; init; } = string.Empty;
+    public string Controller { get; init; } = string.Empty;
+    public string BaseId { get; init; } = string.Empty;
+    public MsaType MsaType { get; init; }
+    public DateTime EvaluatedAt { get; init; }
+    public IReadOnlyList<MsaResultRow> Rows { get; init; } = Array.Empty<MsaResultRow>();
+
+    public bool OverallPass => Rows.Count > 0 && Rows.All(r => r.Passed);
+}

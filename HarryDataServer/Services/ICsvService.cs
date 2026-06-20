@@ -9,6 +9,13 @@ public interface ICsvService
 {
     int PendingCount { get; }
     long TotalRows { get; }
+
+    /// <summary>Path of the CSV file currently being written, or null if none yet.</summary>
+    string? ActiveFilePath { get; }
+
+    /// <summary>Local timestamp of the last row written, or null if nothing written yet.</summary>
+    DateTime? LastWriteTime { get; }
+
     event Action? StatsChanged;
 
     Task StartAsync(CancellationToken ct);

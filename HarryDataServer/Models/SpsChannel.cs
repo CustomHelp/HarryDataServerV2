@@ -35,4 +35,20 @@ public static class SpsChannelExtensions
     public static bool IsMsaChannel(this SpsChannel channel) =>
         channel is SpsChannel.MsaM10 or SpsChannel.MsaM11 or SpsChannel.MsaM20
             or SpsChannel.MsaM21 or SpsChannel.MsaM50;
+
+    /// <summary>1-based channel number as documented in CLAUDE.md section 5.</summary>
+    public static int Number(this SpsChannel channel) => (int)channel + 1;
+
+    /// <summary>Human-readable channel description for the UI.</summary>
+    public static string Description(this SpsChannel channel) => channel switch
+    {
+        SpsChannel.KeepAlive => "KeepAlive / Status",
+        SpsChannel.PartExit => "Part Exit (St160)",
+        SpsChannel.MsaM10 => "MSA Trigger M10",
+        SpsChannel.MsaM11 => "MSA Trigger M11",
+        SpsChannel.MsaM20 => "MSA Trigger M20",
+        SpsChannel.MsaM21 => "MSA Trigger M21",
+        SpsChannel.MsaM50 => "MSA Trigger M50",
+        _ => channel.ToString(),
+    };
 }

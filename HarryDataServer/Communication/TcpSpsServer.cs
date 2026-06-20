@@ -23,6 +23,7 @@ public sealed class TcpSpsServer : ISpsServer
     private readonly ILogService _log;
 
     private readonly List<TcpListener> _listeners = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<SpsChannel, int> _connectionsByChannel = new();
     private CancellationTokenSource? _cts;
     private readonly List<Task> _acceptTasks = new();
     private int _listeningChannels;
@@ -42,7 +43,10 @@ public sealed class TcpSpsServer : ISpsServer
 
     public event Action? StatusChanged;
     public event EventHandler<SpsPartExitEventArgs>? PartExitReceived;
+    public event Action<SpsChannel, bool, string>? ChannelActivity;
     public Func<string, string, string>? MsaRequestHandler { get; set; }
+
+    public int ConnectionsOn(SpsChannel channel) => _connectionsByChannel.GetValueOrDefault(channel);
 
     public Task StartAsync(CancellationToken ct)
     {
@@ -133,6 +137,7 @@ public sealed class TcpSpsServer : ISpsServer
     {
         var remote = client.Client.RemoteEndPoint?.ToString() ?? "unknown";
         Interlocked.Increment(ref _activeConnections);
+        _connectionsByChannel.AddOrUpdate(channel, 1, (_, n) => n + 1);
         StatusChanged?.Invoke();
         _log.Information("SPS {Channel}: client connected from {Remote}.", channel, remote);
 
@@ -151,6 +156,7 @@ public sealed class TcpSpsServer : ISpsServer
         {
             try { client.Dispose(); } catch { /* ignore */ }
             Interlocked.Decrement(ref _activeConnections);
+            _connectionsByChannel.AddOrUpdate(channel, 0, (_, n) => Math.Max(0, n - 1));
             StatusChanged?.Invoke();
             _log.Information("SPS {Channel}: client {Remote} disconnected.", channel, remote);
         }
@@ -179,11 +185,14 @@ public sealed class TcpSpsServer : ISpsServer
                 if (text.Length == 0)
                     continue;
 
+                ChannelActivity?.Invoke(channel, false, text);
+
                 var response = Dispatch(channel, text);
                 if (response is not null)
                 {
                     var bytes = Encoding.Latin1.GetBytes(response + ResponseTerminator);
                     await stream.WriteAsync(bytes, token).ConfigureAwait(false);
+                    ChannelActivity?.Invoke(channel, true, response);
                 }
             }
 

@@ -251,6 +251,73 @@ VALUES
             _queue.Enqueue(row);
     }
 
+    // --- Read path for the UI (load historical runs from msa_results) ---
+
+    public async Task<IReadOnlyList<MsaRunDto>> GetRunsAsync(string module, MsaType type, CancellationToken ct = default)
+    {
+        var runs = new List<MsaRunDto>();
+        if (_database.Status != DatabaseStatus.Ready)
+            return runs;
+
+        const string sql = @"
+SELECT base_id, controller_name, evaluated_at, display_name, cg_value, cgk_value, pct_tolerance, passed
+FROM msa_results
+WHERE msa_type = @type AND controller_name LIKE @mod
+ORDER BY evaluated_at, base_id, id;";
+
+        try
+        {
+            await using var conn = await _database.OpenConnectionAsync(ct).ConfigureAwait(false);
+            await using var cmd = new MySqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@type", type.ToDbString());
+            cmd.Parameters.AddWithValue("@mod", module + "%");
+            await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+
+            var byBaseId = new Dictionary<string, (string Ctrl, DateTime At, List<MsaResultRow> Rows)>();
+            var order = new List<string>();
+
+            while (await reader.ReadAsync(ct).ConfigureAwait(false))
+            {
+                var baseId = reader.GetString(0);
+                if (!byBaseId.TryGetValue(baseId, out var entry))
+                {
+                    entry = (reader.GetString(1), reader.GetDateTime(2), new List<MsaResultRow>());
+                    byBaseId[baseId] = entry;
+                    order.Add(baseId);
+                }
+
+                entry.Rows.Add(new MsaResultRow
+                {
+                    DisplayName = reader.IsDBNull(3) ? string.Empty : reader.GetString(3),
+                    Cg = reader.IsDBNull(4) ? null : reader.GetDouble(4),
+                    Cgk = reader.IsDBNull(5) ? null : reader.GetDouble(5),
+                    PctTolerance = reader.IsDBNull(6) ? null : reader.GetDouble(6),
+                    Passed = reader.GetInt32(7) != 0,
+                });
+            }
+
+            foreach (var baseId in order)
+            {
+                var e = byBaseId[baseId];
+                runs.Add(new MsaRunDto
+                {
+                    Module = module,
+                    Controller = e.Ctrl,
+                    BaseId = baseId,
+                    MsaType = type,
+                    EvaluatedAt = e.At,
+                    Rows = e.Rows,
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.Error(ex, "Failed to load MSA runs for {Module}/{Type}.", module, type);
+        }
+
+        return runs;
+    }
+
     // --- Evaluation: SPS handler (sync, poll model) ---
 
     private string HandleMsaRequest(string module, string baseId)

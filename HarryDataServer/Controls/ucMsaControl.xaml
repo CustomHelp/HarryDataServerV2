@@ -1,0 +1,139 @@
+<UserControl x:Class="HarryDataServer.Controls.ucMsaControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.Resources>
+        <!-- Shared toolbar: Prev/Next, overall badge, run info, Refresh/Export.
+             DataContext is an MsaRunsViewModel. -->
+        <Style x:Key="MsaPanelGrid" TargetType="Grid" />
+    </UserControl.Resources>
+
+    <TabControl ItemsSource="{Binding Modules}" Margin="4">
+        <TabControl.ItemTemplate>
+            <DataTemplate>
+                <TextBlock Text="{Binding Module}" FontWeight="SemiBold" />
+            </DataTemplate>
+        </TabControl.ItemTemplate>
+        <TabControl.ContentTemplate>
+            <DataTemplate>
+                <!-- DataContext = MsaModuleViewModel -->
+                <TabControl Margin="6">
+
+                    <TabItem Header="MSA1">
+                        <Grid Margin="8" DataContext="{Binding Msa1}">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <DockPanel Grid.Row="0" Margin="0,0,0,8">
+                                <Button Content="◀ Prev" Command="{Binding PreviousCommand}" DockPanel.Dock="Left" Margin="0,0,6,0" />
+                                <Button Content="Next ▶" Command="{Binding NextCommand}" DockPanel.Dock="Left" Margin="0,0,12,0" />
+                                <Border DockPanel.Dock="Left" Background="{Binding OverallBrush}" CornerRadius="4" Padding="10,3" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding OverallText}" Foreground="White" FontWeight="Bold" />
+                                </Border>
+                                <Button Content="Export CSV" Command="{Binding ExportCsvCommand}" DockPanel.Dock="Right" />
+                                <Button Content="↻" Command="{Binding RefreshCommand}" DockPanel.Dock="Right" Margin="0,0,6,0" />
+                                <TextBlock Text="{Binding RunInfo}" VerticalAlignment="Center" Margin="12,0,8,0"
+                                           Foreground="{StaticResource TextDimBrush}" TextTrimming="CharacterEllipsis" />
+                            </DockPanel>
+                            <DataGrid Grid.Row="1" ItemsSource="{Binding Rows}">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Measurement" Binding="{Binding DisplayName}" Width="2*" />
+                                    <DataGridTextColumn Header="Cg" Binding="{Binding Cg, StringFormat=0.###}" Width="*" />
+                                    <DataGridTextColumn Header="Cgk" Binding="{Binding Cgk, StringFormat=0.###}" Width="*" />
+                                    <DataGridTemplateColumn Header="Result" Width="90">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <Border CornerRadius="3" Padding="8,1" HorizontalAlignment="Left"
+                                                        Background="{Binding Passed, Converter={StaticResource PassToBrush}}">
+                                                    <TextBlock Text="{Binding Passed, Converter={StaticResource PassToText}}"
+                                                               Foreground="White" FontWeight="SemiBold" />
+                                                </Border>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </Grid>
+                    </TabItem>
+
+                    <TabItem Header="MSA3">
+                        <Grid Margin="8" DataContext="{Binding Msa3}">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <DockPanel Grid.Row="0" Margin="0,0,0,8">
+                                <Button Content="◀ Prev" Command="{Binding PreviousCommand}" DockPanel.Dock="Left" Margin="0,0,6,0" />
+                                <Button Content="Next ▶" Command="{Binding NextCommand}" DockPanel.Dock="Left" Margin="0,0,12,0" />
+                                <Border DockPanel.Dock="Left" Background="{Binding OverallBrush}" CornerRadius="4" Padding="10,3" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding OverallText}" Foreground="White" FontWeight="Bold" />
+                                </Border>
+                                <Button Content="Export CSV" Command="{Binding ExportCsvCommand}" DockPanel.Dock="Right" />
+                                <Button Content="↻" Command="{Binding RefreshCommand}" DockPanel.Dock="Right" Margin="0,0,6,0" />
+                                <TextBlock Text="{Binding RunInfo}" VerticalAlignment="Center" Margin="12,0,8,0"
+                                           Foreground="{StaticResource TextDimBrush}" TextTrimming="CharacterEllipsis" />
+                            </DockPanel>
+                            <DataGrid Grid.Row="1" ItemsSource="{Binding Rows}">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Measurement" Binding="{Binding DisplayName}" Width="2*" />
+                                    <DataGridTextColumn Header="%Tolerance" Binding="{Binding PctTolerance, StringFormat=0.###}" Width="*" />
+                                    <DataGridTemplateColumn Header="Result" Width="90">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <Border CornerRadius="3" Padding="8,1" HorizontalAlignment="Left"
+                                                        Background="{Binding Passed, Converter={StaticResource PassToBrush}}">
+                                                    <TextBlock Text="{Binding Passed, Converter={StaticResource PassToText}}"
+                                                               Foreground="White" FontWeight="SemiBold" />
+                                                </Border>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </Grid>
+                    </TabItem>
+
+                    <TabItem Header="LimitSample">
+                        <Grid Margin="8" DataContext="{Binding LimitSample}">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <DockPanel Grid.Row="0" Margin="0,0,0,8">
+                                <Button Content="◀ Prev" Command="{Binding PreviousCommand}" DockPanel.Dock="Left" Margin="0,0,6,0" />
+                                <Button Content="Next ▶" Command="{Binding NextCommand}" DockPanel.Dock="Left" Margin="0,0,12,0" />
+                                <Border DockPanel.Dock="Left" Background="{Binding OverallBrush}" CornerRadius="4" Padding="10,3" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding OverallText}" Foreground="White" FontWeight="Bold" />
+                                </Border>
+                                <Button Content="Export CSV" Command="{Binding ExportCsvCommand}" DockPanel.Dock="Right" />
+                                <Button Content="↻" Command="{Binding RefreshCommand}" DockPanel.Dock="Right" Margin="0,0,6,0" />
+                                <TextBlock Text="{Binding RunInfo}" VerticalAlignment="Center" Margin="12,0,8,0"
+                                           Foreground="{StaticResource TextDimBrush}" TextTrimming="CharacterEllipsis" />
+                            </DockPanel>
+                            <DataGrid Grid.Row="1" ItemsSource="{Binding Rows}">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Measurement" Binding="{Binding DisplayName}" Width="2*" />
+                                    <DataGridTemplateColumn Header="Result" Width="90">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <Border CornerRadius="3" Padding="8,1" HorizontalAlignment="Left"
+                                                        Background="{Binding Passed, Converter={StaticResource PassToBrush}}">
+                                                    <TextBlock Text="{Binding Passed, Converter={StaticResource PassToText}}"
+                                                               Foreground="White" FontWeight="SemiBold" />
+                                                </Border>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                            <TextBlock Grid.Row="2" Margin="0,6,0,0" FontSize="11" Foreground="{StaticResource TextDimBrush}"
+                                       Text="LimitSample stores pass/fail per measurement; Expected/Actual values are not persisted in msa_results." />
+                        </Grid>
+                    </TabItem>
+
+                </TabControl>
+            </DataTemplate>
+        </TabControl.ContentTemplate>
+    </TabControl>
+</UserControl>
