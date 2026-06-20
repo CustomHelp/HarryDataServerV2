@@ -152,6 +152,60 @@ public sealed class MySqlRepository
             _log.Information("Schema-check complete: applied {Count} column change(s).", changes);
     }
 
+    /// <summary>
+    /// Ensure every expected secondary index exists, creating any that are missing.
+    /// MySQL has no <c>CREATE INDEX IF NOT EXISTS</c>, so each index is first looked
+    /// up in INFORMATION_SCHEMA.STATISTICS and only created when absent — the same
+    /// approach as the ADD COLUMN schema-check. Runs after the column check at
+    /// startup so a new index deploys by a code change alone (CLAUDE.md section 8).
+    /// </summary>
+    public async Task EnsureIndexesAsync(CancellationToken ct = default)
+    {
+        await using var conn = await OpenAsync(ct).ConfigureAwait(false);
+        var changes = 0;
+
+        foreach (var index in DatabaseSchema.ExpectedIndexes)
+        {
+            if (await IndexExistsAsync(conn, index.Table, index.Name, ct).ConfigureAwait(false))
+                continue;
+
+            var create = $"CREATE INDEX `{index.Name}` ON `{index.Table}` ({index.Columns});";
+
+            try
+            {
+                await using var cmd = new MySqlCommand(create, conn);
+                await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+                changes++;
+                _log.Information("Index created: {Table}.{Index} ({Columns})",
+                    index.Table, index.Name, index.Columns);
+            }
+            catch (Exception ex)
+            {
+                _log.Error(ex, "Failed to create index {Table}.{Index}", index.Table, index.Name);
+            }
+        }
+
+        if (changes == 0)
+            _log.Information("Index-check complete: all indexes present.");
+        else
+            _log.Information("Index-check complete: created {Count} index(es).", changes);
+    }
+
+    private static async Task<bool> IndexExistsAsync(
+        MySqlConnection conn, string tableName, string indexName, CancellationToken ct)
+    {
+        const string sql = @"
+SELECT COUNT(*)
+FROM INFORMATION_SCHEMA.STATISTICS
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = @table AND INDEX_NAME = @index;";
+
+        await using var cmd = new MySqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@table", tableName);
+        cmd.Parameters.AddWithValue("@index", indexName);
+        var count = Convert.ToInt64(await cmd.ExecuteScalarAsync(ct).ConfigureAwait(false));
+        return count > 0;
+    }
+
     private static async Task<HashSet<string>> GetExistingColumnsAsync(
         MySqlConnection conn, string tableName, CancellationToken ct)
     {

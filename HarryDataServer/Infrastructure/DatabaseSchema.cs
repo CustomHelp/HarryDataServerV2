@@ -9,6 +9,20 @@ namespace HarryDataServer.Infrastructure;
 public readonly record struct ColumnSpec(string Name, string Definition);
 
 /// <summary>
+/// One expected secondary index, used by the automatic index-check at startup.
+/// MySQL has no <c>CREATE INDEX IF NOT EXISTS</c>, so the index is looked up in
+/// INFORMATION_SCHEMA.STATISTICS first and only created when missing (mirrors the
+/// ADD COLUMN schema-check). Adding an entry here is enough to deploy a new index
+/// by a code change alone — no manual SQL, no production stop (CLAUDE.md section 8).
+/// PRIMARY / UNIQUE / foreign-key indexes are owned by the CREATE statements and
+/// are intentionally not listed here.
+/// </summary>
+/// <param name="Table">Table the index lives on.</param>
+/// <param name="Name">Index name as it appears in INFORMATION_SCHEMA.STATISTICS.</param>
+/// <param name="Columns">Comma-separated column list, e.g. "serial_number, measured_at".</param>
+public readonly record struct IndexSpec(string Table, string Name, string Columns);
+
+/// <summary>
 /// Describes a table the application owns: the full CREATE statement plus the
 /// list of expected columns. If a column is added here, the startup schema-check
 /// applies it automatically via ALTER TABLE — no manual SQL, no production stop
@@ -52,6 +66,49 @@ public static class DatabaseSchema
     {
         "measurements_serial",
         "measurements_serial_trimmer",
+    };
+
+    /// <summary>
+    /// Every expected secondary index. New installs get these from the CREATE
+    /// statements; existing installs get any missing one applied by the startup
+    /// index-check (CREATE TABLE IF NOT EXISTS never alters an existing table).
+    /// Keep this list in sync with the INDEX clauses in the CreateSql above — the
+    /// same dual-listing convention used for columns (Columns + CreateSql).
+    /// </summary>
+    public static readonly IReadOnlyList<IndexSpec> ExpectedIndexes = new[]
+    {
+        // dmcserial — part lookups (HarryAnalysis) and NG counting (HarryCounter).
+        new IndexSpec("dmcserial", "idx_dmc", "dmc"),
+        new IndexSpec("dmcserial", "idx_trimmer", "serial_trimmer"),
+        new IndexSpec("dmcserial", "idx_order", "order_name"),
+        new IndexSpec("dmcserial", "idx_created", "created_at"),
+        new IndexSpec("dmcserial", "idx_result_status", "result_status"),
+
+        // measurements_serial — by-serial (HarryAnalysis) and by-definition (HarryGraph).
+        // The composites also satisfy the ORDER BY measured_at without a filesort.
+        new IndexSpec("measurements_serial", "idx_serial", "serial_number"),
+        new IndexSpec("measurements_serial", "idx_def", "definition_id"),
+        new IndexSpec("measurements_serial", "idx_measured", "measured_at"),
+        new IndexSpec("measurements_serial", "idx_serial_measured", "serial_number, measured_at"),
+        new IndexSpec("measurements_serial", "idx_def_measured", "definition_id, measured_at"),
+
+        // measurements_serial_trimmer — same access patterns for M20/M21.
+        new IndexSpec("measurements_serial_trimmer", "idx_trimmer", "serial_trimmer"),
+        new IndexSpec("measurements_serial_trimmer", "idx_def", "definition_id"),
+        new IndexSpec("measurements_serial_trimmer", "idx_measured", "measured_at"),
+        new IndexSpec("measurements_serial_trimmer", "idx_trimmer_measured", "serial_trimmer, measured_at"),
+        new IndexSpec("measurements_serial_trimmer", "idx_def_measured", "definition_id, measured_at"),
+
+        // msa_measurements — raw MSA samples.
+        new IndexSpec("msa_measurements", "idx_dmc_baseid", "dmc, base_id"),
+        new IndexSpec("msa_measurements", "idx_controller", "controller_name"),
+        new IndexSpec("msa_measurements", "idx_measured", "measured_at"),
+
+        // msa_results — by base_id (a run), by dmc, and per-module run navigation.
+        new IndexSpec("msa_results", "idx_dmc", "dmc"),
+        new IndexSpec("msa_results", "idx_controller_type", "controller_name, msa_type"),
+        new IndexSpec("msa_results", "idx_base_id", "base_id"),
+        new IndexSpec("msa_results", "idx_controller_type_eval", "controller_name, msa_type, evaluated_at"),
     };
 
     private static TableSchema Cameras => new()
@@ -213,7 +270,8 @@ CREATE TABLE IF NOT EXISTS dmcserial (
   INDEX idx_dmc (dmc),
   INDEX idx_trimmer (serial_trimmer),
   INDEX idx_order (order_name),
-  INDEX idx_created (created_at)
+  INDEX idx_created (created_at),
+  INDEX idx_result_status (result_status)
 ) ENGINE=InnoDB {DefaultCharset};",
     };
 
@@ -248,7 +306,9 @@ CREATE TABLE IF NOT EXISTS measurements_serial (
   PRIMARY KEY (id, measured_at),
   INDEX idx_serial (serial_number),
   INDEX idx_def (definition_id),
-  INDEX idx_measured (measured_at)
+  INDEX idx_measured (measured_at),
+  INDEX idx_serial_measured (serial_number, measured_at),
+  INDEX idx_def_measured (definition_id, measured_at)
 ) ENGINE=InnoDB {DefaultCharset}
 PARTITION BY RANGE (TO_DAYS(measured_at)) (
   PARTITION p_future VALUES LESS THAN MAXVALUE
@@ -273,7 +333,9 @@ CREATE TABLE IF NOT EXISTS measurements_serial_trimmer (
   PRIMARY KEY (id, measured_at),
   INDEX idx_trimmer (serial_trimmer),
   INDEX idx_def (definition_id),
-  INDEX idx_measured (measured_at)
+  INDEX idx_measured (measured_at),
+  INDEX idx_trimmer_measured (serial_trimmer, measured_at),
+  INDEX idx_def_measured (definition_id, measured_at)
 ) ENGINE=InnoDB {DefaultCharset}
 PARTITION BY RANGE (TO_DAYS(measured_at)) (
   PARTITION p_future VALUES LESS THAN MAXVALUE
@@ -358,7 +420,9 @@ CREATE TABLE IF NOT EXISTS msa_results (
   passed          TINYINT      NOT NULL,
   evaluated_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_dmc (dmc),
-  INDEX idx_controller_type (controller_name, msa_type)
+  INDEX idx_controller_type (controller_name, msa_type),
+  INDEX idx_base_id (base_id),
+  INDEX idx_controller_type_eval (controller_name, msa_type, evaluated_at)
 ) ENGINE=InnoDB {DefaultCharset};",
     };
 }

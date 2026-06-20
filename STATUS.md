@@ -314,6 +314,38 @@ Second round of customer feedback (`fix: companion tools UX review pass 2`):
 
 ---
 
+## Database index audit + startup index-check (2026-06-20)
+
+Performance audit of all 9 tables (`SHOW INDEX` + `EXPLAIN` on the typical
+HarryAnalysis / HarryGraph / HarryCounter / MSA queries). Seven missing indexes were
+found and created on the live DB, and the schema/startup code was updated so they are
+applied automatically on every install.
+
+**Indexes added** (live DB + `DatabaseSchema.cs` CREATE statements):
+- `dmcserial.idx_result_status (result_status)` — HarryCounter NG-in-range scans.
+- `measurements_serial.idx_serial_measured (serial_number, measured_at)` — by-serial
+  lookup ordered by time without a filesort (HarryAnalysis).
+- `measurements_serial.idx_def_measured (definition_id, measured_at)` — HarryGraph
+  time-series, range + order served by one index.
+- `measurements_serial_trimmer.idx_trimmer_measured (serial_trimmer, measured_at)`.
+- `measurements_serial_trimmer.idx_def_measured (definition_id, measured_at)`.
+- `msa_results.idx_base_id (base_id)` — lookup of one MSA run (was a table scan).
+- `msa_results.idx_controller_type_eval (controller_name, msa_type, evaluated_at)` —
+  per-module run navigation.
+
+EXPLAIN confirms the new indexes are used (`idx_base_id`, `idx_result_status`); the two
+measurement composites remove the `ORDER BY measured_at` filesort (verified with
+`FORCE INDEX` — the cost-based optimizer adopts them once the tables hold real data).
+
+**Startup index-check** — mirrors the existing ADD COLUMN schema-check. After the column
+check, `MySqlDatabaseService.StartAsync` calls `MySqlRepository.EnsureIndexesAsync`, which
+walks `DatabaseSchema.ExpectedIndexes`, checks each against `INFORMATION_SCHEMA.STATISTICS`,
+and runs `CREATE INDEX` for any that are missing (logged at Information level). MySQL has
+**no `CREATE INDEX IF NOT EXISTS`**, so the existence check substitutes for it. A new index
+now deploys by a code change alone — no manual SQL, no production stop (CLAUDE.md §8).
+
+---
+
 ## Build & Repo
 - `dotnet build HarryDataServer.sln -c Release` → 0 warnings, 0 errors (`net8.0-windows`).
 - Branch `main`, pushed to `https://github.com/CustomHelp/HarryDataServerV2`.

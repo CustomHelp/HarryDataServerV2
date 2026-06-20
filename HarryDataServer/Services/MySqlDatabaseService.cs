@@ -140,6 +140,9 @@ FROM dmcserial;", conn))
 
             Status = DatabaseStatus.Initializing;
             await _repo.InitializeSchemaAsync(ct).ConfigureAwait(false);
+            // After the column schema-check (ADD COLUMN), bring indexes up to date:
+            // existing installs get any missing index created automatically.
+            await _repo.EnsureIndexesAsync(ct).ConfigureAwait(false);
             await _partitions.EnsurePartitionsAsync(ct).ConfigureAwait(false);
 
             var cameraIds = await SyncCamerasAsync(ct).ConfigureAwait(false);
