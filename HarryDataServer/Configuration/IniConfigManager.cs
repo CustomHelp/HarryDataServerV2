@@ -38,7 +38,7 @@ public sealed class IniConfigManager
             MySql = ParseMySql(data),
             Csv = ParseCsv(data),
             Nas = ParseNas(data),
-            Collage = ParseCollage(data),
+            Collage = ParseCollage(data, configDir),
             Sps = ParseSps(data),
             SqlSettings = ParseSqlSettings(data),
             Msa = ParseMsa(data, configDir),
@@ -121,12 +121,12 @@ public sealed class IniConfigManager
         };
     }
 
-    private static CollageConfig ParseCollage(IniData data)
+    private static CollageConfig ParseCollage(IniData data, string configDir)
     {
         var s = data["Collage"];
         return new CollageConfig
         {
-            IniPath = Str(s, "Collage_IniPath", string.Empty),
+            IniPath = ResolvePath(Str(s, "Collage_IniPath", string.Empty), configDir),
             Generate = Bool(s, "Collage_Generate", true),
         };
     }

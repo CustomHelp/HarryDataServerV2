@@ -74,6 +74,9 @@ public partial class App : Application
 
             var msa = _services.GetRequiredService<IMsaService>();
             _ = Task.Run(() => msa.StartAsync(_shutdownCts.Token));
+
+            var collage = _services.GetRequiredService<ICollageService>();
+            _ = Task.Run(() => collage.StartAsync(_shutdownCts.Token));
         }
         catch (Exception ex)
         {
@@ -105,6 +108,7 @@ public partial class App : Application
                 _services?.GetService<ICsvService>()?.StopAsync(),
                 _services?.GetService<IMsaService>()?.StopAsync(),
                 _services?.GetService<IImageCleanupService>()?.StopAsync(),
+                _services?.GetService<ICollageService>()?.StopAsync(),
             }.Where(t => t is not null).Cast<Task>().ToArray();
 
             Task.WhenAll(stopTasks).Wait(TimeSpan.FromSeconds(8));
@@ -176,6 +180,11 @@ public partial class App : Application
         services.AddSingleton<IImageCleanupService, ImageCleanupService>();
         services.AddSingleton<MsaReferenceLoader>();
         services.AddSingleton<IMsaService, MsaService>();
+
+        // --- Collage generator (Phase 9) ---
+        services.AddSingleton<CollageIniReader>();
+        services.AddSingleton<CollageComposer>();
+        services.AddSingleton<ICollageService, CollageService>();
 
         // --- Windows ---
         services.AddSingleton<MainWindow>();

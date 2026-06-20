@@ -60,4 +60,5 @@ public static class HealthSources
     public const string PartExit = "PartExit";
     public const string Csv = "Csv";
     public const string Msa = "Msa";
+    public const string Collage = "Collage";
 }

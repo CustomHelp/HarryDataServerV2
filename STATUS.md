@@ -1,6 +1,16 @@
 # HarryDataServer V2 — Implementation Status
 
-*Last updated: 2026-06-19*
+*Last updated: 2026-06-20*
+
+> ## ⚠️ Pending on-site (live) verification
+> - **Phase 9 — Collage generator** is implemented and compiles but has **not** been
+>   tested against real images / a real V1 collage. The compositing semantics
+>   (Pos = centre, size = crop × Scale × Zoom, crop→scale→mirror→place, PNG output)
+>   are **assumptions** — verify them on-site and adjust `CollageComposer` if needed.
+> - Ships **OFF by default** so go-live is safe: in `Harry.ini`,
+>   `Collage_Generate=false` and `DeleteAfterCollage=false`. Enable both only after the
+>   on-site collage output looks correct.
+> - **When the customer goes live, the collage must be re-tested** before enabling it.
 
 Phase numbers follow the execution order used in this project (SPS server was
 brought forward; numbering otherwise tracks CLAUDE.md section 18).
@@ -19,6 +29,7 @@ brought forward; numbering otherwise tracks CLAUDE.md section 18).
 | 6 | Settings / Diagnostic / Part-Exit consumers | SettingsProcessor(+SettingDefinitionCache, PendingSetting), DiagnosticProcessor(+CsvFileWriter), PartExitProcessor |
 | 7 | Main CSV export | CsvExportService (two-row header, R_/V_ columns) |
 | 8 | Image cleanup + DB partition retention | ImageCleanupService |
+| 9 | Collage generator | ICollageService/CollageService, CollageIniReader, CollageComposer, CollageLayout(+CollageImageSpec) |
 | 10 | MSA engine | MsaCalculator, MsaService, MsaModels, BaseId, MsaReference(+Loader), MsaConfig |
 | 8b | Health reporting on SPS KeepAlive + flush data-loss hardening | ISystemHealth/SystemHealthService, HealthSources, FlushHelper |
 
@@ -76,6 +87,7 @@ A `Health: OK/WARNING/ERROR` indicator was added to the MainWindow status bar.
 | TcpSpsServer | ✅ | one Task per channel + per client | — |
 | ImageCleanupService | ✅ | daily background Task | — |
 | MsaService | ✅ | dedicated Task (storage) + per-eval Task | ConcurrentQueue (→ msa_measurements) |
+| CollageService | ✅ | dedicated Task | ConcurrentQueue (→ collage image + delete OK sources) |
 
 All processors: receive threads only enqueue; per-operation MySqlConnection
 (never shared); `ConfigureAwait(false)` on every async I/O op.
@@ -91,6 +103,7 @@ Cameras ─Results(Normal)──▶ MeasurementProcessor ─▶ measurements_ser
         ─Diagnostic───────▶ DiagnosticProcessor   ─▶ Diagnostic CSV
 SPS Ch2 ─PartExit─┬▶ PartExitProcessor  ─▶ dmcserial
                   ├▶ CsvExportService   ─▶ main CSV (all measurements/part, 2-row header)
+                  ├▶ CollageService (OK+Normal → compose collage, delete consumed OK images)
                   └▶ ImageCleanupService (NG → delete orphaned OK images)
 SPS Ch3-7 ─Request;BaseID─▶ MsaService.HandleMsaRequest ─▶ Wait → (eval) → OK/NG
                                                           └▶ msa_results + MSA CSV
@@ -111,10 +124,29 @@ Daily ─▶ ImageCleanupService ─▶ delete aged NG/Diag/Golden images + DROP
 
 ---
 
+## Collage notes (Phase 9) — assumptions to verify against a V1 collage
+
+GDI+ (`System.Drawing.Common`, Windows-only) composition on a background task.
+
+- **Trigger:** Part Exit with `Result = OK` and a non-MSA mode. NG/MSA parts skipped.
+- **File match:** real filenames don't equal the `TemplateName` (variable serial + result
+  digit in the middle), so a source file matches when its name **starts with** the 12-char
+  serial prefix (SZID or VirtualSerial) **and ends with** the suffix after
+  `<serial_pattern>`. Searched with an OS-level `prefix*` filter, recursively.
+- **Compositing assumptions:** Pos_X/Pos_Y = image **centre**; draw size = crop × Scale ×
+  Zoom; order crop → scale → mirror → place; images drawn in [ImageN] order (later on top).
+  BackgroundColor accepts a name, `#RRGGBB`, or `R,G,B`.
+- **Output:** `<SZID>_collage.png` written to `[NAS] CollagePath` (NAS auto-sorts into
+  date folders). Output format follows the extension (png/jpg/bmp).
+- **DeleteAfterCollage:** when set, the exact source files placed into the collage are
+  deleted (consumed OK images, section 11).
+- **Health:** collage faults are WARNING-level (non-critical artifact), with TTL.
+- `Collage.ini` path now resolves relative to the config dir (portable), like Templates/MSA.
+
+---
+
 ## Not yet built
 
-- **Phase 9** — Collage generator (triggered on Part Exit = OK; Collage.ini reader).
-  Note: the "delete OK images after collage" rule (section 11) lands with Phase 9.
 - **Phase 11/12** — WPF UI (per-subsystem UserControls, MSA view).
 - **Phase 14** — Companion tools (HarryAnalysis, HarryGraph, HarryCounter, etc.).
 
