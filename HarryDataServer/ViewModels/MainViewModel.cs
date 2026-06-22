@@ -31,6 +31,7 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly ICsvService _csv;
     private readonly ICollageService _collage;
     private readonly IMsaService _msa;
+    private readonly IPdfReportService _pdf;
     private readonly ISpsServer _sps;
     private readonly ISystemHealth _health;
     private readonly ILogBuffer _log;
@@ -50,19 +51,19 @@ public sealed partial class MainViewModel : ObservableObject
         IConfigService config, ICameraService cameras, IDatabaseService database,
         IMeasurementProcessor measurements, ISettingsProcessor settings, IDiagnosticProcessor diagnostics,
         IPartExitOrchestrator partExit, ICsvService csv, ICollageService collage, IMsaService msa,
-        ISpsServer sps, ISystemHealth health, ILogBuffer log)
+        IPdfReportService pdf, ISpsServer sps, ISystemHealth health, ILogBuffer log)
     {
         _config = config; _cameras = cameras; _database = database;
         _measurements = measurements; _settings = settings; _diagnostics = diagnostics;
         _partExit = partExit; _csv = csv; _collage = collage; _msa = msa;
-        _sps = sps; _health = health; _log = log;
+        _pdf = pdf; _sps = sps; _health = health; _log = log;
 
         ConfigFile = System.IO.Path.GetFileName(_config.IniPath);
         AppVersion = "v" + (Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "2.0.0");
 
         Cameras = new ObservableCollection<CameraViewModel>(_cameras.Clients.Select(c => new CameraViewModel(c)));
         SpsChannels = BuildChannels();
-        Msa = new MsaViewModel(_msa);
+        Msa = new MsaViewModel(_msa, _pdf);
         Log = new LogViewModel(_log, _config);
         CollageView = new CollageViewModel(_collage);
 

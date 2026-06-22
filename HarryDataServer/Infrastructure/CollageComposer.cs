@@ -4,6 +4,7 @@ using System.Drawing.Imaging;
 using System.Globalization;
 using System.IO;
 using HarryDataServer.Models;
+using HarryDataServer.Services;
 
 namespace HarryDataServer.Infrastructure;
 
@@ -19,6 +20,15 @@ namespace HarryDataServer.Infrastructure;
 /// </summary>
 public sealed class CollageComposer
 {
+    // SOW §5.2.2 size-enforcement: re-encode JPEG from this quality downwards.
+    private const long StartQuality = 85;
+    private const long MinQuality = 30;
+    private const long QualityStep = 5;
+
+    private readonly ILogService _log;
+
+    public CollageComposer(ILogService log) => _log = log;
+
     public sealed record CollageResult(
         bool Success, string? OutputPath, IReadOnlyList<string> UsedSourceFiles, int Placed, int Missing);
 
@@ -26,12 +36,14 @@ public sealed class CollageComposer
     /// Build the collage for one part. <paramref name="formattedSerials"/> are the
     /// serials with "_" inserted after char 12 (SZID and/or TrimmerSerial). Each image
     /// slot matches a *.bmp whose filename contains a serial AND all KeyName keywords.
+    /// <paramref name="maxFileSizeKb"/> caps the JPEG output size (SOW §5.2.2); ≤ 0 disables the cap.
     /// </summary>
     public CollageResult Compose(
         CollageLayout layout,
         IReadOnlyList<string> formattedSerials,
         string sourceDir,
-        string outputPath)
+        string outputPath,
+        int maxFileSizeKb)
     {
         var candidates = FindCandidateFiles(formattedSerials, sourceDir);
 
@@ -65,7 +77,7 @@ public sealed class CollageComposer
                 return new CollageResult(false, null, Array.Empty<string>(), 0, missing);
 
             Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
-            canvas.Save(outputPath, FormatFor(outputPath));
+            Save(canvas, outputPath, maxFileSizeKb);
             return new CollageResult(true, outputPath, used, placed, missing);
         }
     }
@@ -95,6 +107,60 @@ public sealed class CollageComposer
         var dest = new[] { new PointF(x0, y0), new PointF(x1, y0), new PointF(x0, y1) };
         g.DrawImage(src, dest, crop, GraphicsUnit.Pixel);
     }
+
+    /// <summary>
+    /// Write the canvas to disk, enforcing the SOW §5.2.2 size cap. For JPEG output the
+    /// image is re-encoded at iteratively lower quality (start 85, step −5, min 30) until
+    /// it fits within <paramref name="maxFileSizeKb"/>. A WARNING is logged if the minimum
+    /// quality is reached and the file still exceeds the limit. Non-JPEG formats (or a
+    /// disabled cap) are written directly.
+    /// </summary>
+    private void Save(Bitmap canvas, string outputPath, int maxFileSizeKb)
+    {
+        var format = FormatFor(outputPath);
+        var limitBytes = (long)maxFileSizeKb * 1024L;
+
+        if (maxFileSizeKb <= 0 || format.Guid != ImageFormat.Jpeg.Guid)
+        {
+            canvas.Save(outputPath, format);
+            if (maxFileSizeKb > 0 && new FileInfo(outputPath).Length > limitBytes)
+                _log.Warning("Collage {Path} is {Kb} KB (> {Max} KB) but is not JPEG; size cap cannot be enforced.",
+                    outputPath, new FileInfo(outputPath).Length / 1024, maxFileSizeKb);
+            return;
+        }
+
+        var jpegCodec = JpegCodec();
+        var quality = StartQuality;
+        byte[] encoded;
+        while (true)
+        {
+            encoded = EncodeJpeg(canvas, jpegCodec, quality);
+            if (encoded.LongLength <= limitBytes || quality <= MinQuality)
+                break;
+            quality -= QualityStep;
+        }
+
+        File.WriteAllBytes(outputPath, encoded);
+
+        if (encoded.LongLength > limitBytes)
+            _log.Warning("Collage {Path}: {Kb} KB still exceeds the {Max} KB limit at minimum JPEG quality {Quality}.",
+                outputPath, encoded.LongLength / 1024, maxFileSizeKb, quality);
+        else if (quality < StartQuality)
+            _log.Debug("Collage {Path} re-encoded at JPEG quality {Quality} to fit {Max} KB ({Kb} KB).",
+                outputPath, quality, maxFileSizeKb, encoded.LongLength / 1024);
+    }
+
+    private static byte[] EncodeJpeg(Bitmap canvas, ImageCodecInfo codec, long quality)
+    {
+        using var ms = new MemoryStream();
+        using var parameters = new EncoderParameters(1);
+        parameters.Param[0] = new EncoderParameter(Encoder.Quality, quality);
+        canvas.Save(ms, codec, parameters);
+        return ms.ToArray();
+    }
+
+    private static ImageCodecInfo JpegCodec() =>
+        ImageCodecInfo.GetImageEncoders().First(c => c.FormatID == ImageFormat.Jpeg.Guid);
 
     /// <summary>
     /// Find all *.bmp under the source whose filename contains one of the formatted

@@ -22,9 +22,12 @@ public static class CsvExport
         File.WriteAllText(path, sb.ToString(), new UTF8Encoding(true));
     }
 
-    /// <summary>Default timestamped filename, e.g. "HarryAnalysis_2026-06-20_14-05.csv".</summary>
+    /// <summary>SOW §5.1.2 datetime token for filenames: DDMMYY_HHMMSS.</summary>
+    public const string DateTimePattern = "ddMMyy_HHmmss";
+
+    /// <summary>Default timestamped filename, e.g. "HarryAnalysis_220626_140522.csv" (SOW §5.1.2).</summary>
     public static string TimestampedName(string prefix) =>
-        $"{prefix}_{DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss", CultureInfo.InvariantCulture)}.csv";
+        $"{prefix}_{DateTime.Now.ToString(DateTimePattern, CultureInfo.InvariantCulture)}.csv";
 
     private static string Escape(string? field)
     {

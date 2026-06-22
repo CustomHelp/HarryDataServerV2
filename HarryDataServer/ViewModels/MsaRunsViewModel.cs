@@ -1,7 +1,9 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Text;
+using System.Windows;
 using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -18,15 +20,17 @@ namespace HarryDataServer.ViewModels;
 public sealed partial class MsaRunsViewModel : ObservableObject
 {
     private readonly IMsaService _msa;
+    private readonly IPdfReportService _pdf;
     private readonly string _module;
     private readonly MsaType _type;
 
     private List<MsaRunDto> _runs = new();
     private int _index = -1;
 
-    public MsaRunsViewModel(IMsaService msa, string module, MsaType type)
+    public MsaRunsViewModel(IMsaService msa, string module, MsaType type, IPdfReportService pdf)
     {
         _msa = msa;
+        _pdf = pdf;
         _module = module;
         _type = type;
 
@@ -34,6 +38,8 @@ public sealed partial class MsaRunsViewModel : ObservableObject
         NextCommand = new RelayCommand(() => Move(+1), () => _index >= 0 && _index < _runs.Count - 1);
         ExportCsvCommand = new RelayCommand(ExportCsv, () => Current is not null);
         RefreshCommand = new AsyncRelayCommand(LoadAsync);
+        OpenAllResultsCommand = new RelayCommand(() => OpenReport(failuresOnly: false), () => Current is not null);
+        OpenFailuresOnlyCommand = new RelayCommand(() => OpenReport(failuresOnly: true), () => Current is not null);
     }
 
     public ObservableCollection<MsaResultRow> Rows { get; } = new();
@@ -42,6 +48,8 @@ public sealed partial class MsaRunsViewModel : ObservableObject
     public IRelayCommand NextCommand { get; }
     public IRelayCommand ExportCsvCommand { get; }
     public IAsyncRelayCommand RefreshCommand { get; }
+    public IRelayCommand OpenAllResultsCommand { get; }
+    public IRelayCommand OpenFailuresOnlyCommand { get; }
 
     [ObservableProperty] private string _runInfo = "No runs loaded.";
     [ObservableProperty] private string _overallText = "—";
@@ -90,6 +98,40 @@ public sealed partial class MsaRunsViewModel : ObservableObject
         PreviousCommand.NotifyCanExecuteChanged();
         NextCommand.NotifyCanExecuteChanged();
         ExportCsvCommand.NotifyCanExecuteChanged();
+        OpenAllResultsCommand.NotifyCanExecuteChanged();
+        OpenFailuresOnlyCommand.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>
+    /// Open the AllResults / FailuresOnly PDF for the current run in the default viewer.
+    /// If the PDF does not yet exist it is generated on demand from the loaded run data
+    /// (SOW §3.2.1), then opened.
+    /// </summary>
+    private void OpenReport(bool failuresOnly)
+    {
+        var run = Current;
+        if (run is null)
+            return;
+
+        try
+        {
+            var report = MsaReportData.FromRun(run);
+            var paths = _pdf.ResolvePaths(report);
+            var path = failuresOnly ? paths.FailuresOnly : paths.AllResults;
+
+            if (!File.Exists(path))
+            {
+                paths = _pdf.Generate(report);
+                path = failuresOnly ? paths.FailuresOnly : paths.AllResults;
+            }
+
+            Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Could not open the PDF report:\n\n{ex.Message}",
+                "MSA Report", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
     }
 
     private void ExportCsv()
@@ -101,7 +143,7 @@ public sealed partial class MsaRunsViewModel : ObservableObject
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
             Filter = "CSV file (*.csv)|*.csv",
-            FileName = $"MSA_{_type}_{_module}_{run.EvaluatedAt:yyyyMMdd_HHmmss}.csv",
+            FileName = $"MSA_{_type}_{_module}_{run.EvaluatedAt:ddMMyy_HHmmss}.csv",
         };
         if (dialog.ShowDialog() != true)
             return;

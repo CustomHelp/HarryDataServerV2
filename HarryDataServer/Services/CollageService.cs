@@ -26,6 +26,7 @@ public sealed class CollageService : ICollageService
     private bool _enabled;
     private string _sourceDir = string.Empty;
     private string _outputDir = string.Empty;
+    private int _maxFileSizeKb = 128;
     private long _totalGenerated;
     private bool _started;
 
@@ -55,6 +56,7 @@ public sealed class CollageService : ICollageService
         _enabled = collage.Generate;
         _sourceDir = collage.SingleImagesPath;
         _outputDir = collage.ResultImagesPath;
+        _maxFileSizeKb = collage.MaxFileSizeKb;
 
         if (!_enabled)
         {
@@ -95,7 +97,7 @@ public sealed class CollageService : ICollageService
 
         try
         {
-            var result = await Task.Run(() => _composer.Compose(_layout, serials, _sourceDir, outputPath), ct)
+            var result = await Task.Run(() => _composer.Compose(_layout, serials, _sourceDir, outputPath, _maxFileSizeKb), ct)
                 .ConfigureAwait(false);
 
             if (!result.Success)

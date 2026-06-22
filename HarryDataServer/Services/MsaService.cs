@@ -27,6 +27,7 @@ public sealed class MsaService : IMsaService
     private readonly ISpsServer _sps;
     private readonly IConfigService _config;
     private readonly MsaReferenceLoader _referenceLoader;
+    private readonly IPdfReportService _pdf;
     private readonly ISystemHealth _health;
     private readonly ILogService _log;
 
@@ -46,6 +47,7 @@ public sealed class MsaService : IMsaService
         ISpsServer sps,
         IConfigService config,
         MsaReferenceLoader referenceLoader,
+        IPdfReportService pdf,
         ISystemHealth health,
         ILogService log)
     {
@@ -55,6 +57,7 @@ public sealed class MsaService : IMsaService
         _sps = sps;
         _config = config;
         _referenceLoader = referenceLoader;
+        _pdf = pdf;
         _health = health;
         _log = log;
         _flushInterval = TimeSpan.FromSeconds(Math.Max(1, config.Config.SqlSettings.SaveIntervalSeconds));
@@ -370,6 +373,7 @@ ORDER BY evaluated_at, base_id, id;";
             var passed = results.Count > 0 && results.All(r => r.Passed);
             await StoreResultsAsync(conn, baseId, msaType, rows[0], results, ct).ConfigureAwait(false);
             ExportCsv(baseId, module, msaType, rows[0], results);
+            GeneratePdf(baseId, module, msaType, rows[0], results, passed);
 
             _evaluations[baseId] = passed ? "OK" : "NG";
             _log.Information("MSA {Type} for BaseID {Base}: {Verdict} ({Count} measurements).",
@@ -542,9 +546,10 @@ VALUES
         try
         {
             using var writer = new CsvFileWriter(csv.MsaPath, int.MaxValue, dateSubfolders: true, _log);
+            // Filename label: module + type (CsvFileWriter prepends the DDMMYY_HHMMSS stamp, SOW §5.1.2).
             writer.Configure(
                 new[] { "BaseID", "Module", "Controller", "MsaType", "DMC", "DisplayName", "Cg", "Cgk", "PctTolerance", "Passed" },
-                $"MSA_{module}_{baseId}");
+                $"MSA_{module}_{msaType.ToDbString()}");
 
             foreach (var r in results)
             {
@@ -564,6 +569,54 @@ VALUES
             _log.Error(ex, "Failed to write MSA CSV for BaseID {Base}.", baseId);
         }
     }
+
+    /// <summary>Generate the two MSA PDF reports (SOW §3.2.1). Best-effort: never fails the evaluation.</summary>
+    private void GeneratePdf(string baseId, string module, MsaType msaType, MsaRow sample, List<MsaMeasurementResult> results, bool passed)
+    {
+        try
+        {
+            var report = BuildReport(baseId, module, msaType, sample, results, passed);
+            _pdf.Generate(report);
+        }
+        catch (Exception ex)
+        {
+            _log.Error(ex, "Failed to generate MSA PDF report for BaseID {Base}.", baseId);
+        }
+    }
+
+    /// <summary>Build the PDF report model from a freshly-evaluated run.</summary>
+    private static MsaReportData BuildReport(
+        string baseId, string module, MsaType msaType, MsaRow sample, List<MsaMeasurementResult> results, bool passed) =>
+        new()
+        {
+            Module = module,
+            TestType = msaType.ToDbString(),
+            Controller = sample.CameraName,
+            BaseId = baseId,
+            RunAt = DateTime.Now,
+            OverallPass = passed,
+            Rows = results.Select(r => new MsaReportRow
+            {
+                Measurement = r.DisplayName,
+                Expected = r.Expected ?? string.Empty,
+                Actual = r.Actual ?? FormatActual(r),
+                Metric = msaType switch
+                {
+                    MsaType.Msa1 => $"Cg {FmtMetric(r.Cg)} / Cgk {FmtMetric(r.Cgk)}",
+                    MsaType.Msa3 => $"%P/T {FmtMetric(r.PctTolerance)}",
+                    _ => string.Empty,
+                },
+                Passed = r.Passed,
+            }).ToList(),
+        };
+
+    private static string FormatActual(MsaMeasurementResult r) =>
+        r.Cg?.ToString("0.###", CultureInfo.InvariantCulture)
+        ?? r.PctTolerance?.ToString("0.###", CultureInfo.InvariantCulture)
+        ?? string.Empty;
+
+    private static string FmtMetric(double? v) =>
+        v?.ToString("0.###", CultureInfo.InvariantCulture) ?? "—";
 
     private MsaReferenceFile? GetReference(string module) =>
         _references.GetOrAdd(module, m => _referenceLoader.Load(_config.Config.Msa.ReferencePath, m));

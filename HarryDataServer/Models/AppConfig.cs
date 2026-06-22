@@ -56,12 +56,17 @@ public sealed class NasConfig
     public int RetentionNgDays { get; init; } = 30;
     public int RetentionDiagnosticDays { get; init; } = 30;
     public int RetentionGoldenSampleDays { get; init; } = 30;
+
+    /// <summary>Default full-resolution image retention in days (SOW §5.2.3). Used as the
+    /// fallback for the per-type NG/Diagnostic/GoldenSample retention when those are unset.</summary>
+    public int FullResRetentionDays { get; init; } = 30;
+
     public bool DeleteAfterCollage { get; init; } = true;
 
     /// <summary>Part-exit image handling: true = delete source images; false = backup then delete.</summary>
     public bool DeletePictures { get; init; } = true;
 
-    /// <summary>Root backup folder (used when DeletePictures = false). Structure: \YYYY\MM\DD\HH\.</summary>
+    /// <summary>Root backup folder (used when DeletePictures = false). Structure: \YYYY\MM\DD\.</summary>
     public string BackupFolder { get; init; } = string.Empty;
 }
 
@@ -75,6 +80,10 @@ public sealed class CollageConfig
 
     /// <summary>Output folder for finished collages (Collage_ResultImages).</summary>
     public string ResultImagesPath { get; init; } = string.Empty;
+
+    /// <summary>Maximum collage file size in kilobytes (SOW §5.2.2). The composer
+    /// re-encodes at decreasing JPEG quality until the output fits. Default 128 KB.</summary>
+    public int MaxFileSizeKb { get; init; } = 128;
 }
 
 public sealed class SpsConfig
@@ -100,4 +109,8 @@ public sealed class MsaConfig
 {
     /// <summary>Folder holding the per-module MSA reference JSON files (relative to the config dir).</summary>
     public string ReferencePath { get; init; } = string.Empty;
+
+    /// <summary>Folder where MSA PDF reports are written (SOW §3.2.1). When empty, falls
+    /// back to <see cref="ReferencePath"/>\Reports.</summary>
+    public string ReportPath { get; init; } = string.Empty;
 }

@@ -622,6 +622,7 @@ CollagePath=Z:\Images\02_Collage\Input
 HighResNGPath=Z:\Images\03_High_Resolution_NG\Input
 HighResDiagnosticPath=Z:\Images\04_High_Resolution_Diagnostic\Input
 HighResGoldenSamplePath=Z:\Images\05_High_Resolution_GoldenSample\Input
+FullResRetentionDays=30   ; default full-res retention (SOW §5.2.3); per-type keys fall back to it
 RetentionNGDays=30
 RetentionDiagnosticDays=30
 RetentionGoldenSampleDays=30
@@ -630,6 +631,11 @@ DeleteAfterCollage=true
 [Collage]
 Collage_IniPath=D:\HarryDataServer\Collage.ini
 Collage_Generate=true
+MaxFileSizeKB=128         ; max collage output size in KB (SOW §5.2.2)
+
+[MSA]
+ReferencePath=MSA_References   ; per-module MSA_<module>.json reference files
+ReportPath=MSA_Reports         ; MSA PDF report output (SOW §3.2.1); empty → ReferencePath\Reports
 
 [SPS]
 IP=172.29.1.5
@@ -844,6 +850,7 @@ services.AddTransient<TcpCameraClient>();
 | System.Text.Json | built-in | JSON template files |
 | OxyPlot.Wpf | 2.x | Charts in MSA view and graph tool |
 | CommunityToolkit.Mvvm | 8.x | MVVM helpers |
+| QuestPDF | 2026.x | MSA PDF report generation (Community licence; SOW §3.2.1) |
 
 **Do NOT use:**
 - `MySql.Data` (use MySqlConnector instead)
@@ -942,5 +949,111 @@ Build in this sequence — each phase must compile before starting the next:
 
 ---
 
-*Last updated: 2026-06-19*
+*Last updated: 2026-06-22*
 *Authors: Customer + Claude Sonnet 4.6*
+
+---
+
+## 19. SOW Compliance — Open Items & Known Gaps
+
+> Source documents: `MP2 Vision SOW 2025-11-05.pdf` + `M1X Inspection Addendum 2026-02-18.docx`
+> Gap analysis performed 2026-06-22. Items marked CRITICAL must be resolved before FAT.
+> Items marked PRE-SAT can be deferred but must be planned now.
+
+---
+
+### 19.1 CRITICAL — Must fix before FAT
+
+#### 19.1.1 Collage file size limit (SOW §5.2.2) — ✅ DONE (2026-06-22)
+**Requirement:** Each collage must not exceed **128 KB**.
+**Implemented:** `CollageComposer` re-encodes JPEG at iteratively lower quality (start 85, step −5, min 30) until the output is ≤ the limit; a WARNING is logged if the minimum quality is reached and the file still exceeds the limit. The limit is configurable via `[Collage] MaxFileSizeKB` (default 128).
+**File:** `HarryDataServer/Infrastructure/CollageComposer.cs`, `Services/CollageService.cs`
+
+#### 19.1.2 MSA PDF reports (SOW §3.2.1) — ✅ DONE (2026-06-22)
+**Requirement:** At the end of every MSA/LimitSample run, generate **2 PDF reports**:
+- Report 1: All measurement results (name, expected, actual, pass/fail)
+- Report 2: Only failed entries
+
+**Implemented:** `PdfReportService` (QuestPDF, Community licence) generates both reports after every evaluation in `MsaService`. Files: `<Module>_<Type>_<DDMMYY_HHMMSS>_AllResults.pdf` and `_FailuresOnly.pdf`, written to `[MSA] ReportPath` (fallback `[MSA] ReferencePath\Reports`). Layout: header (module, type, run datetime, overall PASS/FAIL), table (Measurement | Expected | Actual | Cg/Cgk or %P/T | Pass/Fail), footer (generated-by + timestamp + page). The MSA tab has **Open All Results** / **Open Failures Only** buttons that open the PDF (generating on demand from the loaded run if it does not yet exist).
+**File:** `HarryDataServer/Services/PdfReportService.cs`, `MsaService.cs`, `Controls/ucMsaControl.xaml`
+
+#### 19.1.3 M1X LimitSample batch confirmation flow (Addendum §2.2)
+**Requirement:** M1X LimitSample run is NOT terminated automatically after a fixed number of parts. After each set of 4 parts is measured, the **operator must confirm** whether more parts are coming. Only after "no more parts" confirmation does the run complete.
+**Current state:** Not implemented — our LimitSample run ends after a fixed cycle count.
+**Action:** SPS channel for M1X LimitSample needs a protocol extension: after each batch of 4, send a "ready for next batch / end run?" prompt back to PLC/operator. Clarify the exact SPS signal with Harry's (which channel, what message format). This may require a new SPS channel command type.
+**File:** `HarryDataServer/Communication/TcpSpsServer.cs`, `SpsChannel.cs`
+
+---
+
+### 19.2 PRE-SAT — Must plan, can implement after FAT
+
+#### 19.2.1 Shift counter with PLC reset signal (SOW §4.3)
+**Requirement:** Three counter types per failure group:
+1. **Shift Counter** — resets on PLC "Reset" signal at shift change
+2. **Resettable Counter** — resets on operator demand (any time)
+3. **Last-Shift Counter** — snapshot of previous shift's counts
+
+**Current state:** HarryCounter tool counts NG in a date range but has no shift-reset concept.
+**Action:** Add a new SPS command type (e.g. on Ch1 KeepAlive or a dedicated channel) for `RESET_SHIFT_COUNTER`. Store shift-reset timestamps in a new `shift_events` table. HarryCounter reads counts between consecutive reset events. Discuss exact PLC signal format with Harry's.
+
+#### 19.2.2 Failure Warnings — X-in-a-row (SOW §4.4)
+**Requirement:** PLC-tracked warning when X failures of the same inspection group occur in a row (or X of Y). Warning hierarchy: Nest > Application Station > Overall Module. Components: Lubra, Frame, Anodes, Blades, Trimmer. Stations: all M50 camera stations.
+**Current state:** Not implemented.
+**Action:** Implement a sliding-window failure counter per (component × station × nest) group in `PartExitOrchestrator`. Thresholds configurable in Harry.ini (`[Warnings] X_in_a_row`, `X_of_Y_window`). Send warning flag in SPS KeepAlive response when threshold crossed. This is complex — design separately with Harry's input on threshold values.
+
+#### 19.2.3 Last NG image on dashboard (SOW §4.1)
+**Requirement:** Dashboard must show images of the last NG parts.
+**Current state:** Collage tab shows last 4 OK collages. No NG image viewer.
+**Action:** Add an "NG Images" section to the Overview or Collage tab. On part exit with NG result, load the most recent full-resolution NG image path from the backup folder and display thumbnail (frozen BitmapImage, off-thread load, same pattern as collage thumbnails). Keep last 4 NG thumbnails in a `Queue<(string path, string serial, DateTime time)>(4)`.
+**File:** `HarryDataServer/Controls/ucCollageControl.xaml`, `MainViewModel.cs`
+
+---
+
+### 19.3 CLARIFY WITH HARRY'S — Questions before/during commissioning
+
+#### 19.3.1 M1X FTP connection (SOW §5.2.1)
+**SOW note:** "New: Need connection between M1X vision to FTP server."
+**Question:** M1X camera images are not delivered via the existing TCP telegram channel. Does Harry's expect us to run an FTP server that M1X uploads to? Or will M1X push images to a shared NAS path directly? What is the agreed folder structure for M1X images?
+**Impact:** If we need to run an FTP server, this is significant new scope. Clarify before commissioning starts.
+
+#### 19.3.2 LimitSample tolerance entries for measurement values (SOW §3.2.1)
+**SOW description:** For measurement values (non-boolean), LimitSample entries can specify `[Expected value] ([Lower tolerance]; [Upper tolerance])` rather than just pass/fail.
+**Current state:** HarryLimitSample works with ShouldPass / ShouldFail / Ignore (boolean only).
+**Question:** Do any M50 or M1X measurements require numeric tolerance matching in LimitSample? If yes, HarryLimitSample needs a tolerance-entry mode and `MsaCalculator` needs a numeric comparison path.
+
+#### 19.3.3 CSV datetime format (SOW §5.1.2) — ✅ DONE (2026-06-22)
+**SOW requirement:** Datetime in filenames must be `DDMMYY_HHMMSS`.
+**Implemented:** Centralised in `Infrastructure/FileNaming.cs` (`DateTimePattern = "ddMMyy_HHmmss"`). All generated filenames now use it: main/MSA/diagnostic CSV (`CsvFileWriter`), the MSA-tab CSV export, the log export, and the companion-tool CSV exports (`HarryShared.Data.CsvExport`). MSA CSV files are labelled module + type and stamped DDMMYY_HHMMSS. GSM run subfolders use the same stamp (see §1.2.1 constants in `FileNaming`).
+**File:** `HarryDataServer/Infrastructure/{FileNaming,CsvFileWriter}.cs`
+
+#### 19.3.4 HMI tolerance adjustment (SOW §4.1)
+**SOW requirement:** All tolerances (limits) visible and adjustable on HMI, passcode-protected.
+**Current state:** Limits come from Keyence Settings telegrams and are stored in the `settings` table. Our dashboard shows them read-only.
+**Question:** Does Harry's expect limits to be writable FROM our WPF dashboard (and pushed back to the Keyence controller)? Or is the Keyence HMI the only place for limit adjustment, and our dashboard just displays them? This is a significant scope difference.
+
+#### 19.3.5 M1X 4-parts-in-1-image filename (SOW §5.2.2)
+**SOW requirement:** M1X captures 4 nests in one image. Filename must include all 4 parts' SZIDs.
+**Current state:** Our image file-matching logic uses the 12-char SZID prefix per part. M1X images with 4 SZIDs in the filename won't match this pattern.
+**Question:** What is the exact filename format Harry's will use for M1X multi-part images? Our `ImageHandler` needs a special matching rule for M1X images.
+
+---
+
+### 19.4 VERIFY DURING TESTING — Implementation checks
+
+These items are implemented but need on-site verification:
+
+| Check | What to verify | File |
+|-------|---------------|------|
+| Collage sources M2X + M50 only | M1X images must NOT appear in collage | `CollageComposer.cs` |
+| GSM CSV folder name | Must be "Golden Sample Data" with subfolder TestType+DDMMYY_HHMMSS+Module (constants in `FileNaming`) | `Infrastructure/FileNaming.cs` |
+| GSM images folder | Must be "Golden Sample Images" with run subfolder (constants in `FileNaming`) | `Infrastructure/FileNaming.cs` |
+| Full-res retention configurable | Default 30 days via `[NAS] FullResRetentionDays`; per-type NG/Diag/GSM keys fall back to it | `ImageCleanupService.cs` |
+| Backup folder YYYY\MM\DD structure | Year/month/day subfolders (no hour level) | `ImageHandler.cs` |
+| Low-res delete after collage | For OK parts: individual BMP deleted after confirmed collage write | `ImageHandler.cs` |
+| Low-res delete for NG | NG parts: low-res kept at part exit; deleted only when the matching full-res NG image is deleted (linked by 12-char serial prefix) | `ImageCleanupService.cs`, `PartExitOrchestrator.cs` |
+| Humidity stored per part | m1x_humidity in dmcserial populated from telegram | `PartExitProcessor.cs` |
+
+> **MSA cycle count is not configured by us.** The number of measurements per MSA run
+> (≈50 for MSA1, 3 per part for MSA3, batch-driven for LimitSample) is controlled entirely
+> by the SPS/PLC. We receive every measurement via TCP and aggregate by BaseID, so the
+> evaluation works for any number of measurements — there is no cycle-count INI key.

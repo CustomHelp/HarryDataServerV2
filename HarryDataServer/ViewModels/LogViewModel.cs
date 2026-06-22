@@ -120,7 +120,7 @@ public sealed partial class LogViewModel : ObservableObject
         {
             var dir = string.IsNullOrWhiteSpace(_logPath) ? AppContext.BaseDirectory : _logPath;
             Directory.CreateDirectory(dir);
-            var file = Path.Combine(dir, $"Log_Export_{DateTime.Now:yyyy-MM-dd_HH-mm}.txt");
+            var file = Path.Combine(dir, $"Log_Export_{DateTime.Now:ddMMyy_HHmmss}.txt");
 
             var sb = new StringBuilder();
             foreach (var entry in Entries)

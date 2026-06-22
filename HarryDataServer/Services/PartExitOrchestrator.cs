@@ -111,12 +111,14 @@ public sealed class PartExitOrchestrator : IPartExitOrchestrator
 
             await Task.WhenAll(csvTask, collageTask, imageTask).ConfigureAwait(false);
         }
-        else // NG (or deleted): CSV + images, no collage.
+        else // NG (or deleted): CSV only.
         {
-            imageTask = RunImagesAfterAsync(null, serials, collage.SingleImagesPath,
-                nas.DeletePictures, nas.BackupFolder, ms => imageMs = ms, ct);
+            // SOW §5.2.3: NG parts produce no collage, so their low-res individual images
+            // are NOT deleted here. They are kept and removed later by ImageCleanupService,
+            // together with the matching full-res NG image (linked by serial prefix).
+            imageTask = Task.FromResult(true);
 
-            await Task.WhenAll(csvTask, imageTask).ConfigureAwait(false);
+            await csvTask.ConfigureAwait(false);
         }
 
         total.Stop();

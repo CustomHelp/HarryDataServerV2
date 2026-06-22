@@ -1,6 +1,6 @@
 # HarryDataServer V2 — Implementation Status
 
-*Last updated: 2026-06-20*
+*Last updated: 2026-06-22*
 
 > **Companion tools:** see **`COMPANION_TOOLS.md`** for the build guide (status, conventions,
 > DB schema, per-tool spec, and the on-site live-test checklist).
@@ -343,6 +343,56 @@ walks `DatabaseSchema.ExpectedIndexes`, checks each against `INFORMATION_SCHEMA.
 and runs `CREATE INDEX` for any that are missing (logged at Information level). MySQL has
 **no `CREATE INDEX IF NOT EXISTS`**, so the existence check substitutes for it. A new index
 now deploys by a code change alone — no manual SQL, no production stop (CLAUDE.md §8).
+
+---
+
+## SOW compliance pass (2026-06-22)
+
+Closed several SOW gaps from CLAUDE.md §19 and tightened filename/folder conventions.
+
+1. **Collage 128 KB size limit (SOW §5.2.2)** — `CollageComposer` now enforces a max
+   output size for JPEG collages: it re-encodes at decreasing quality (start 85, step −5,
+   min 30) until the file fits, logging a WARNING if the minimum quality is reached and the
+   file still exceeds the limit. Configurable via `[Collage] MaxFileSizeKB` (default 128).
+2. **Filename datetime DDMMYY_HHMMSS (SOW §5.1.2)** — new `Infrastructure/FileNaming.cs`
+   centralises the pattern (`ddMMyy_HHmmss`). Applied to main/MSA/diagnostic CSV
+   (`CsvFileWriter`), the MSA-tab CSV export, the log export, and the companion-tool CSV
+   exports (`HarryShared.Data.CsvExport`). MSA CSV files are labelled module + type.
+3. **Backup folder structure (SOW §5.2.3)** — `ImageHandler` backup path is now
+   `BackupFolder\YYYY\MM\DD\` (dropped the `\HH\` level).
+4. **GSM folder names (SOW §1.2.1)** — exact constants in `FileNaming`:
+   `Golden Sample Data`, `Golden Sample Images`, and the per-run subfolder
+   `<TestType>_<DDMMYY_HHMMSS>_<Module>` (e.g. `MSA1_220626_143022_M50`). No magic strings.
+5. **NG low-res deletion linkage (SOW §5.2.3)** — NG parts no longer delete their low-res
+   individual images at part exit (`PartExitOrchestrator` NG branch is CSV-only now). Instead
+   `ImageCleanupService`, when it deletes an aged full-res NG image, also deletes the matching
+   low-res images (linked by the 12-char serial prefix). OK-part behaviour is unchanged
+   (low-res consumed/deleted after collage).
+6. **MSA PDF reports (SOW §3.2.1)** — new `IPdfReportService`/`PdfReportService` (QuestPDF
+   2026.6.0, Community licence). After every MSA evaluation, `MsaService` writes two PDFs:
+   `<Module>_<Type>_<DDMMYY_HHMMSS>_AllResults.pdf` and `_FailuresOnly.pdf`, to
+   `[MSA] ReportPath` (fallback `[MSA] ReferencePath\Reports`). Layout: header (module/type/
+   run datetime/overall PASS-FAIL), table (Measurement | Expected | Actual | Cg/Cgk or %P/T |
+   Pass/Fail), footer (generated-by + timestamp + page). Registered Singleton in `App.xaml.cs`.
+7. **PDF buttons in the MSA tab** — `ucMsaControl` gained **Open All Results** /
+   **Open Failures Only** per run (plain `Button`, same implicit dark-theme style as the Log
+   tab / Export CSV). They open the PDF in the default viewer, generating it on demand from
+   the loaded run if it doesn't exist yet. Wired `IPdfReportService` through
+   MainViewModel → MsaViewModel → MsaModuleViewModel → MsaRunsViewModel.
+8. **Unified button style** — verified: every toggle/action button across the suite uses the
+   implicit `Button`/`ToggleButton` styles (no per-button overrides anywhere). The companion
+   tools consume `HarryShared/Themes/DarkTheme.xaml`; HarryDataServer's own theme defines the
+   identical styles. New PDF buttons follow the same pattern.
+9. **New INI keys** — `[MSA] ReportPath`, `[Collage] MaxFileSizeKB=128`,
+   `[NAS] FullResRetentionDays=30` (the per-type NG/Diagnostic/GoldenSample retentions now
+   fall back to `FullResRetentionDays` when unset). Added to `AppConfig`, `IniConfigManager`,
+   and the `Harry.ini` template.
+10. **MSA cycle count** — confirmed there is no hardcoded cycle count or INI key; `MsaService`
+    aggregates all measurements for a BaseID regardless of count (SPS/PLC controls the count).
+    The §19.4 verify note was updated to record this.
+
+New files: `Infrastructure/FileNaming.cs`, `Services/{IPdfReportService,PdfReportService}.cs`,
+`Models/MsaReport.cs`. Full solution builds **0 warnings / 0 errors**.
 
 ---
 

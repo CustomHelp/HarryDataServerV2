@@ -29,11 +29,12 @@ public sealed class ImageHandler
         if (files.Count == 0)
             return true;
 
-        // One timestamped backup subfolder for the whole part (BackupFolder\YYYY\MM\DD\HH\).
+        // Backup subfolder for the whole part: BackupFolder\YYYY\MM\DD\ (SOW §5.2.3,
+        // e.g. Z:\03_High_Resolution_NG\2025\07\01). No hour level.
         var now = DateTime.Now;
         var backupDir = string.IsNullOrWhiteSpace(backupFolder)
             ? null
-            : Path.Combine(backupFolder, now.ToString("yyyy"), now.ToString("MM"), now.ToString("dd"), now.ToString("HH"));
+            : Path.Combine(backupFolder, now.ToString("yyyy"), now.ToString("MM"), now.ToString("dd"));
 
         var ok = true;
         foreach (var file in files)

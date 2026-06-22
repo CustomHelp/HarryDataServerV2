@@ -182,6 +182,7 @@ public partial class App : Application
         // --- Image cleanup (Phase 8) + MSA engine (Phase 10) ---
         services.AddSingleton<IImageCleanupService, ImageCleanupService>();
         services.AddSingleton<MsaReferenceLoader>();
+        services.AddSingleton<IPdfReportService, PdfReportService>();
         services.AddSingleton<IMsaService, MsaService>();
 
         // --- Collage generator (Phase 9) ---

@@ -52,6 +52,7 @@ public sealed class IniConfigManager
         return new MsaConfig
         {
             ReferencePath = ResolvePath(Str(s, "ReferencePath", string.Empty), configDir),
+            ReportPath = ResolvePath(Str(s, "ReportPath", string.Empty), configDir),
         };
     }
 
@@ -106,6 +107,8 @@ public sealed class IniConfigManager
     private static NasConfig ParseNas(IniData data)
     {
         var s = data["NAS"];
+        // Default full-res retention; the per-type retentions fall back to it when unset.
+        var fullRes = Int(s, "FullResRetentionDays", 30);
         return new NasConfig
         {
             BasePath = Str(s, "NAS_BasePath", string.Empty),
@@ -114,9 +117,10 @@ public sealed class IniConfigManager
             HighResNgPath = Str(s, "HighResNGPath", string.Empty),
             HighResDiagnosticPath = Str(s, "HighResDiagnosticPath", string.Empty),
             HighResGoldenSamplePath = Str(s, "HighResGoldenSamplePath", string.Empty),
-            RetentionNgDays = Int(s, "RetentionNGDays", 30),
-            RetentionDiagnosticDays = Int(s, "RetentionDiagnosticDays", 30),
-            RetentionGoldenSampleDays = Int(s, "RetentionGoldenSampleDays", 30),
+            FullResRetentionDays = fullRes,
+            RetentionNgDays = Int(s, "RetentionNGDays", fullRes),
+            RetentionDiagnosticDays = Int(s, "RetentionDiagnosticDays", fullRes),
+            RetentionGoldenSampleDays = Int(s, "RetentionGoldenSampleDays", fullRes),
             DeleteAfterCollage = Bool(s, "DeleteAfterCollage", true),
             DeletePictures = Bool(s, "DeletePictures", true),
             BackupFolder = Str(s, "BackupFolder", string.Empty),
@@ -132,6 +136,7 @@ public sealed class IniConfigManager
             Generate = Bool(s, "Collage_Generate", true),
             SingleImagesPath = Str(s, "Collage_SingleImages", string.Empty),
             ResultImagesPath = Str(s, "Collage_ResultImages", string.Empty),
+            MaxFileSizeKb = Int(s, "MaxFileSizeKB", 128),
         };
     }
 

@@ -77,7 +77,10 @@ public sealed class ImageCleanupService : IImageCleanupService
     {
         var nas = _config.Config.Nas;
 
-        DeleteAgedFiles(nas.HighResNgPath, nas.RetentionNgDays);
+        // NG full-res images also drag their linked low-res individual images with them
+        // (SOW §5.2.3): NG parts produce no collage, so the low-res images are kept until
+        // the matching full-res NG image is deleted here — never earlier.
+        DeleteAgedNgImages(nas.HighResNgPath, nas.LowResIndividualPath, nas.RetentionNgDays);
         DeleteAgedFiles(nas.HighResDiagnosticPath, nas.RetentionDiagnosticDays);
         DeleteAgedFiles(nas.HighResGoldenSamplePath, nas.RetentionGoldenSampleDays);
 
@@ -89,6 +92,75 @@ public sealed class ImageCleanupService : IImageCleanupService
                 await _partitions.DropOldPartitionsAsync(table, days, ct).ConfigureAwait(false);
         }
     }
+
+    /// <summary>
+    /// Delete aged full-resolution NG images and, for each one removed, the matching
+    /// low-resolution individual images (linked by the 12-char serial prefix, SOW §5.2.3).
+    /// The low-res images of an NG part are deliberately retained until this point — they
+    /// are not deleted at part exit because no collage consumes them.
+    /// </summary>
+    private void DeleteAgedNgImages(string ngDirectory, string lowResDirectory, int retentionDays)
+    {
+        if (retentionDays <= 0 || string.IsNullOrWhiteSpace(ngDirectory) || !Directory.Exists(ngDirectory))
+            return;
+
+        var cutoff = DateTime.Now.AddDays(-retentionDays);
+        var deletedNg = 0;
+        var deletedLowRes = 0;
+
+        foreach (var file in EnumerateFilesSafe(ngDirectory))
+        {
+            try
+            {
+                if (File.GetLastWriteTime(file) >= cutoff)
+                    continue;
+
+                var prefix = SerialPrefix(Path.GetFileName(file));
+                File.Delete(file);
+                deletedNg++;
+                deletedLowRes += DeleteLowResByPrefix(lowResDirectory, prefix);
+            }
+            catch (Exception ex)
+            {
+                _log.Debug("Could not delete NG image {File}: {Message}", file, ex.Message);
+            }
+        }
+
+        if (deletedNg > 0)
+            _log.Information("Retention: deleted {Ng} NG image(s) + {Low} linked low-res image(s) older than {Days} days in {Dir}.",
+                deletedNg, deletedLowRes, retentionDays, ngDirectory);
+    }
+
+    /// <summary>Delete every low-res image whose filename starts with the given 12-char serial prefix.</summary>
+    private int DeleteLowResByPrefix(string lowResDirectory, string? serialPrefix)
+    {
+        if (string.IsNullOrEmpty(serialPrefix) || string.IsNullOrWhiteSpace(lowResDirectory) || !Directory.Exists(lowResDirectory))
+            return 0;
+
+        var deleted = 0;
+        foreach (var file in EnumerateFilesSafe(lowResDirectory))
+        {
+            if (!Path.GetFileName(file).StartsWith(serialPrefix, StringComparison.OrdinalIgnoreCase))
+                continue;
+            try
+            {
+                File.Delete(file);
+                deleted++;
+            }
+            catch (Exception ex)
+            {
+                _log.Debug("Could not delete linked low-res image {File}: {Message}", file, ex.Message);
+            }
+        }
+        return deleted;
+    }
+
+    /// <summary>
+    /// The image search key (CLAUDE.md §6/§11): the first 12 characters of the serial,
+    /// which every related image filename starts with. Null if the name is too short.
+    /// </summary>
+    private static string? SerialPrefix(string fileName) =>
+        fileName.Length >= 12 ? fileName[..12] : null;
 
     /// <summary>Delete files older than <paramref name="retentionDays"/> under a directory tree.</summary>
     private void DeleteAgedFiles(string directory, int retentionDays)

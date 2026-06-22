@@ -6,12 +6,12 @@ namespace HarryDataServer.ViewModels;
 /// <summary>One module's MSA view (M10..M50): three run views (MSA1, MSA3, LimitSample).</summary>
 public sealed class MsaModuleViewModel
 {
-    public MsaModuleViewModel(IMsaService msa, string module)
+    public MsaModuleViewModel(IMsaService msa, string module, IPdfReportService pdf)
     {
         Module = module;
-        Msa1 = new MsaRunsViewModel(msa, module, MsaType.Msa1);
-        Msa3 = new MsaRunsViewModel(msa, module, MsaType.Msa3);
-        LimitSample = new MsaRunsViewModel(msa, module, MsaType.LimitSample);
+        Msa1 = new MsaRunsViewModel(msa, module, MsaType.Msa1, pdf);
+        Msa3 = new MsaRunsViewModel(msa, module, MsaType.Msa3, pdf);
+        LimitSample = new MsaRunsViewModel(msa, module, MsaType.LimitSample, pdf);
     }
 
     public string Module { get; }

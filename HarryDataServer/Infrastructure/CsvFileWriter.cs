@@ -86,7 +86,8 @@ public sealed class CsvFileWriter : IDisposable
             : _baseDir;
         Directory.CreateDirectory(dir);
 
-        var baseName = $"{now:yyyy-MM-dd-HH-mm-ss}-{_fileLabel}";
+        // SOW §5.1.2: datetime token in the filename is DDMMYY_HHMMSS.
+        var baseName = $"{FileNaming.Stamp(now)}_{_fileLabel}";
         var path = Path.Combine(dir, baseName + ".csv");
 
         // Avoid clobbering a file created in the same second.

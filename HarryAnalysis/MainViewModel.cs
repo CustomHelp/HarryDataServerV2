@@ -168,7 +168,7 @@ public partial class MainViewModel : ObservableObject
         var dialog = new SaveFileDialog
         {
             Filter = "CSV files (*.csv)|*.csv",
-            FileName = $"Analysis_{Sanitize(dmc)}_{DateTime.Now:yyyy-MM-dd}.csv",
+            FileName = $"Analysis_{Sanitize(dmc)}_{DateTime.Now:ddMMyy_HHmmss}.csv",
             InitialDirectory = defaultDir,
         };
         if (dialog.ShowDialog() != true)
@@ -206,7 +206,7 @@ public partial class MainViewModel : ObservableObject
         var dialog = new SaveFileDialog
         {
             Filter = "CSV files (*.csv)|*.csv",
-            FileName = $"Analysis_All_{DateTime.Now:yyyy-MM-dd_HH-mm}.csv",
+            FileName = $"Analysis_All_{DateTime.Now:ddMMyy_HHmmss}.csv",
             InitialDirectory = defaultDir,
         };
         if (dialog.ShowDialog() != true)

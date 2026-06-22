@@ -8,10 +8,10 @@ public sealed class MsaViewModel
 {
     private static readonly string[] ModuleKeys = { "M10", "M11", "M20", "M21", "M50" };
 
-    public MsaViewModel(IMsaService msa)
+    public MsaViewModel(IMsaService msa, IPdfReportService pdf)
     {
         Modules = new ObservableCollection<MsaModuleViewModel>(
-            ModuleKeys.Select(m => new MsaModuleViewModel(msa, m)));
+            ModuleKeys.Select(m => new MsaModuleViewModel(msa, m, pdf)));
     }
 
     public ObservableCollection<MsaModuleViewModel> Modules { get; }
