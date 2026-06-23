@@ -104,16 +104,15 @@ public sealed class MsaService : IMsaService
         if (!telegram.IsMsa)
             return; // production telegrams handled by MeasurementProcessor
 
-        var dmc = telegram.Serial1;       // DMC of the test part
-        var baseId = telegram.Serial2;    // BaseID
-        if (string.IsNullOrWhiteSpace(dmc) || string.IsNullOrWhiteSpace(baseId))
+        // MSA serial layout: Serial1 (pos 4–35) = BaseID(14) + loop(3); Serial2 (pos 36–67) = DMC.
+        var dmc = telegram.Serial2;       // DMC of the test part
+        if (!BaseId.TrySplitRun(telegram.Serial1, out var baseId, out var loop) || string.IsNullOrWhiteSpace(dmc))
         {
-            _log.Debug("{Camera}: MSA telegram missing DMC/BaseID; skipped.", telegram.ControllerName);
+            _log.Debug("{Camera}: MSA telegram missing/invalid BaseID or DMC; skipped.", telegram.ControllerName);
             return;
         }
 
         var msaType = MsaTypeExtensions.FromMode(telegram.Mode);
-        var loop = BaseId.TryParse(baseId) is { } b ? b.Loop1 * 100 + b.Loop2 * 10 + b.Loop3 : 0;
         var measuredAt = DateTime.Now;
 
         // Combine R_/V_ pairs the same way as production measurements.
@@ -349,7 +348,7 @@ ORDER BY evaluated_at, base_id, id;";
         try
         {
             await using var conn = await _database.OpenConnectionAsync(ct).ConfigureAwait(false);
-            var rows = await GatherAsync(conn, baseId, ct).ConfigureAwait(false);
+            var rows = await GatherAsync(conn, module, baseId, ct).ConfigureAwait(false);
             if (rows.Count == 0)
             {
                 _evaluations[baseId] = "Error;no MSA data for BaseID";
@@ -441,7 +440,13 @@ ORDER BY evaluated_at, base_id, id;";
         int DefinitionId, string Dmc, double? Value, int? ResultStatus,
         string MsaType, string? MsaVersion, string DisplayName, int ParameterSet, int CameraId, string CameraName);
 
-    private static async Task<List<MsaRow>> GatherAsync(MySqlConnection conn, string baseId, CancellationToken ct)
+    /// <summary>
+    /// Collect every measurement of one MSA run. The run is identified by an EXACT match on
+    /// the 14-char <paramref name="baseId"/> (never LIKE/prefix). It is additionally scoped to
+    /// the requesting module via <c>controller_name</c> (one run = one module = one msa_type),
+    /// so a BaseID can never pull rows from another module even in an edge case (task 3).
+    /// </summary>
+    private static async Task<List<MsaRow>> GatherAsync(MySqlConnection conn, string module, string baseId, CancellationToken ct)
     {
         const string sql = @"
 SELECT m.definition_id, m.dmc, m.measurement_value, m.result_status, m.msa_type, m.msa_version,
@@ -449,11 +454,12 @@ SELECT m.definition_id, m.dmc, m.measurement_value, m.result_status, m.msa_type,
 FROM msa_measurements m
 JOIN measurement_definitions md ON md.id = m.definition_id
 JOIN cameras c ON c.id = md.camera_id
-WHERE m.base_id = @b;";
+WHERE m.base_id = @b AND m.controller_name LIKE @mod;";
 
         var rows = new List<MsaRow>();
         await using var cmd = new MySqlCommand(sql, conn);
         cmd.Parameters.AddWithValue("@b", baseId);
+        cmd.Parameters.AddWithValue("@mod", module + "%");
         await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
         while (await reader.ReadAsync(ct).ConfigureAwait(false))
         {

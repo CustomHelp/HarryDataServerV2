@@ -236,8 +236,8 @@
 |--------|------|----------|-----|---------|-------------|
 | id | bigint | NO | PRI | — | Surrogate primary key (AUTO_INCREMENT). |
 | dmc | varchar(50) | NO | MUL | — | DMC of the test part. |
-| base_id | varchar(50) | NO | | — | 19-char BaseID identifying the MSA run. |
-| loop_number | int | NO | | — | Repeat/loop index of the measurement. |
+| base_id | varchar(50) | NO | MUL | — | 14-char BaseID (MMYYMMDDHHmmSS) identifying the MSA run. Never stored with the loop counter appended. |
+| loop_number | int | NO | | — | 3-digit per-loop counter, parsed from the run serial field. |
 | controller_name | varchar(100) | NO | MUL | — | Camera controller name. |
 | definition_id | int | NO | | — | Measurement definition (logical → `measurement_definitions.id`). |
 | measurement_value | double | YES | | — | Measured value. |
@@ -252,8 +252,12 @@
 |------------|---------|------|
 | PRIMARY | id | BTREE (UNIQUE) |
 | idx_dmc_baseid | dmc, base_id | BTREE |
+| idx_baseid_controller | base_id, controller_name | BTREE |
 | idx_controller | controller_name | BTREE |
 | idx_measured | measured_at | BTREE |
+
+> `idx_baseid_controller` supports the MSA completion handler's exact lookup
+> (`WHERE base_id = @x AND controller_name LIKE 'M50%'`).
 
 **Partitioning:** NONE
 
@@ -269,7 +273,7 @@
 | id | int | NO | PRI | — | Surrogate primary key (AUTO_INCREMENT). |
 | controller_name | varchar(100) | NO | MUL | — | Camera controller name. |
 | dmc | varchar(50) | NO | MUL | — | DMC of the evaluated part. |
-| base_id | varchar(50) | NO | MUL | — | BaseID of the MSA run (a run = rows sharing base_id). |
+| base_id | varchar(50) | NO | MUL | — | 14-char BaseID of the MSA run (a run = rows sharing base_id). |
 | msa_type | varchar(20) | NO | | — | `MSA1`, `MSA3` or `LimitSample`. |
 | msa_version | varchar(50) | YES | | — | MSA reference version. |
 | definition_id | int | NO | | — | Measurement definition (logical → `measurement_definitions.id`). |

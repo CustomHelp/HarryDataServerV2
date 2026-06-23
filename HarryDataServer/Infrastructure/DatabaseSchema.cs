@@ -99,8 +99,10 @@ public static class DatabaseSchema
         new IndexSpec("measurements_serial_trimmer", "idx_trimmer_measured", "serial_trimmer, measured_at"),
         new IndexSpec("measurements_serial_trimmer", "idx_def_measured", "definition_id, measured_at"),
 
-        // msa_measurements — raw MSA samples.
+        // msa_measurements — raw MSA samples. idx_baseid_controller serves the MSA completion
+        // handler's exact lookup: WHERE base_id = @x AND controller_name LIKE 'M50%' (task 2b/3).
         new IndexSpec("msa_measurements", "idx_dmc_baseid", "dmc, base_id"),
+        new IndexSpec("msa_measurements", "idx_baseid_controller", "base_id, controller_name"),
         new IndexSpec("msa_measurements", "idx_controller", "controller_name"),
         new IndexSpec("msa_measurements", "idx_measured", "measured_at"),
 
@@ -349,8 +351,8 @@ PARTITION BY RANGE (TO_DAYS(measured_at)) (
         {
             new("id", "BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY"),
             new("dmc", "VARCHAR(50) NOT NULL"),
-            new("base_id", "VARCHAR(50) NOT NULL"),
-            new("loop_number", "INT NOT NULL"),
+            new("base_id", "VARCHAR(50) NOT NULL"),         // 14-char BaseID (MMYYMMDDHHmmSS), never with the loop counter
+            new("loop_number", "INT NOT NULL"),             // 3-digit per-loop counter parsed from the run serial field
             new("controller_name", "VARCHAR(100) NOT NULL"),
             new("definition_id", "INT NOT NULL"),
             new("measurement_value", "DOUBLE NULL"),
@@ -364,8 +366,8 @@ PARTITION BY RANGE (TO_DAYS(measured_at)) (
 CREATE TABLE IF NOT EXISTS msa_measurements (
   id                 BIGINT       NOT NULL AUTO_INCREMENT,
   dmc                VARCHAR(50)  NOT NULL,
-  base_id            VARCHAR(50)  NOT NULL,
-  loop_number        INT          NOT NULL,
+  base_id            VARCHAR(50)  NOT NULL,   -- 14-char BaseID (MMYYMMDDHHmmSS); the loop counter is stored separately
+  loop_number        INT          NOT NULL,   -- 3-digit per-loop counter from the run serial field
   controller_name    VARCHAR(100) NOT NULL,
   definition_id      INT          NOT NULL,
   measurement_value  DOUBLE,
@@ -376,6 +378,7 @@ CREATE TABLE IF NOT EXISTS msa_measurements (
   measured_at        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   INDEX idx_dmc_baseid (dmc, base_id),
+  INDEX idx_baseid_controller (base_id, controller_name),
   INDEX idx_controller (controller_name),
   INDEX idx_measured (measured_at)
 ) ENGINE=InnoDB {DefaultCharset};",

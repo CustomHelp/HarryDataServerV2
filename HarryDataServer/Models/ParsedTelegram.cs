@@ -32,13 +32,15 @@ public sealed class ParsedTelegram
     public CameraOperatingMode Mode { get; init; }
 
     /// <summary>
-    /// Positions 4–35: SZID / Virtual Serial in Normal mode, DMC of the test part
-    /// in MSA modes. Empty if the telegram is too short (e.g. Settings).
+    /// Positions 4–35: SZID / Virtual Serial in Normal mode; in MSA modes this carries the
+    /// BaseID (14 chars) followed by the 3-digit loop counter (split via
+    /// <see cref="BaseId.TrySplitRun"/>). Empty if the telegram is too short (e.g. Settings).
     /// </summary>
     public string Serial1 { get; init; } = string.Empty;
 
     /// <summary>
-    /// Positions 36–67: Virtual Serial (M20/M21) in Normal mode, BaseID in MSA modes.
+    /// Positions 36–67: Virtual Serial (M20/M21) in Normal mode; the DMC of the test part
+    /// in MSA modes.
     /// </summary>
     public string Serial2 { get; init; } = string.Empty;
 

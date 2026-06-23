@@ -396,6 +396,51 @@ New files: `Infrastructure/FileNaming.cs`, `Services/{IPdfReportService,PdfRepor
 
 ---
 
+## BaseID 14-char format + MSA pipeline audit (2026-06-23)
+
+The BaseID format changed: the old 19-char form (with TrayRow/TrayCol/Loop1-3) is gone.
+BaseID is now **14 chars** `MMYYMMDDHHmmSS` (e.g. `10260623083000` = M10, 2026-06-23,
+08:30:00). During a run each loop telegram appends a **3-digit loop counter** to the BaseID
+in the serial field; the completion signal `Request;<BaseID>` carries the **bare 14 chars**.
+
+1. **Telegram serial layout (MSA modes) — swapped + reformatted.** Serial field 1 (positions
+   4–35) now carries `BaseID(14)+loop(3)`; serial field 2 (36–67) carries the DMC. New
+   `BaseId.TrySplitRun` splits the run serial into the 14-char `base_id` + integer
+   `loop_number`. `BaseId` rewritten to the 14-char model (Module/Year/…/Second; Tray/Loop
+   fields removed). `MsaService.OnResultsReceived` updated accordingly; `ParsedTelegram`
+   doc-comments corrected. (`Models/BaseId.cs`, `Models/ParsedTelegram.cs`,
+   `Services/MsaService.cs`)
+2. **Storage separation verified.** `msa_measurements.base_id` stores **only** the 14-char
+   BaseID; the 3-digit counter goes to `loop_number` (int). Confirmed in the insert path.
+3. **Schema / auto-migration.** Added composite index
+   `msa_measurements.idx_baseid_controller (base_id, controller_name)` to the CREATE +
+   `ExpectedIndexes` so the startup index-check applies it to existing DBs too; column
+   comments clarified (`base_id` = 14-char, never with loop). (`Infrastructure/DatabaseSchema.cs`)
+4. **Completion handler.** `Request;<14-char BaseID>` → aggregate `msa_measurements` on an
+   **exact** `base_id = @x` match (never LIKE/prefix), additionally scoped by
+   `controller_name LIKE '<module>%'` (one run = one module = one msa_type). (`MsaService.GatherAsync`)
+5. **MSA calculation audited.** Cg/Cgk (MSA1, pass ≥1.33), %Tolerance (MSA3, pass ≤20%),
+   LimitSample (100% rejection) confirmed against the SOW. `MsaCalculator.Msa3` computes
+   DoF **dynamically** as Σ(measurementsPerPart−1) — it does **not** assume a fixed cycle
+   count, so it is correct for any number of parts/loops (e.g. 30×3 → 60 or 32×3 → 64). The
+   evaluation aggregates all loops for a base_id regardless of count.
+6. **MoverNumber.** No `Mover`/`MoverNumber`/`MoverNr` references exist in the solution
+   (verified by search) — nothing to remove on our side. (Keyence Fieldbus byte 66 is the
+   controller's concern, not ours.)
+7. **MSA-vs-production routing hardened.** `MeasurementProcessor` (Normal-only) and
+   `MsaService` (MSA-only) already split cleanly. **Fixed a leak:** `PartExitOrchestrator`
+   previously wrote `dmcserial` *before* the MSA check — the MSA guard now runs first, so MSA
+   test parts never touch production tables (CSV/Collage/Images skipped too). MSA data →
+   `msa_measurements` + `msa_results` only. (`Services/PartExitOrchestrator.cs`)
+8. **PDF reports verified.** Both on-eval and on-demand generation build from the base_id
+   aggregation; the on-demand path (`MsaRunsViewModel` → `MsaReportData.FromRun`) uses the
+   stored 14-char base_id — no length assumptions. (`Models/MsaReport.cs`, `Services/MsaService.cs`)
+
+Docs updated: `CLAUDE.md` §4/§5/§6/§7/§8, `DATABASE_SCHEMA.md` (msa_measurements/msa_results).
+Full solution builds **0 warnings / 0 errors**.
+
+---
+
 ## Build & Repo
 - `dotnet build HarryDataServer.sln -c Release` → 0 warnings, 0 errors (`net8.0-windows`).
 - Branch `main`, pushed to `https://github.com/CustomHelp/HarryDataServerV2`.

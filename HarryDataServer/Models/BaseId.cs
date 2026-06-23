@@ -3,11 +3,21 @@ using System.Globalization;
 namespace HarryDataServer.Models;
 
 /// <summary>
-/// The 19-character BaseID that identifies an MSA run (CLAUDE.md section 6),
-/// e.g. <c>5026061608560272010</c>.
+/// The 14-character BaseID that identifies an MSA run (CLAUDE.md section 6),
+/// format <c>MMYYMMDDHHmmSS</c>, e.g. <c>10260623083000</c> = M10, 2026-06-23, 08:30:00.
+/// During a run each loop telegram appends a 3-digit loop counter (001, 002, …) to the
+/// BaseID in the serial field; that counter is parsed out separately by
+/// <see cref="TrySplitRun"/> and stored in <c>msa_measurements.loop_number</c>. The
+/// BaseID itself (these 14 chars) stays constant across all stations and loops of a run.
 /// </summary>
 public sealed class BaseId
 {
+    /// <summary>Length of the BaseID itself (MMYYMMDDHHmmSS).</summary>
+    public const int Length = 14;
+
+    /// <summary>Length of the loop counter appended to the BaseID in run telegrams.</summary>
+    public const int LoopLength = 3;
+
     public required string Raw { get; init; }
     public int Module { get; init; }
     public int Year { get; init; }
@@ -16,22 +26,22 @@ public sealed class BaseId
     public int Hour { get; init; }
     public int Minute { get; init; }
     public int Second { get; init; }
-    public int TrayRow { get; init; }
-    public int TrayCol { get; init; }
-    public int Loop1 { get; init; }
-    public int Loop2 { get; init; }
-    public int Loop3 { get; init; }
 
+    /// <summary>Parse a bare 14-char BaseID (no loop counter), e.g. from the SPS completion request.</summary>
     public static BaseId? TryParse(string raw)
     {
-        if (string.IsNullOrWhiteSpace(raw) || raw.Length != 19 || !raw.All(char.IsDigit))
+        if (string.IsNullOrWhiteSpace(raw))
             return null;
 
-        int N(int start, int len) => int.Parse(raw.Substring(start, len), CultureInfo.InvariantCulture);
+        var s = raw.Trim();
+        if (s.Length != Length || !s.All(char.IsDigit))
+            return null;
+
+        int N(int start, int len) => int.Parse(s.Substring(start, len), CultureInfo.InvariantCulture);
 
         return new BaseId
         {
-            Raw = raw,
+            Raw = s,
             Module = N(0, 2),
             Year = N(2, 2),
             Month = N(4, 2),
@@ -39,11 +49,41 @@ public sealed class BaseId
             Hour = N(8, 2),
             Minute = N(10, 2),
             Second = N(12, 2),
-            TrayRow = N(14, 1),
-            TrayCol = N(15, 1),
-            Loop1 = N(16, 1),
-            Loop2 = N(17, 1),
-            Loop3 = N(18, 1),
         };
+    }
+
+    /// <summary>
+    /// Split a run serial field ("&lt;14-char BaseID&gt;&lt;3-digit loop&gt;", e.g. <c>10260623083000001</c>)
+    /// into the 14-char <paramref name="baseId"/> and the integer <paramref name="loopNumber"/>.
+    /// The BaseID returned never includes the loop counter. Returns false if the field does
+    /// not start with 14 numeric BaseID characters.
+    /// </summary>
+    public static bool TrySplitRun(string serialField, out string baseId, out int loopNumber)
+    {
+        baseId = string.Empty;
+        loopNumber = 0;
+
+        if (string.IsNullOrWhiteSpace(serialField))
+            return false;
+
+        var s = serialField.Trim();
+        if (s.Length < Length)
+            return false;
+
+        var head = s.Substring(0, Length);
+        if (!head.All(char.IsDigit))
+            return false;
+
+        baseId = head;
+
+        if (s.Length > Length)
+        {
+            var loopPart = s.Substring(Length);
+            if (loopPart.Length > LoopLength)
+                loopPart = loopPart.Substring(0, LoopLength);
+            int.TryParse(loopPart, NumberStyles.Integer, CultureInfo.InvariantCulture, out loopNumber);
+        }
+
+        return true;
     }
 }

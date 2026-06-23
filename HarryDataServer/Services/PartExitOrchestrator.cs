@@ -75,16 +75,18 @@ public sealed class PartExitOrchestrator : IPartExitOrchestrator
         var ct = _cts?.Token ?? CancellationToken.None;
         var total = Stopwatch.StartNew();
 
-        // 1) Persist the part first.
-        var dmcOk = await SaveDmcAsync(data, ct).ConfigureAwait(false);
-
-        // MSA test parts are not exported / collaged / cleaned by the production flow.
+        // MSA / LimitSample test parts must never touch the production tables (task 6):
+        // their data lives in msa_measurements / msa_results only. Acknowledge the part exit
+        // without persisting to dmcserial or running the CSV / Collage / Image flow.
         if (data.IsMsa)
         {
             total.Stop();
             Interlocked.Increment(ref _totalProcessed);
-            return dmcOk;
+            return true;
         }
+
+        // 1) Persist the part first.
+        var dmcOk = await SaveDmcAsync(data, ct).ConfigureAwait(false);
 
         long csvMs = 0, collageMs = 0, imageMs = 0;
         var serials = CollageService.FormattedSerials(data);

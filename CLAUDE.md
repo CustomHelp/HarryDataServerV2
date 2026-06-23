@@ -93,8 +93,12 @@ Everything that happens in Strand 1 happens identically in Strand 2.
 
 | Positions | Normal Mode | MSA Modes |
 |-----------|-------------|-----------|
-| 4–35 (32 chars) | SZID (frame serial) or Virtual Serial (M20/M21) | DMC code of test part |
-| 36–67 (32 chars) | Virtual Serial (M20/M21) / empty otherwise | BaseID |
+| 4–35 (32 chars) | SZID (frame serial) or Virtual Serial (M20/M21) | BaseID (14 chars) + 3-digit loop counter |
+| 36–67 (32 chars) | Virtual Serial (M20/M21) / empty otherwise | DMC code of test part |
+
+> In MSA/LimitSample mode the BaseID lives in the **first** serial field (positions 4–35),
+> immediately followed by the 3-digit loop counter (e.g. `10260623083000` + `001`); the DMC
+> of the test part is in the **second** serial field (positions 36–67).
 
 ### Telegram Types (detected by signal word at position 2)
 
@@ -174,7 +178,9 @@ Telegram fields (semicolon-separated):
 | 6 | M21 |
 | 7 | M50 |
 
-**Request telegram:** `Request;<BaseID>`
+**Request telegram:** `Request;<BaseID>` — `<BaseID>` is the bare **14-char** BaseID (no loop
+counter). The completion handler aggregates `msa_measurements` on an **exact** `base_id`
+match, scoped by `controller_name` (module) for safety.
 **Responses:**
 - `Wait` — currently processing, try again
 - `Error;<description>` — error occurred
@@ -192,25 +198,30 @@ Telegram fields (semicolon-separated):
 - **Part Exit (Ch2):** All three known: DMC + SZID + VirtualSerial.
 
 ### MSA Modes (MSA1, MSA3, LimitSample)
-- Positions 4–35: DMC of test part
-- Positions 36–67: BaseID
+- Positions 4–35: BaseID (14 chars) + 3-digit loop counter
+- Positions 36–67: DMC of test part
 
-### BaseID Format (19 characters: `5026061608560272010`)
+### BaseID Format (14 characters: `10260623083000` = M10, 2026-06-23, 08:30:00)
 
 | Field | Chars | Example |
 |-------|-------|---------|
-| Module | 2 | `50` |
+| Module | 2 | `10` |
 | Year | 2 | `26` |
 | Month | 2 | `06` |
-| Day | 2 | `16` |
+| Day | 2 | `23` |
 | Hour | 2 | `08` |
-| Minute | 2 | `56` |
-| Second | 2 | `02` |
-| TrayRow | 1 | `7` |
-| TrayCol | 1 | `2` |
-| Loop1 | 1 | `0` |
-| Loop2 | 1 | `1` |
-| Loop3 | 1 | `0` |
+| Minute | 2 | `30` |
+| Second | 2 | `00` |
+
+The BaseID (14 chars) stays constant across all stations for one loop of a run. During
+the run, **each loop telegram appends a 3-digit loop counter** to the BaseID in the serial
+field: loop 1 → `…001` (17 chars total), loop 2 → `…002`, etc. The counter increments each
+time the run cycles through again. In storage the **`base_id` column holds only the 14-char
+BaseID**, and the loop counter is parsed out into the integer **`loop_number`** column.
+
+When the run completes, the SPS sends the completion signal on the MSA channel as
+`Request;<BaseID>` — **the bare 14-char BaseID, with no loop counter** (CLAUDE.md §5).
+There is no longer any "MoverNumber" / TrayRow / TrayCol field.
 
 ### Image Filename Search
 Image filenames start with a 12-character abbreviated serial + underscore.
@@ -243,17 +254,24 @@ where:
   xm = reference value from MSA JSON reference file
 ```
 
-### MSA3 Formula (32 parts × 3 measurements each)
+### MSA3 Formula (parts × repeated measurements each)
 
 ```
 Tolerance = USL - LSL
 
-For each part i: x̄i = mean of its 3 measurements
+For each part i: x̄i = mean of its measurements
 SumSquares = ΣΣ(x̄i - xij)²   (sum over all parts and all measurements)
-DegreesOfFreedom = 32 × 1 × (3 - 1) = 64   (b=1, no operators)
+DegreesOfFreedom = Σ over parts (measurementsPerPart − 1)
 
 %Tolerance = 6 × √(SumSquares / DegreesOfFreedom) / Tolerance
 ```
+
+> The classic layout is 32 parts × 3 measurements → DoF = 32 × (3 − 1) = 64. **The number
+> of parts and loops is controlled entirely by the SPS/PLC and is never hardcoded** — the
+> implementation (`MsaCalculator.Msa3`) computes DoF dynamically as
+> Σ(measurementsPerPart − 1) over the parts actually present, so it is correct for any
+> sample/loop count (e.g. 30 × 3 → DoF = 60). Parts are grouped by DMC; loops are the
+> repeated measurements of one part.
 
 ### MSA JSON Reference Files
 - Location: configurable per module in Harry.ini
@@ -435,8 +453,8 @@ For M20/M21 measurements only.
 CREATE TABLE IF NOT EXISTS msa_measurements (
   id                 BIGINT      NOT NULL AUTO_INCREMENT,
   dmc                VARCHAR(50) NOT NULL,
-  base_id            VARCHAR(50) NOT NULL,
-  loop_number        INT         NOT NULL,
+  base_id            VARCHAR(50) NOT NULL,  -- 14-char BaseID (MMYYMMDDHHmmSS); never includes the loop counter
+  loop_number        INT         NOT NULL,  -- 3-digit per-loop counter parsed from the run serial field
   controller_name    VARCHAR(100) NOT NULL,
   definition_id      INT         NOT NULL,
   measurement_value  DOUBLE,
@@ -447,6 +465,7 @@ CREATE TABLE IF NOT EXISTS msa_measurements (
   measured_at        DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   INDEX idx_dmc_baseid (dmc, base_id),
+  INDEX idx_baseid_controller (base_id, controller_name),  -- exact-match completion lookup
   INDEX idx_controller (controller_name),
   INDEX idx_measured (measured_at)
 );
