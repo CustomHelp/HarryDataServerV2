@@ -10,6 +10,7 @@ public sealed class AppConfig
     public GeneralConfig General { get; init; } = new();
     public MySqlConfig MySql { get; init; } = new();
     public CsvConfig Csv { get; init; } = new();
+    public DiagnosticConfig Diagnostic { get; init; } = new();
     public NasConfig Nas { get; init; } = new();
     public CollageConfig Collage { get; init; } = new();
     public SpsConfig Sps { get; init; } = new();
@@ -42,6 +43,19 @@ public sealed class CsvConfig
     public bool Save { get; init; } = true;
     public bool MsaSave { get; init; } = true;
     public bool DiagnosticSave { get; init; } = true;
+}
+
+public sealed class DiagnosticConfig
+{
+    /// <summary>
+    /// Output folder for the raw diagnostic CSV dump (<c>[Diagnostic] DiagnosticPath</c>). Falls
+    /// back to the legacy <c>[CSV] CSV_DiagnosticPath</c> when the [Diagnostic] key is empty, so the
+    /// path is never duplicated.
+    /// </summary>
+    public string Path { get; init; } = string.Empty;
+
+    /// <summary>Max rows per diagnostic CSV file before rotating to a new one (<c>[Diagnostic] MaxRows</c>, default 1000).</summary>
+    public int MaxRows { get; init; } = 1000;
 }
 
 public sealed class NasConfig

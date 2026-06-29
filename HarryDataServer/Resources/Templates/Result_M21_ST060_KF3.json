@@ -3,7 +3,7 @@
   "signal_word": "Results",
   "measurements": [
     {
-      "telegram_place": 71,
+      "telegram_place": 72,
       "variable_name": "R_TrimSubAss_Pin_Dist_1",
       "display_name": "TrimSubAss_Pin_Dist_1",
       "type": "Result",
@@ -13,7 +13,7 @@
       "feature_group": "Trimmer sub-assembly"
     },
     {
-      "telegram_place": 72,
+      "telegram_place": 73,
       "variable_name": "V_TrimSubAss_Pin_Dist_1",
       "display_name": "TrimSubAss_Pin_Dist_1",
       "type": "Value",
@@ -23,7 +23,7 @@
       "feature_group": "Trimmer sub-assembly"
     },
     {
-      "telegram_place": 73,
+      "telegram_place": 74,
       "variable_name": "R_TrimSubAss_Pin_Dist_2",
       "display_name": "TrimSubAss_Pin_Dist_2",
       "type": "Result",
@@ -33,7 +33,7 @@
       "feature_group": "Trimmer sub-assembly"
     },
     {
-      "telegram_place": 74,
+      "telegram_place": 75,
       "variable_name": "V_TrimSubAss_Pin_Dist_2",
       "display_name": "TrimSubAss_Pin_Dist_2",
       "type": "Value",
@@ -43,7 +43,7 @@
       "feature_group": "Trimmer sub-assembly"
     },
     {
-      "telegram_place": 75,
+      "telegram_place": 76,
       "variable_name": "R_TrimSubAss_Pin_Dist_3",
       "display_name": "TrimSubAss_Pin_Dist_3",
       "type": "Result",
@@ -53,7 +53,7 @@
       "feature_group": "Trimmer sub-assembly"
     },
     {
-      "telegram_place": 76,
+      "telegram_place": 77,
       "variable_name": "V_TrimSubAss_Pin_Dist_3",
       "display_name": "TrimSubAss_Pin_Dist_3",
       "type": "Value",
@@ -63,7 +63,7 @@
       "feature_group": "Trimmer sub-assembly"
     },
     {
-      "telegram_place": 77,
+      "telegram_place": 78,
       "variable_name": "R_TrimSubAss_Pin_Dist_4",
       "display_name": "TrimSubAss_Pin_Dist_4",
       "type": "Result",
@@ -73,7 +73,7 @@
       "feature_group": "Trimmer sub-assembly"
     },
     {
-      "telegram_place": 78,
+      "telegram_place": 79,
       "variable_name": "V_TrimSubAss_Pin_Dist_4",
       "display_name": "TrimSubAss_Pin_Dist_4",
       "type": "Value",
@@ -83,7 +83,7 @@
       "feature_group": "Trimmer sub-assembly"
     },
     {
-      "telegram_place": 79,
+      "telegram_place": 80,
       "variable_name": "R_TrimSubAss_Pin_Height_1",
       "display_name": "TrimSubAss_Pin_Height_1",
       "type": "Result",
@@ -93,7 +93,7 @@
       "feature_group": "Trimmer sub-assembly"
     },
     {
-      "telegram_place": 80,
+      "telegram_place": 81,
       "variable_name": "V_TrimSubAss_Pin_Height_1",
       "display_name": "TrimSubAss_Pin_Height_1",
       "type": "Value",
@@ -103,7 +103,7 @@
       "feature_group": "Trimmer sub-assembly"
     },
     {
-      "telegram_place": 81,
+      "telegram_place": 82,
       "variable_name": "R_TrimSubAss_Pin_Height_2",
       "display_name": "TrimSubAss_Pin_Height_2",
       "type": "Result",
@@ -113,7 +113,7 @@
       "feature_group": "Trimmer sub-assembly"
     },
     {
-      "telegram_place": 82,
+      "telegram_place": 83,
       "variable_name": "V_TrimSubAss_Pin_Height_2",
       "display_name": "TrimSubAss_Pin_Height_2",
       "type": "Value",
@@ -123,7 +123,7 @@
       "feature_group": "Trimmer sub-assembly"
     },
     {
-      "telegram_place": 83,
+      "telegram_place": 84,
       "variable_name": "R_TrimSubAss_Pin_Height_3",
       "display_name": "TrimSubAss_Pin_Height_3",
       "type": "Result",
@@ -133,7 +133,7 @@
       "feature_group": "Trimmer sub-assembly"
     },
     {
-      "telegram_place": 84,
+      "telegram_place": 85,
       "variable_name": "V_TrimSubAss_Pin_Height_3",
       "display_name": "TrimSubAss_Pin_Height_3",
       "type": "Value",
@@ -143,7 +143,7 @@
       "feature_group": "Trimmer sub-assembly"
     },
     {
-      "telegram_place": 85,
+      "telegram_place": 86,
       "variable_name": "R_TrimSubAss_Pin_Height_4",
       "display_name": "TrimSubAss_Pin_Height_4",
       "type": "Result",
@@ -153,7 +153,7 @@
       "feature_group": "Trimmer sub-assembly"
     },
     {
-      "telegram_place": 86,
+      "telegram_place": 87,
       "variable_name": "V_TrimSubAss_Pin_Height_4",
       "display_name": "TrimSubAss_Pin_Height_4",
       "type": "Value",

@@ -80,52 +80,106 @@ Everything that happens in Strand 1 happens identically in Strand 2.
 - Reconnect strategy: exponential backoff (3s, 6s, 12s, max 60s)
 - Keepalive: continuously send version variable request; if no response → camera offline
 
-### Telegram Header (positions 0–3, identical for all types)
+A telegram is one of **three kinds — `Results`, `Settings`, or `Diagnostic`.** Results and
+Settings share a header with the signal word at **token 2**. A **Diagnostic** telegram has a
+**different layout** (serials first, no version field, the literal word `Diagnostic` at ~token 65)
+and is therefore detected by **scanning the tokens for an exact `Diagnostic` token**, not by
+position — this check runs *before* the signal-word dispatch (`TelegramParser.ParseLine`).
 
-| Position | Content | Example |
-|----------|---------|---------|
-| 0 | Controller name | `M50_ST110_KF1` |
-| 1 | Camera program version | `1.2.3` |
-| 2 | Signal word | `Results` / `Settings` / `Diagnostic` |
-| 3 | Operating mode | `Normal` / `MSA1` / `MSA3` / `LimitSample` |
+> **Real layout confirmed (2026-06-29)** from the live Keyence "Datenausgabe" configs
+> (M50_ST110, M11_ST030, M50_ST140) + `Result_Header.xlsx`. Every camera outputs the serials as
+> **32 separate comma-tokens each** (Keyence "Anzahl 32"); for Results/Settings the signal word is
+> at token 2. The earlier assumption of a single operating-mode string at token 3 was wrong and
+> dropped every telegram on the live line.
 
-### Serial Number Fields (positions 4–67)
+### "Results" Telegram Layout (comma-separated, 0-based token index)
 
-| Positions | Normal Mode | MSA Modes |
-|-----------|-------------|-----------|
-| 4–35 → **Serial1** (transmitted 32 chars, **stored 22**) | SZID (frame serial) or Virtual Serial (M20/M21) | BaseID (14 chars) + 3-digit loop counter |
-| 36–67 → **Serial2** (32 chars) | Virtual Serial (M20/M21) / empty otherwise | DMC code of test part |
+| Token(s) | Content | Notes |
+|----------|---------|-------|
+| 0 | Controller name | e.g. `M11_ST030_KF1` |
+| 1 | Camera program version | e.g. `4.0` |
+| 2 | Signal word | always `Results` |
+| 3 … 34 | **Serial1** (32 tokens) | concatenated → **truncated to 22 chars** |
+| 35 … 66 | **Serial2** (32 tokens) | concatenated → kept full **32 chars** |
+| 67 | `Mode_Diagnostic` (bool 0/1) | **independent** of operating mode — INFO only |
+| 68 | `Mode_GoldenSample` (bool 0/1) | → operating mode `LimitSample` |
+| 69 | `Mode_MSA1` (bool 0/1) | → operating mode `MSA1` |
+| 70 | `Mode_MSA3` (bool 0/1) | → operating mode `MSA3` |
+| 71 | `Total_Result` (SINT −2/−1/0/1/2) | camera's overall part result — **display only** |
+| 72 … | measurements | alternating `R_` (SINT) / `V_` (Float) pairs |
 
-> **Serial1 length:** the field is transmitted as 32 chars but only the **first 22 are
-> meaningful** (SPS agreement); the rest is padding. The parser (`TelegramParser`) truncates
-> Serial1 to **22 chars** at parse time, and the DB serial columns are `VARCHAR(22)`, so the
-> stored value matches the 22-char Field 1 of the image filename (§11). The single width
-> definition is `Infrastructure/SerialField.cs` (`SerialField.MaxLength = 22`). **Serial2 keeps
-> its full 32 chars** (needed for DMC uniqueness in MSA).
+> **Serial1 (tokens 3–34):** transmitted as 32 chars but only the **first 22 are meaningful**
+> (SPS agreement); the rest is padding. `TelegramParser` concatenates the 32 tokens and truncates
+> to **22 chars** at parse time; the DB serial columns are `VARCHAR(22)`, so the stored value
+> matches the 22-char Field 1 of the image filename (§11). Single width definition:
+> `Infrastructure/SerialField.cs` (`SerialField.MaxLength = 22`). **Serial2 (tokens 35–66)** keeps
+> its full 32 chars (needed for DMC uniqueness in MSA).
+>
+> **Operating mode** is derived from the three flags at tokens 68–70: all 0 → `Normal`;
+> exactly one set → `MSA1` / `MSA3` / `LimitSample` (GoldenSample → `LimitSample`). Only one is
+> ever set; if more than one is set the telegram is logged (WARNING) and treated as `Normal`.
+> **`Mode_Diagnostic` (token 67) is independent** — it can be on/off in any mode, is exposed as
+> `ParsedTelegram.IsDiagnostic`, and has **no effect on processing or routing** (UI INFO only).
+> This boolean flag inside a *Results* telegram is a **completely separate thing** from a
+> standalone **Diagnostic telegram** (the signal-word kind, see its own layout below): one is an
+> INFO badge on a normal part, the other is a raw diagnostic dump with its own layout.
+>
+> **`Total_Result` (token 71)** is the camera's overall part result, exposed as
+> `ParsedTelegram.OverallResult` for display in the camera control only. The authoritative OK/NG
+> decision for collage / CSV / image handling comes from the **PLC at part-exit** (§5 Ch 2), never
+> from this camera value.
 >
 > **Routing (Normal mode):** M1X/M5X carry the SZID in Serial1 → `measurements_serial`;
 > M2X (M20/M21) carry the Virtual Serial in Serial1 → `measurements_serial_trimmer`. The module
 > is taken from each camera's INI config (`MeasurementProcessor`).
 >
-> In MSA/LimitSample mode the BaseID lives in the **first** serial field (positions 4–35),
-> immediately followed by the 3-digit loop counter (e.g. `10260623083000` + `001`, then padding);
-> the DMC of the test part is in the **second** serial field (positions 36–67). In storage the
-> `base_id` column holds only the 14-char BaseID and the loop counter goes to `loop_number`.
+> In MSA/LimitSample mode the BaseID lives in **Serial1** (tokens 3–34), immediately followed by
+> the 3-digit loop counter (e.g. `10260623083000` + `001`, then padding); the DMC of the test part
+> is in **Serial2** (tokens 35–66). In storage the `base_id` column holds only the 14-char BaseID
+> and the loop counter goes to `loop_number`.
 
-### Telegram Types (detected by signal word at position 2)
+### "Settings" Telegram Layout
 
-#### "Results" Telegram
-- Positions 71+: alternating `R_` (SINT result) and `V_` (Float value) pairs
-- Structure defined per camera in `Result_CameraName.json`
+| Token(s) | Content |
+|----------|---------|
+| 0 | Controller name |
+| 1 | Camera program version |
+| 2 | Signal word (`Settings`) |
+| 3 … | Min/Max pairs per ParameterSet (no serials, no mode flags) |
 
-#### "Settings" Telegram
-- Sent at controller startup or when limits change
-- Positions 3+: Min/Max pairs per ParameterSet
-- Structure defined per camera in `Settings_CameraName.json`
+- Sent at controller startup or when limits change.
+- Structure defined per camera in `Settings_CameraName.json` (telegram_place from token 3).
 
-#### "Diagnostic" Telegram
-- Special results → write directly to CSV only (not to main DB)
-- Do not process through normal measurement pipeline
+### "Diagnostic" Telegram Layout (different layout — detected by token scan)
+
+A diagnostic telegram does **not** share the Results/Settings header: there is **no version
+field**, the serials come **first**, and the word `Diagnostic` sits at **token 65 — not token 2**.
+The trailing values are **arbitrary and camera-dependent** (no fixed measurement structure).
+Confirmed live example (M50_ST140_KF1):
+
+| Token(s) | Content |
+|----------|---------|
+| 0 | Controller name (e.g. `M50_ST140_KF1`) |
+| 1 … 32 | **Serial1** / SZID (32 tokens) → concatenated, truncated to **22 chars** |
+| 33 … 64 | **Serial2** / Trimmer/DMC (32 tokens) → concatenated, kept full **32 chars** |
+| 65 | the literal word `Diagnostic` |
+| 66 | a label (e.g. `B5 Blade CAM1`) |
+| 67 … | arbitrary `VAL_` values (variable count) |
+
+> **Detection:** scan the comma-split tokens for an exact token equal to `Diagnostic`
+> (case-insensitive, trimmed). If present, the whole telegram is diagnostic and is routed to the
+> diagnostic CSV — normal Results/Settings parsing is skipped. Results/Settings bodies are
+> serials/numbers and never contain that word, so there are no false positives.
+>
+> **Raw CSV dump (`DiagnosticProcessor`):** one row per telegram, plain left-to-right —
+> `ReceivedAt` (`DDMMYY_HHMMSS`), Serial1 (≤22), Serial2 (32), then **every remaining token**
+> (the `Diagnostic` word, the label and all values) exactly as received. Rows may have different
+> column counts (raw dump, not a fixed schema). Output: `Diagnostic_<DDMMYY_HHMMSS>.csv` in
+> `[Diagnostic] DiagnosticPath`, rotating to a new file every `[Diagnostic] MaxRows` (default
+> 1000). Written to CSV only, never to the DB.
+>
+> **Not to be confused with the `Mode_Diagnostic` flag** (token 67 of a *Results* telegram, INFO
+> only) — that is an independent boolean on a normal part and does not produce a diagnostic dump.
 
 ### Result Codes (R_ values)
 
@@ -203,15 +257,17 @@ match, scoped by `controller_name` (module) for safety.
 
 ## 6. Serial Number Concept
 
+> Serial1 = tokens 3–34, Serial2 = tokens 35–66 (each 32 comma-tokens, see §4).
+
 ### Normal Mode
-- **M10/M11:** SZID (frame identity) in positions 4–35. Positions 36–67 empty.
-- **M20/M21:** Virtual Serial (trimmer identity) in positions 4–35. Positions 36–67 empty.
-- **M50:** SZID in positions 4–35. Positions 36–67 empty.
+- **M10/M11:** SZID (frame identity) in Serial1 (tokens 3–34). Serial2 empty.
+- **M20/M21:** Virtual Serial (trimmer identity) in Serial1 (tokens 3–34). Serial2 empty.
+- **M50:** SZID in Serial1 (tokens 3–34). Serial2 empty.
 - **Part Exit (Ch2):** All three known: DMC + SZID + VirtualSerial.
 
 ### MSA Modes (MSA1, MSA3, LimitSample)
-- Positions 4–35: BaseID (14 chars) + 3-digit loop counter
-- Positions 36–67: DMC of test part
+- Serial1 (tokens 3–34): BaseID (14 chars) + 3-digit loop counter
+- Serial2 (tokens 35–66): DMC of test part
 
 ### BaseID Format (14 characters: `10260623083000` = M10, 2026-06-23, 08:30:00)
 

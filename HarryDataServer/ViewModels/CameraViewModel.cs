@@ -22,6 +22,12 @@ public sealed partial class CameraViewModel : ObservableObject
     private readonly Queue<string> _recent = new(RecentTelegramCount);
     private volatile bool _recentDirty;
 
+    // Last received Results-telegram state (guarded by _gate; applied to the bound
+    // properties on the UI thread in Update()).
+    private CameraOperatingMode _lastMode = CameraOperatingMode.Unknown;
+    private bool _lastDiagnostic;
+    private bool _hasModeInfo;
+
     public CameraViewModel(TcpCameraClient client)
     {
         _client = client;
@@ -51,15 +57,29 @@ public sealed partial class CameraViewModel : ObservableObject
     [ObservableProperty] private Brush _jsonBrush = Brushes.Gray;
     [ObservableProperty] private Brush _reconnectBrush = Brushes.Gray;
 
+    /// <summary>Operating mode of the last received Results telegram (display text).</summary>
+    [ObservableProperty] private string _modeText = "—";
+
+    /// <summary>Mode_Diagnostic flag of the last received Results telegram (independent of <see cref="ModeText"/>).</summary>
+    [ObservableProperty] private bool _isDiagnostic;
+
     private void OnTelegram(object? sender, ParsedTelegram telegram)
     {
-        // Background thread: only touch the thread-safe queue here.
-        var line = $"{DateTime.Now:HH:mm:ss}  {telegram.RawSignal}/{telegram.Mode}  {Trim(telegram.Serial1)}";
+        // Background thread: only touch the thread-safe queue / guarded fields here.
+        var line = $"{DateTime.Now:HH:mm:ss}  {Describe(telegram)}  {Trim(telegram.Serial1)}";
         lock (_gate)
         {
             _recent.Enqueue(line);
             while (_recent.Count > RecentTelegramCount)
                 _recent.Dequeue();
+
+            // Only Results telegrams carry the mode/diagnostic block.
+            if (telegram.Signal == TelegramSignal.Results)
+            {
+                _lastMode = telegram.Mode;
+                _lastDiagnostic = telegram.IsDiagnostic;
+                _hasModeInfo = true;
+            }
         }
         _recentDirty = true;
     }
@@ -80,19 +100,64 @@ public sealed partial class CameraViewModel : ObservableObject
         JsonBrush = _client.JsonLoaded ? Led.Green : Led.Red;
         ReconnectBrush = _client.AutoReconnectActive ? Led.Green : Led.Gray;
 
-        if (_recentDirty)
+        bool hasMode;
+        CameraOperatingMode lastMode;
+        bool lastDiag;
+        string[]? snapshot = null;
+        lock (_gate)
         {
-            _recentDirty = false;
-            string[] snapshot;
-            lock (_gate)
+            hasMode = _hasModeInfo;
+            lastMode = _lastMode;
+            lastDiag = _lastDiagnostic;
+            if (_recentDirty)
+            {
+                _recentDirty = false;
                 snapshot = _recent.ToArray();
+            }
+        }
 
+        if (hasMode)
+        {
+            ModeText = ModeToText(lastMode);
+            IsDiagnostic = lastDiag;
+        }
+
+        if (snapshot is not null)
+        {
             RecentTelegrams.Clear();
             // Newest on top.
             for (var i = snapshot.Length - 1; i >= 0; i--)
                 RecentTelegrams.Add(snapshot[i]);
         }
     }
+
+    /// <summary>Operating-mode display text (CLAUDE.md §4): LimitSample shows "Limit".</summary>
+    private static string ModeToText(CameraOperatingMode mode) => mode switch
+    {
+        CameraOperatingMode.Normal => "Normal Operation",
+        CameraOperatingMode.Msa1 => "MSA1",
+        CameraOperatingMode.Msa3 => "MSA3",
+        CameraOperatingMode.LimitSample => "Limit",
+        _ => "—",
+    };
+
+    /// <summary>One-line description of a telegram for the recent-telegram list.</summary>
+    private static string Describe(ParsedTelegram t) =>
+        t.Signal == TelegramSignal.Results
+            ? $"{ModeToText(t.Mode)}{(t.IsDiagnostic ? " ·Diag" : string.Empty)}  {ResultToText(t.OverallResult)}"
+            : t.RawSignal;
+
+    /// <summary>Total_Result code → short display token (display only; not a routing decision).</summary>
+    private static string ResultToText(int? result) => result switch
+    {
+        1 => "IO",
+        0 => "NG",
+        -1 => "PosErr",
+        -2 => "NotVal",
+        2 => "Off",
+        null => string.Empty,
+        _ => result.Value.ToString(),
+    };
 
     private static string Trim(string s) => s.Length <= 20 ? s : s[..20] + "…";
 }

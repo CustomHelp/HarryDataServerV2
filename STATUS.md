@@ -557,6 +557,107 @@ CLAUDE.md §4/§11 updated. Full solution builds **0 errors** (`net8.0-windows`)
 
 ---
 
+## Camera telegram layout fix — real Keyence layout + mode/diagnostic UI (2026-06-29)
+
+The telegram parser was built on an **assumed** layout (a single operating-mode string at token 3).
+Against the **real** Keyence cameras token 3 is the first character of Serial1, so `ParseMode`
+returned `Unknown` and **every telegram was dropped** — thousands of warnings, nothing reached the
+DB. The real layout is now confirmed from the live "Datenausgabe" configs (M50_ST110, M11_ST030)
+and `Result_Header.xlsx`: serials are **32 comma-tokens each**, then four boolean mode flags, then
+the overall result, then measurements.
+
+1. **Serial offsets corrected** (`ParsedTelegram`/`TelegramParser`). Serial1 = concat tokens
+   **3–34** → truncate to 22 chars; Serial2 = concat tokens **35–66** → full 32. (Was 4–35 / 36–67,
+   off by one.) The 22-char truncation chokepoint (`SerialField`) is unchanged.
+2. **Operating mode from 4 boolean flags, not a string.** `ParseMode(Fields[3])` removed. New
+   `TelegramParser.DeriveMode` reads the flags at tokens **68/69/70**: all 0 → `Normal`,
+   `Mode_MSA1` → `Msa1`, `Mode_MSA3` → `Msa3`, `Mode_GoldenSample` → `LimitSample`. Only one is
+   ever set; **>1 set → WARNING + `Normal`**.
+3. **`Mode_Diagnostic` (token 67) is independent** of the operating mode. Exposed as the separate
+   bool `ParsedTelegram.IsDiagnostic`; it has **no effect on processing/routing** (INFO only).
+   ⚠️ **Superseded** — this section originally said "Diagnostic is no longer a signal word / the
+   pipeline is dormant." That was wrong: a standalone **Diagnostic telegram** (different layout,
+   word at token 65) is a separate thing and is fully handled — see the next section
+   "Diagnostic telegram — detect by token, raw rotating CSV dump (2026-06-29)".
+4. **`Total_Result` (token 71)** exposed as `ParsedTelegram.OverallResult` (SINT). Measurements
+   start at token **72** and never consume token 71. It is **display only** — the authoritative
+   OK/NG for collage/CSV/images still comes from the PLC at part-exit (logic untouched).
+5. **Result templates shifted +1.** Every `telegram_place` in **all 14** `Result_*.json` moved
+   71→72 (first measurement), so they match the new layout. `Settings_*.json` untouched (still
+   from token 3). Verified: M50_ST110 now 72…287, 216 distinct/contiguous places.
+   - **Deviation from the task brief:** the brief said the two new M10/M11 **ST030** templates were
+     "already at 72, leave untouched". In fact **all four M1X templates** (M10/M11 × ST030/ST060)
+     were TODO **stubs at 71**. Leaving them would have violated the DoD ("first measurement at 72")
+     and made their `R_` entry read `Total_Result`, so they were shifted with the rest. They remain
+     placeholder stubs (single `R_`/`V_` TODO pair) to be filled from camera docs.
+6. **Camera control UI** (`CameraViewModel` + `ucCameraControl.xaml`). Each camera card now shows,
+   updated **live per Results telegram**: the **operating mode** as status text
+   (`Normal Operation` / `MSA1` / `MSA3` / `Limit`) and a **separate "Diagnose" badge** that
+   highlights (Accent) when `IsDiagnostic` is true — independent of the mode. Both read the last
+   telegram only; theme-aware via `DynamicResource`. The recent-telegram list also shows mode +
+   IO/NG (`Total_Result`).
+7. **Settings path verified (Task 5).** The Settings parser reads `telegram.Field(place)` from
+   token 3 onward with no serial/mode block — matches `Settings_Header.xlsx` (token 2 = `Settings`).
+   No change needed.
+
+Touched: `Models/ParsedTelegram.cs`, `Communication/TelegramParser.cs`, `ViewModels/CameraViewModel.cs`,
+`Controls/ucCameraControl.xaml`, all 14 `Resources/Templates/Result_*.json`. CLAUDE.md §4/§6 rewritten
+to the real layout. Full solution builds **0 errors / 0 code warnings** (`net8.0-windows`; the only
+warnings are environmental `NU1900` NuGet-audit offline notices).
+
+---
+
+## Diagnostic telegram — detect by token, raw rotating CSV dump (2026-06-29)
+
+**Corrects the previous section's claim** that "Diagnostic is no longer a signal word / the
+pipeline is dormant." That was wrong: there are **two unrelated things named diagnostic** and both
+must work. This change fixes the first.
+
+A **Diagnostic telegram** has a **different layout** from Results/Settings — no version field,
+serials first, and the literal word `Diagnostic` at **token 65** (confirmed live, M50_ST140_KF1):
+`ctrl, Serial1(1–32), Serial2(33–64), "Diagnostic"(65), label(66), arbitrary VAL_…`. The earlier
+parser only recognised `Diagnostic` as a signal word at token 2, so these telegrams were never
+detected.
+
+1. **Detection by token scan, not position** (`TelegramParser`). `ParseLine` now scans the
+   comma-split tokens for an exact `Diagnostic` token (case-insensitive, trimmed) **before** the
+   signal-word dispatch; if found, `BuildDiagnostic` parses the diagnostic layout (Serial1 tokens
+   1–32 → truncated 22; Serial2 tokens 33–64 → full 32; `DiagnosticStart` = index of the word) and
+   returns `Signal = Diagnostic`. Results/Settings bodies are serials/numbers and never contain the
+   word → no false positives. New `ParsedTelegram` members: `DiagSerial1/2*` layout constants +
+   `DiagnosticStart`.
+2. **Raw CSV dump** (`DiagnosticProcessor`, rewritten). One row per telegram, plain left-to-right:
+   `ReceivedAt` (`ddMMyy_HHmmss` via `FileNaming`), **Serial1(≤22)**, **Serial2(32)**, then **every
+   remaining token** from the `Diagnostic` word onward (word + label + all values) exactly as
+   received. **Variable column count** per row (raw dump, no fixed schema/header). Queue of
+   `string[]`; CSV-only, never the DB.
+3. **File naming + rotation.** New `CsvFileWriter` `labelFirst` option →
+   `Diagnostic_<ddMMyy_HHmmss>.csv` written **directly** in `[Diagnostic] DiagnosticPath` (no date
+   subfolders), a **new** file every `[Diagnostic] MaxRows` rows (default 1000); existing files are
+   never renamed/overwritten (same-second collision guard already present). Existing CsvFileWriter
+   callers are unchanged (`labelFirst` defaults false).
+4. **Config.** New `[Diagnostic]` section + `DiagnosticConfig` (`DiagnosticPath`, `MaxRows`). To
+   avoid duplicating the path, `DiagnosticPath` **falls back to the legacy `[CSV] CSV_DiagnosticPath`**
+   when empty; the enable flag stays on the existing `[CSV] CSVDiagnostic_Save`. Harry.ini template
+   updated.
+5. **`Mode_Diagnostic` flag unchanged.** Token 67 of a *Results* telegram (`ParsedTelegram.IsDiagnostic`
+   + UI badge) is the unrelated INFO-only boolean — left exactly as is. `BuildDiagnostic` sets
+   `IsDiagnostic = false` (it is the signal-word kind, not the flag).
+6. **Reachability verified.** TCP → `TcpCameraClient.ProcessFrame` → `ParseLine` (token scan →
+   `Signal=Diagnostic`) → `case Diagnostic` → `DiagnosticReceived` → `DiagnosticProcessor`
+   (started in `App.xaml.cs`) → `Diagnostic_*.csv`. Not dead code.
+
+**Implementation choice (documented):** the DoD example shows the file directly in `DiagnosticPath`,
+so the dump is written **flat** (no `YYYY\MM\DD` subfolders, unlike the production CSV). Files stay
+self-identifying via the timestamped name.
+
+Touched: `Models/ParsedTelegram.cs`, `Communication/TelegramParser.cs`, `Services/DiagnosticProcessor.cs`,
+`Infrastructure/CsvFileWriter.cs`, `Models/AppConfig.cs`, `Configuration/IniConfigManager.cs`, `Harry.ini`.
+CLAUDE.md §4 gained the Diagnostic-telegram layout + the Diagnostic-vs-`Mode_Diagnostic` contrast.
+Full solution builds **0 errors / 0 code warnings** (`net8.0-windows`; only environmental `NU1900`).
+
+---
+
 ## Build & Repo
 - `dotnet build HarryDataServer.sln -c Release` → 0 warnings, 0 errors (`net8.0-windows`).
 - Branch `main`, pushed to `https://github.com/CustomHelp/HarryDataServerV2`.

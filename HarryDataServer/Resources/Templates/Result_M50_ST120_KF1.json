@@ -3,7 +3,7 @@
   "signal_word": "Results",
   "measurements": [
     {
-      "telegram_place": 71,
+      "telegram_place": 72,
       "variable_name": "R_Trimmer_Defect",
       "display_name": "Trimmer_Defect",
       "type": "Result",
@@ -13,7 +13,7 @@
       "feature_group": "Trimmer sub-assembly"
     },
     {
-      "telegram_place": 72,
+      "telegram_place": 73,
       "variable_name": "V_Trimmer_Defect",
       "display_name": "Trimmer_Defect",
       "type": "Value",

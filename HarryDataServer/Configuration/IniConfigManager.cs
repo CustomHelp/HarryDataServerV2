@@ -32,11 +32,14 @@ public sealed class IniConfigManager
         // (Harry.ini + Templates\) is portable.
         var configDir = Path.GetDirectoryName(Path.GetFullPath(iniPath)) ?? AppContext.BaseDirectory;
 
+        var csv = ParseCsv(data);
+
         return new AppConfig
         {
             General = ParseGeneral(data),
             MySql = ParseMySql(data),
-            Csv = ParseCsv(data),
+            Csv = csv,
+            Diagnostic = ParseDiagnostic(data, csv),
             Nas = ParseNas(data),
             Collage = ParseCollage(data, configDir),
             Sps = ParseSps(data),
@@ -100,6 +103,24 @@ public sealed class IniConfigManager
             Save = Bool(s, "CSV_Save", true),
             MsaSave = Bool(s, "CSVMSA_Save", true),
             DiagnosticSave = Bool(s, "CSVDiagnostic_Save", true),
+        };
+    }
+
+    /// <summary>
+    /// Parse the [Diagnostic] section (raw diagnostic CSV dump). The output path reuses the legacy
+    /// [CSV] CSV_DiagnosticPath when [Diagnostic] DiagnosticPath is omitted, so it is never duplicated.
+    /// </summary>
+    private static DiagnosticConfig ParseDiagnostic(IniData data, CsvConfig csv)
+    {
+        var s = data["Diagnostic"];
+        var path = Str(s, "DiagnosticPath", string.Empty);
+        if (string.IsNullOrWhiteSpace(path))
+            path = csv.DiagnosticPath;   // reuse existing [CSV] CSV_DiagnosticPath
+
+        return new DiagnosticConfig
+        {
+            Path = path,
+            MaxRows = Int(s, "MaxRows", 1000),
         };
     }
 

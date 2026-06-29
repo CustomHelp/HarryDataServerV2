@@ -4,7 +4,7 @@
   "_comment": "STUB - Please fill telegram_place and measurement names from camera program documentation",
   "measurements": [
     {
-      "telegram_place": 71,
+      "telegram_place": 72,
       "variable_name": "R_TODO_Measurement1",
       "display_name": "TODO_Measurement1",
       "type": "Result",
@@ -14,7 +14,7 @@
       "feature_group": "TODO_Group"
     },
     {
-      "telegram_place": 72,
+      "telegram_place": 73,
       "variable_name": "V_TODO_Measurement1",
       "display_name": "TODO_Measurement1",
       "type": "Value",

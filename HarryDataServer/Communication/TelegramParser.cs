@@ -7,13 +7,18 @@ namespace HarryDataServer.Communication;
 
 /// <summary>
 /// Parses Keyence camera telegrams (CLAUDE.md section 4). Stateless and shared by
-/// all camera clients: the header (positions 0–3) and serial region (4–67) are
-/// interpreted by fixed index, while the measurement/setting body is read by the
-/// <c>telegram_place</c> indexes declared in each camera's JSON templates.
+/// all camera clients. The fixed-layout region is interpreted by index: header
+/// (tokens 0–2), Serial1 (3–34), Serial2 (35–66), the four boolean mode flags
+/// (67–70) and the overall result (71). The measurement/setting body (token 72+)
+/// is read by the <c>telegram_place</c> indexes declared in each camera's JSON
+/// templates.
 /// </summary>
 public sealed class TelegramParser
 {
     private const char Delimiter = ',';
+
+    /// <summary>The literal token that identifies a Diagnostic telegram (CLAUDE.md §4).</summary>
+    private const string DiagnosticSignalWord = "Diagnostic";
 
     private readonly ILogService _log;
 
@@ -59,28 +64,45 @@ public sealed class TelegramParser
             return null;
         }
 
+        // A Diagnostic telegram has a DIFFERENT layout (CLAUDE.md §4): no version field, serials
+        // first, and the literal word "Diagnostic" at ~token 65 — NOT at the signal position.
+        // Detect it by scanning the tokens (Results/Settings bodies are serials/numbers and never
+        // contain that word, so there are no false positives) and handle it before the normal
+        // signal-word dispatch so it can never be misread as Results.
+        var diagIndex = FindDiagnosticToken(fields);
+        if (diagIndex >= 0)
+            return BuildDiagnostic(fields, line, diagIndex);
+
         var signalRaw = fields[ParsedTelegram.PosSignal];
         var signal = ParseSignal(signalRaw);
 
-        // Operating mode lives at position 3 only for Results/Diagnostic telegrams;
-        // in Settings telegrams that position is already a limit value.
-        var mode = CameraOperatingMode.Unknown;
-        if (signal is TelegramSignal.Results or TelegramSignal.Diagnostic)
-            mode = ParseMode(fields.Length > ParsedTelegram.PosMode ? fields[ParsedTelegram.PosMode] : string.Empty);
-
-        // Serials are only present in Results/Diagnostic telegrams.
+        // The serial + mode-flag + result block is present only on Results/Diagnostic
+        // telegrams; Settings telegrams carry limit values directly from token 3 onward.
         var serial1 = string.Empty;
         var serial2 = string.Empty;
+        var mode = CameraOperatingMode.Unknown;
+        var isDiagnostic = false;
+        int? overallResult = null;
         if (signal is TelegramSignal.Results or TelegramSignal.Diagnostic)
         {
-            // Serial1 (pos 4–35) is transmitted as 32 chars but only the first 22 are meaningful
+            // Serial1 (tokens 3–34) is transmitted as 32 chars but only the first 22 are meaningful
             // (SPS agreement); the trailing chars are padding. Truncating here, at the single
             // parse chokepoint, makes the stored value match the 22-char Field 1 of the Keyence
-            // image filenames (CLAUDE.md §4/§11). Serial2 keeps its full 32 chars.
+            // image filenames (CLAUDE.md §4/§11). Serial2 (tokens 35–66) keeps its full 32 chars.
             serial1 = ConcatRange(fields, ParsedTelegram.Serial1Start, ParsedTelegram.Serial1End);
             if (serial1.Length > ParsedTelegram.Serial1MaxLength)
                 serial1 = serial1[..ParsedTelegram.Serial1MaxLength];
             serial2 = ConcatRange(fields, ParsedTelegram.Serial2Start, ParsedTelegram.Serial2End);
+
+            // Four independent boolean flags at tokens 67–70 (CLAUDE.md §4): Mode_Diagnostic is
+            // INFO only; the operating mode is derived from GoldenSample/MSA1/MSA3.
+            isDiagnostic = ReadFlag(fields, ParsedTelegram.PosModeDiagnostic);
+            mode = DeriveMode(fields, fields[ParsedTelegram.PosController]);
+
+            // Total_Result (token 71) is the camera's overall part result (SINT) — display only.
+            var resultRaw = FieldAt(fields, ParsedTelegram.PosTotalResult);
+            if (resultRaw is not null)
+                overallResult = TryParseInt(resultRaw.Trim());
         }
 
         return new ParsedTelegram
@@ -92,6 +114,8 @@ public sealed class TelegramParser
             Signal = signal,
             RawSignal = signalRaw,
             Mode = mode,
+            IsDiagnostic = isDiagnostic,
+            OverallResult = overallResult,
             Serial1 = serial1,
             Serial2 = serial2,
         };
@@ -167,6 +191,54 @@ public sealed class TelegramParser
         return samples;
     }
 
+    /// <summary>
+    /// Scan the tokens for an exact "Diagnostic" token (case-insensitive, trimmed). Returns its
+    /// index, or −1 if not present. Detection is by content, not position (CLAUDE.md §4).
+    /// </summary>
+    private static int FindDiagnosticToken(string[] fields)
+    {
+        for (var i = 0; i < fields.Length; i++)
+        {
+            if (string.Equals(fields[i].Trim(), DiagnosticSignalWord, StringComparison.OrdinalIgnoreCase))
+                return i;
+        }
+        return -1;
+    }
+
+    /// <summary>
+    /// Build a Diagnostic telegram (CLAUDE.md §4): no version field; Serial1 = tokens 1–32
+    /// (truncated to 22 chars, same rule as the main pipeline); Serial2 = tokens 33–64 (full 32);
+    /// the raw payload (word + label + arbitrary values) starts at <paramref name="diagIndex"/>.
+    /// The operating-mode block does not apply, so <see cref="ParsedTelegram.Mode"/> is Unknown and
+    /// <see cref="ParsedTelegram.IsDiagnostic"/> is false (that flag is the unrelated Mode_Diagnostic).
+    /// </summary>
+    private ParsedTelegram BuildDiagnostic(string[] fields, string line, int diagIndex)
+    {
+        var serial1 = ConcatRange(fields, ParsedTelegram.DiagSerial1Start, ParsedTelegram.DiagSerial1End);
+        if (serial1.Length > ParsedTelegram.Serial1MaxLength)
+            serial1 = serial1[..ParsedTelegram.Serial1MaxLength];
+        var serial2 = ConcatRange(fields, ParsedTelegram.DiagSerial2Start, ParsedTelegram.DiagSerial2End);
+
+        _log.Debug("{Camera}: Diagnostic telegram ({Tokens} tokens, payload from index {Index}).",
+            fields[ParsedTelegram.PosController], fields.Length, diagIndex);
+
+        return new ParsedTelegram
+        {
+            Fields = fields,
+            Raw = line,
+            ControllerName = fields[ParsedTelegram.PosController],
+            Version = string.Empty,
+            Signal = TelegramSignal.Diagnostic,
+            RawSignal = fields[diagIndex].Trim(),
+            Mode = CameraOperatingMode.Unknown,
+            IsDiagnostic = false,
+            OverallResult = null,
+            Serial1 = serial1,
+            Serial2 = serial2,
+            DiagnosticStart = diagIndex,
+        };
+    }
+
     private static TelegramSignal ParseSignal(string raw) => raw.Trim().ToLowerInvariant() switch
     {
         "results" => TelegramSignal.Results,
@@ -175,14 +247,45 @@ public sealed class TelegramParser
         _ => TelegramSignal.Unknown,
     };
 
-    private static CameraOperatingMode ParseMode(string raw) => raw.Trim().ToLowerInvariant() switch
+    /// <summary>
+    /// Derive the operating mode from the three mode flags at tokens 68–70 (CLAUDE.md §4):
+    /// all 0 → Normal; MSA1/MSA3/GoldenSample → the matching mode (GoldenSample → LimitSample).
+    /// Only one is ever set; if more than one is set the telegram is treated as Normal and a
+    /// WARNING is logged. (Mode_Diagnostic at token 67 is independent and read separately.)
+    /// </summary>
+    private CameraOperatingMode DeriveMode(string[] fields, string controller)
     {
-        "normal" => CameraOperatingMode.Normal,
-        "msa1" => CameraOperatingMode.Msa1,
-        "msa3" => CameraOperatingMode.Msa3,
-        "limitsample" => CameraOperatingMode.LimitSample,
-        _ => CameraOperatingMode.Unknown,
-    };
+        var goldenSample = ReadFlag(fields, ParsedTelegram.PosModeGoldenSample);
+        var msa1 = ReadFlag(fields, ParsedTelegram.PosModeMsa1);
+        var msa3 = ReadFlag(fields, ParsedTelegram.PosModeMsa3);
+
+        var setCount = (goldenSample ? 1 : 0) + (msa1 ? 1 : 0) + (msa3 ? 1 : 0);
+        if (setCount == 0)
+            return CameraOperatingMode.Normal;
+
+        if (setCount > 1)
+        {
+            _log.Warning(
+                "{Camera}: multiple operating-mode flags set (GoldenSample={GSM}, MSA1={M1}, MSA3={M3}); treating as Normal.",
+                controller, goldenSample, msa1, msa3);
+            return CameraOperatingMode.Normal;
+        }
+
+        if (msa1) return CameraOperatingMode.Msa1;
+        if (msa3) return CameraOperatingMode.Msa3;
+        return CameraOperatingMode.LimitSample;   // GoldenSample
+    }
+
+    /// <summary>Read a boolean mode flag (0/1) at the given token; true when non-zero.</summary>
+    private static bool ReadFlag(string[] fields, int index)
+    {
+        var raw = FieldAt(fields, index);
+        return raw is not null && TryParseInt(raw.Trim()) is { } value && value != 0;
+    }
+
+    /// <summary>Safe token accessor; returns null when the index is out of range.</summary>
+    private static string? FieldAt(string[] fields, int index) =>
+        index >= 0 && index < fields.Length ? fields[index] : null;
 
     /// <summary>
     /// Join a contiguous range of fields (the serial region) into a single string.

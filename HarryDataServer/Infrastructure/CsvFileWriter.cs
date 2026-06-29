@@ -17,6 +17,7 @@ public sealed class CsvFileWriter : IDisposable
     private readonly bool _dateSubfolders;
     private readonly ILogService _log;
     private readonly string _delimiter;
+    private readonly bool _labelFirst;
 
     private IReadOnlyList<IReadOnlyList<string>> _headerRows = Array.Empty<IReadOnlyList<string>>();
     private string _fileLabel = "data";
@@ -24,13 +25,19 @@ public sealed class CsvFileWriter : IDisposable
     private string? _currentPath;
     private int _rowsInFile;
 
-    public CsvFileWriter(string baseDir, int maxRowsPerFile, bool dateSubfolders, ILogService log, string delimiter = ",")
+    /// <param name="labelFirst">
+    /// When true the filename is <c>&lt;label&gt;_&lt;DDMMYY_HHMMSS&gt;.csv</c> (e.g.
+    /// <c>Diagnostic_290626_143000.csv</c>); when false (default) it is
+    /// <c>&lt;DDMMYY_HHMMSS&gt;_&lt;label&gt;.csv</c>. The datetime token is unchanged either way.
+    /// </param>
+    public CsvFileWriter(string baseDir, int maxRowsPerFile, bool dateSubfolders, ILogService log, string delimiter = ",", bool labelFirst = false)
     {
         _baseDir = baseDir;
         MaxRowsPerFile = Math.Max(1, maxRowsPerFile);
         _dateSubfolders = dateSubfolders;
         _log = log;
         _delimiter = delimiter;
+        _labelFirst = labelFirst;
     }
 
     public int MaxRowsPerFile { get; }
@@ -87,7 +94,8 @@ public sealed class CsvFileWriter : IDisposable
         Directory.CreateDirectory(dir);
 
         // SOW §5.1.2: datetime token in the filename is DDMMYY_HHMMSS.
-        var baseName = $"{FileNaming.Stamp(now)}_{_fileLabel}";
+        var stamp = FileNaming.Stamp(now);
+        var baseName = _labelFirst ? $"{_fileLabel}_{stamp}" : $"{stamp}_{_fileLabel}";
         var path = Path.Combine(dir, baseName + ".csv");
 
         // Avoid clobbering a file created in the same second.

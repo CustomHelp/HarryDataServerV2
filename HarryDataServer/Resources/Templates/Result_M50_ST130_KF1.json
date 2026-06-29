@@ -3,7 +3,7 @@
   "signal_word": "Results",
   "measurements": [
     {
-      "telegram_place": 71,
+      "telegram_place": 72,
       "variable_name": "R_Anode_Defect_Blob_L",
       "display_name": "Anode_Defect_Blob_L",
       "type": "Result",
@@ -13,7 +13,7 @@
       "feature_group": "Anode Cosmetic"
     },
     {
-      "telegram_place": 72,
+      "telegram_place": 73,
       "variable_name": "V_Anode_Defect_Blob_L",
       "display_name": "Anode_Defect_Blob_L",
       "type": "Value",
@@ -23,7 +23,7 @@
       "feature_group": "Anode Cosmetic"
     },
     {
-      "telegram_place": 73,
+      "telegram_place": 74,
       "variable_name": "R_Anode_Defect_Blob_R",
       "display_name": "Anode_Defect_Blob_R",
       "type": "Result",
@@ -33,7 +33,7 @@
       "feature_group": "Anode Cosmetic"
     },
     {
-      "telegram_place": 74,
+      "telegram_place": 75,
       "variable_name": "V_Anode_Defect_Blob_R",
       "display_name": "Anode_Defect_Blob_R",
       "type": "Value",
@@ -43,7 +43,7 @@
       "feature_group": "Anode Cosmetic"
     },
     {
-      "telegram_place": 75,
+      "telegram_place": 76,
       "variable_name": "R_Anode_Defect_NM_GA_L",
       "display_name": "Anode_Defect_NM_GA_L",
       "type": "Result",
@@ -53,7 +53,7 @@
       "feature_group": "Anode Cosmetic"
     },
     {
-      "telegram_place": 76,
+      "telegram_place": 77,
       "variable_name": "V_Anode_Defect_NM_GA_L",
       "display_name": "Anode_Defect_NM_GA_L",
       "type": "Value",
@@ -63,7 +63,7 @@
       "feature_group": "Anode Cosmetic"
     },
     {
-      "telegram_place": 77,
+      "telegram_place": 78,
       "variable_name": "R_Anode_Defect_NM_GA_R",
       "display_name": "Anode_Defect_NM_GA_R",
       "type": "Result",
@@ -73,7 +73,7 @@
       "feature_group": "Anode Cosmetic"
     },
     {
-      "telegram_place": 78,
+      "telegram_place": 79,
       "variable_name": "V_Anode_Defect_NM_GA_R",
       "display_name": "Anode_Defect_NM_GA_R",
       "type": "Value",
@@ -83,7 +83,7 @@
       "feature_group": "Anode Cosmetic"
     },
     {
-      "telegram_place": 79,
+      "telegram_place": 80,
       "variable_name": "R_Anode_Defect_NM_TA_L",
       "display_name": "Anode_Defect_NM_TA_L",
       "type": "Result",
@@ -93,7 +93,7 @@
       "feature_group": "Anode Cosmetic"
     },
     {
-      "telegram_place": 80,
+      "telegram_place": 81,
       "variable_name": "V_Anode_Defect_NM_TA_L",
       "display_name": "Anode_Defect_NM_TA_L",
       "type": "Value",
@@ -103,7 +103,7 @@
       "feature_group": "Anode Cosmetic"
     },
     {
-      "telegram_place": 81,
+      "telegram_place": 82,
       "variable_name": "R_Anode_Defect_NM_TA_R",
       "display_name": "Anode_Defect_NM_TA_R",
       "type": "Result",
@@ -113,7 +113,7 @@
       "feature_group": "Anode Cosmetic"
     },
     {
-      "telegram_place": 82,
+      "telegram_place": 83,
       "variable_name": "V_Anode_Defect_NM_TA_R",
       "display_name": "Anode_Defect_NM_TA_R",
       "type": "Value",
@@ -123,7 +123,7 @@
       "feature_group": "Anode Cosmetic"
     },
     {
-      "telegram_place": 83,
+      "telegram_place": 84,
       "variable_name": "R_Anode_Defect_SH_GA_L",
       "display_name": "Anode_Defect_SH_GA_L",
       "type": "Result",
@@ -133,7 +133,7 @@
       "feature_group": "Anode Cosmetic"
     },
     {
-      "telegram_place": 84,
+      "telegram_place": 85,
       "variable_name": "V_Anode_Defect_SH_GA_L",
       "display_name": "Anode_Defect_SH_GA_L",
       "type": "Value",
@@ -143,7 +143,7 @@
       "feature_group": "Anode Cosmetic"
     },
     {
-      "telegram_place": 85,
+      "telegram_place": 86,
       "variable_name": "R_Anode_Defect_SH_GA_R",
       "display_name": "Anode_Defect_SH_GA_R",
       "type": "Result",
@@ -153,7 +153,7 @@
       "feature_group": "Anode Cosmetic"
     },
     {
-      "telegram_place": 86,
+      "telegram_place": 87,
       "variable_name": "V_Anode_Defect_SH_GA_R",
       "display_name": "Anode_Defect_SH_GA_R",
       "type": "Value",
@@ -163,7 +163,7 @@
       "feature_group": "Anode Cosmetic"
     },
     {
-      "telegram_place": 87,
+      "telegram_place": 88,
       "variable_name": "R_Anode_Defect_SH_TA_L",
       "display_name": "Anode_Defect_SH_TA_L",
       "type": "Result",
@@ -173,7 +173,7 @@
       "feature_group": "Anode Cosmetic"
     },
     {
-      "telegram_place": 88,
+      "telegram_place": 89,
       "variable_name": "V_Anode_Defect_SH_TA_L",
       "display_name": "Anode_Defect_SH_TA_L",
       "type": "Value",
@@ -183,7 +183,7 @@
       "feature_group": "Anode Cosmetic"
     },
     {
-      "telegram_place": 89,
+      "telegram_place": 90,
       "variable_name": "R_Anode_Defect_SH_TA_R",
       "display_name": "Anode_Defect_SH_TA_R",
       "type": "Result",
@@ -193,7 +193,7 @@
       "feature_group": "Anode Cosmetic"
     },
     {
-      "telegram_place": 90,
+      "telegram_place": 91,
       "variable_name": "V_Anode_Defect_SH_TA_R",
       "display_name": "Anode_Defect_SH_TA_R",
       "type": "Value",
@@ -203,7 +203,7 @@
       "feature_group": "Anode Cosmetic"
     },
     {
-      "telegram_place": 91,
+      "telegram_place": 92,
       "variable_name": "R_Blade_Cosmetic_B1",
       "display_name": "Blade_Cosmetic_B1",
       "type": "Result",
@@ -213,7 +213,7 @@
       "feature_group": "Blades Issues"
     },
     {
-      "telegram_place": 92,
+      "telegram_place": 93,
       "variable_name": "V_Blade_Cosmetic_B1",
       "display_name": "Blade_Cosmetic_B1",
       "type": "Value",
@@ -223,7 +223,7 @@
       "feature_group": "Blades Issues"
     },
     {
-      "telegram_place": 93,
+      "telegram_place": 94,
       "variable_name": "R_Blade_Cosmetic_B2",
       "display_name": "Blade_Cosmetic_B2",
       "type": "Result",
@@ -233,7 +233,7 @@
       "feature_group": "Blades Issues"
     },
     {
-      "telegram_place": 94,
+      "telegram_place": 95,
       "variable_name": "V_Blade_Cosmetic_B2",
       "display_name": "Blade_Cosmetic_B2",
       "type": "Value",
@@ -243,7 +243,7 @@
       "feature_group": "Blades Issues"
     },
     {
-      "telegram_place": 95,
+      "telegram_place": 96,
       "variable_name": "R_Blade_Cosmetic_B3",
       "display_name": "Blade_Cosmetic_B3",
       "type": "Result",
@@ -253,7 +253,7 @@
       "feature_group": "Blades Issues"
     },
     {
-      "telegram_place": 96,
+      "telegram_place": 97,
       "variable_name": "V_Blade_Cosmetic_B3",
       "display_name": "Blade_Cosmetic_B3",
       "type": "Value",
@@ -263,7 +263,7 @@
       "feature_group": "Blades Issues"
     },
     {
-      "telegram_place": 97,
+      "telegram_place": 98,
       "variable_name": "R_Blade_Cosmetic_B4",
       "display_name": "Blade_Cosmetic_B4",
       "type": "Result",
@@ -273,7 +273,7 @@
       "feature_group": "Blades Issues"
     },
     {
-      "telegram_place": 98,
+      "telegram_place": 99,
       "variable_name": "V_Blade_Cosmetic_B4",
       "display_name": "Blade_Cosmetic_B4",
       "type": "Value",
@@ -283,7 +283,7 @@
       "feature_group": "Blades Issues"
     },
     {
-      "telegram_place": 99,
+      "telegram_place": 100,
       "variable_name": "R_Blade_Cosmetic_B5",
       "display_name": "Blade_Cosmetic_B5",
       "type": "Result",
@@ -293,7 +293,7 @@
       "feature_group": "Blades Issues"
     },
     {
-      "telegram_place": 100,
+      "telegram_place": 101,
       "variable_name": "V_Blade_Cosmetic_B5",
       "display_name": "Blade_Cosmetic_B5",
       "type": "Value",
@@ -303,7 +303,7 @@
       "feature_group": "Blades Issues"
     },
     {
-      "telegram_place": 101,
+      "telegram_place": 102,
       "variable_name": "R_HardCap_Defect",
       "display_name": "HardCap_Defect",
       "type": "Result",
@@ -313,7 +313,7 @@
       "feature_group": "Frame Cosmetic"
     },
     {
-      "telegram_place": 102,
+      "telegram_place": 103,
       "variable_name": "V_HardCap_Defect",
       "display_name": "HardCap_Defect",
       "type": "Value",
@@ -323,7 +323,7 @@
       "feature_group": "Frame Cosmetic"
     },
     {
-      "telegram_place": 103,
+      "telegram_place": 104,
       "variable_name": "R_HardCap_Blob",
       "display_name": "HardCap_Blob",
       "type": "Result",
@@ -333,7 +333,7 @@
       "feature_group": "Frame Cosmetic"
     },
     {
-      "telegram_place": 104,
+      "telegram_place": 105,
       "variable_name": "V_HardCap_Blob",
       "display_name": "HardCap_Blob",
       "type": "Value",
@@ -343,7 +343,7 @@
       "feature_group": "Frame Cosmetic"
     },
     {
-      "telegram_place": 105,
+      "telegram_place": 106,
       "variable_name": "R_HardGuard_Defect",
       "display_name": "HardGuard_Defect",
       "type": "Result",
@@ -353,7 +353,7 @@
       "feature_group": "Frame Cosmetic"
     },
     {
-      "telegram_place": 106,
+      "telegram_place": 107,
       "variable_name": "V_HardGuard_Defect",
       "display_name": "HardGuard_Defect",
       "type": "Value",
@@ -363,7 +363,7 @@
       "feature_group": "Frame Cosmetic"
     },
     {
-      "telegram_place": 107,
+      "telegram_place": 108,
       "variable_name": "R_HardGuard_Blob",
       "display_name": "HardGuard_Blob",
       "type": "Result",
@@ -373,7 +373,7 @@
       "feature_group": "Frame Cosmetic"
     },
     {
-      "telegram_place": 108,
+      "telegram_place": 109,
       "variable_name": "V_HardGuard_Blob",
       "display_name": "HardGuard_Blob",
       "type": "Value",
@@ -383,7 +383,7 @@
       "feature_group": "Frame Cosmetic"
     },
     {
-      "telegram_place": 109,
+      "telegram_place": 110,
       "variable_name": "R_Fin_Discolor",
       "display_name": "Fin_Discolor",
       "type": "Result",
@@ -393,7 +393,7 @@
       "feature_group": "Frame Cosmetic"
     },
     {
-      "telegram_place": 110,
+      "telegram_place": 111,
       "variable_name": "V_Fin_Discolor",
       "display_name": "Fin_Discolor",
       "type": "Value",
@@ -403,7 +403,7 @@
       "feature_group": "Frame Cosmetic"
     },
     {
-      "telegram_place": 111,
+      "telegram_place": 112,
       "variable_name": "R_Lubra_Gap_L",
       "display_name": "Lubra_Gap_L",
       "type": "Result",
@@ -413,7 +413,7 @@
       "feature_group": "Lubra Measured"
     },
     {
-      "telegram_place": 112,
+      "telegram_place": 113,
       "variable_name": "V_Lubra_Gap_L",
       "display_name": "Lubra_Gap_L",
       "type": "Value",
@@ -423,7 +423,7 @@
       "feature_group": "Lubra Measured"
     },
     {
-      "telegram_place": 113,
+      "telegram_place": 114,
       "variable_name": "R_Lubra_Gap_R",
       "display_name": "Lubra_Gap_R",
       "type": "Result",
@@ -433,7 +433,7 @@
       "feature_group": "Lubra Measured"
     },
     {
-      "telegram_place": 114,
+      "telegram_place": 115,
       "variable_name": "V_Lubra_Gap_R",
       "display_name": "Lubra_Gap_R",
       "type": "Value",
@@ -443,7 +443,7 @@
       "feature_group": "Lubra Measured"
     },
     {
-      "telegram_place": 115,
+      "telegram_place": 116,
       "variable_name": "R_Lubra_Length",
       "display_name": "Lubra_Length",
       "type": "Result",
@@ -453,7 +453,7 @@
       "feature_group": "Lubra Measured"
     },
     {
-      "telegram_place": 116,
+      "telegram_place": 117,
       "variable_name": "V_Lubra_Length",
       "display_name": "Lubra_Length",
       "type": "Value",
@@ -463,7 +463,7 @@
       "feature_group": "Lubra Measured"
     },
     {
-      "telegram_place": 117,
+      "telegram_place": 118,
       "variable_name": "R_LubraCos_Dark_Spots",
       "display_name": "LubraCos_Dark_Spots",
       "type": "Result",
@@ -473,7 +473,7 @@
       "feature_group": "Lubra Cosmetic"
     },
     {
-      "telegram_place": 118,
+      "telegram_place": 119,
       "variable_name": "V_LubraCos_Dark_Spots",
       "display_name": "LubraCos_Dark_Spots",
       "type": "Value",
@@ -483,7 +483,7 @@
       "feature_group": "Lubra Cosmetic"
     },
     {
-      "telegram_place": 119,
+      "telegram_place": 120,
       "variable_name": "R_Lubra_Presence",
       "display_name": "Lubra_Presence",
       "type": "Result",
@@ -493,7 +493,7 @@
       "feature_group": "Lubra Cosmetic"
     },
     {
-      "telegram_place": 120,
+      "telegram_place": 121,
       "variable_name": "V_Lubra_Presence",
       "display_name": "Lubra_Presence",
       "type": "Value",
@@ -503,7 +503,7 @@
       "feature_group": "Lubra Cosmetic"
     },
     {
-      "telegram_place": 121,
+      "telegram_place": 122,
       "variable_name": "R_LubraCos_White_Spots",
       "display_name": "LubraCos_White_Spots",
       "type": "Result",
@@ -513,7 +513,7 @@
       "feature_group": "Lubra Cosmetic"
     },
     {
-      "telegram_place": 122,
+      "telegram_place": 123,
       "variable_name": "V_LubraCos_White_Spots",
       "display_name": "LubraCos_White_Spots",
       "type": "Value",
@@ -523,7 +523,7 @@
       "feature_group": "Lubra Cosmetic"
     },
     {
-      "telegram_place": 123,
+      "telegram_place": 124,
       "variable_name": "R_LubraCos_Mouse_Bites_Bot",
       "display_name": "LubraCos_Mouse_Bites_Bot",
       "type": "Result",
@@ -533,7 +533,7 @@
       "feature_group": "Lubra Cosmetic"
     },
     {
-      "telegram_place": 124,
+      "telegram_place": 125,
       "variable_name": "V_LubraCos_Mouse_Bites_Bot",
       "display_name": "LubraCos_Mouse_Bites_Bot",
       "type": "Value",
@@ -543,7 +543,7 @@
       "feature_group": "Lubra Cosmetic"
     },
     {
-      "telegram_place": 125,
+      "telegram_place": 126,
       "variable_name": "R_LubraCos_Mouse_Bites_Top",
       "display_name": "LubraCos_Mouse_Bites_Top",
       "type": "Result",
@@ -553,7 +553,7 @@
       "feature_group": "Lubra Cosmetic"
     },
     {
-      "telegram_place": 126,
+      "telegram_place": 127,
       "variable_name": "V_LubraCos_Mouse_Bites_Top",
       "display_name": "LubraCos_Mouse_Bites_Top",
       "type": "Value",
@@ -563,7 +563,7 @@
       "feature_group": "Lubra Cosmetic"
     },
     {
-      "telegram_place": 127,
+      "telegram_place": 128,
       "variable_name": "R_LubraCos_Defect_NM",
       "display_name": "LubraCos_Defect_NM",
       "type": "Result",
@@ -573,7 +573,7 @@
       "feature_group": "Lubra Cosmetic"
     },
     {
-      "telegram_place": 128,
+      "telegram_place": 129,
       "variable_name": "V_LubraCos_Defect_NM",
       "display_name": "LubraCos_Defect_NM",
       "type": "Value",
@@ -583,7 +583,7 @@
       "feature_group": "Lubra Cosmetic"
     },
     {
-      "telegram_place": 129,
+      "telegram_place": 130,
       "variable_name": "R_LubraCos_Defect_SH",
       "display_name": "LubraCos_Defect_SH",
       "type": "Result",
@@ -593,7 +593,7 @@
       "feature_group": "Lubra Cosmetic"
     },
     {
-      "telegram_place": 130,
+      "telegram_place": 131,
       "variable_name": "V_LubraCos_Defect_SH",
       "display_name": "LubraCos_Defect_SH",
       "type": "Value",

@@ -10,9 +10,42 @@
                 <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="13"
                            TextTrimming="CharacterEllipsis" />
             </DockPanel>
-            <TextBlock Margin="0,2,0,8" Foreground="{DynamicResource TextDimBrush}">
+            <TextBlock Margin="0,2,0,6" Foreground="{DynamicResource TextDimBrush}">
                 <Run Text="{Binding Ip, Mode=OneWay}" /><Run Text=":" /><Run Text="{Binding Port, Mode=OneWay}" />
             </TextBlock>
+
+            <!-- Last-received operating mode + independent diagnostic badge -->
+            <DockPanel Margin="0,0,0,8">
+                <Border DockPanel.Dock="Right" CornerRadius="3" Padding="6,1" BorderThickness="1"
+                        VerticalAlignment="Center">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Background" Value="Transparent" />
+                            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsDiagnostic}" Value="True">
+                                    <Setter Property="Background" Value="{DynamicResource Accent}" />
+                                    <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <TextBlock Text="Diagnose" FontSize="11" VerticalAlignment="Center">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{DynamicResource TextDimBrush}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsDiagnostic}" Value="True">
+                                        <Setter Property="Foreground" Value="White" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </Border>
+                <TextBlock Text="{Binding ModeText}" FontWeight="Bold" VerticalAlignment="Center"
+                           Foreground="{DynamicResource AccentLight}" TextTrimming="CharacterEllipsis" />
+            </DockPanel>
 
             <!-- LEDs -->
             <StackPanel Orientation="Horizontal" Margin="0,0,0,6">

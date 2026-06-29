@@ -1,23 +1,24 @@
 using System.Collections.Concurrent;
-using System.Globalization;
 using HarryDataServer.Communication;
 using HarryDataServer.Infrastructure;
+using HarryDataServer.Models;
 
 namespace HarryDataServer.Services;
 
 /// <summary>
 /// Background diagnostic pipeline. Subscribes to every camera's
-/// <see cref="TcpCameraClient.DiagnosticReceived"/> event, enqueues a row (no I/O
-/// on the receive thread) and writes it straight to a rotating CSV file — never to
-/// the database (CLAUDE.md sections 4 + 13). Same pattern as <see cref="MeasurementProcessor"/>.
+/// <see cref="TcpCameraClient.DiagnosticReceived"/> event, enqueues a row (no I/O on
+/// the receive thread) and dumps it straight to a rotating CSV file — never to the
+/// database (CLAUDE.md sections 4 + 13). A diagnostic telegram has no fixed schema, so
+/// each row is a RAW dump: <c>ReceivedAt</c>, Serial1 (≤22), Serial2 (32), then every
+/// remaining token (the word "Diagnostic", the label and all values) plain left-to-right.
+/// Rows may therefore have different column counts. Files are
+/// <c>Diagnostic_&lt;DDMMYY_HHMMSS&gt;.csv</c>, rotated every <c>[Diagnostic] MaxRows</c> rows.
 /// </summary>
 public sealed class DiagnosticProcessor : IDiagnosticProcessor
 {
     private const int MaxQueue = 200_000;
     private const int MaxItemsPerFlush = 10_000;
-
-    private static readonly string[] Header =
-        { "Timestamp", "Controller", "Version", "Mode", "Serial1", "Serial2", "RawTelegram" };
 
     private readonly ICameraService _cameras;
     private readonly ILogService _log;
@@ -26,7 +27,7 @@ public sealed class DiagnosticProcessor : IDiagnosticProcessor
     private readonly int _maxRows;
     private readonly TimeSpan _flushInterval;
 
-    private readonly ConcurrentQueue<DiagnosticRow> _queue = new();
+    private readonly ConcurrentQueue<string[]> _queue = new();
     private CsvFileWriter? _csv;
     private CancellationTokenSource? _cts;
     private Task? _flushTask;
@@ -38,10 +39,12 @@ public sealed class DiagnosticProcessor : IDiagnosticProcessor
         _cameras = cameras;
         _log = log;
 
-        var csv = config.Config.Csv;
-        _enabled = csv.DiagnosticSave && !string.IsNullOrWhiteSpace(csv.DiagnosticPath);
-        _path = csv.DiagnosticPath;
-        _maxRows = csv.DataSetsPerFile;
+        // Enable flag stays on the existing [CSV] CSVDiagnostic_Save; the output path + row cap
+        // come from the [Diagnostic] section (path falls back to [CSV] CSV_DiagnosticPath).
+        var diag = config.Config.Diagnostic;
+        _enabled = config.Config.Csv.DiagnosticSave && !string.IsNullOrWhiteSpace(diag.Path);
+        _path = diag.Path;
+        _maxRows = diag.MaxRows;
         _flushInterval = TimeSpan.FromSeconds(Math.Max(1, config.Config.SqlSettings.SaveIntervalSeconds));
     }
 
@@ -61,8 +64,10 @@ public sealed class DiagnosticProcessor : IDiagnosticProcessor
             return Task.CompletedTask;
         }
 
-        _csv = new CsvFileWriter(_path, _maxRows, dateSubfolders: true, _log);
-        _csv.Configure(Header, "Diagnostic");
+        // Raw dump: label-first filename (Diagnostic_<stamp>.csv) directly in the configured
+        // folder (no date subfolders, no header row — variable column count per row).
+        _csv = new CsvFileWriter(_path, _maxRows, dateSubfolders: false, _log, labelFirst: true);
+        _csv.Configure(Array.Empty<string>(), "Diagnostic");
 
         foreach (var client in _cameras.Clients)
             client.DiagnosticReceived += OnDiagnosticReceived;
@@ -103,9 +108,19 @@ public sealed class DiagnosticProcessor : IDiagnosticProcessor
         }
 
         var t = e.Telegram;
-        _queue.Enqueue(new DiagnosticRow(
-            DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture),
-            t.ControllerName, t.Version, t.Mode.ToString(), t.Serial1, t.Serial2, t.Raw));
+
+        // Raw row, plain left-to-right: ReceivedAt, Serial1 (≤22), Serial2 (32), then every
+        // remaining token from the "Diagnostic" word onward (word + label + arbitrary values),
+        // exactly as received and uninterpreted.
+        var start = t.DiagnosticStart >= 0 ? t.DiagnosticStart : t.Fields.Length;
+        var row = new string[3 + (t.Fields.Length - start)];
+        row[0] = FileNaming.Stamp(DateTime.Now);   // ReceivedAt (DDMMYY_HHMMSS)
+        row[1] = t.Serial1;
+        row[2] = t.Serial2;
+        for (var i = start; i < t.Fields.Length; i++)
+            row[3 + (i - start)] = t.Fields[i];
+
+        _queue.Enqueue(row);
     }
 
     // --- Flush side (dedicated background task; CSV only, no DB) ---
@@ -133,10 +148,7 @@ public sealed class DiagnosticProcessor : IDiagnosticProcessor
         var written = 0;
         while (written < MaxItemsPerFlush && _queue.TryDequeue(out var row))
         {
-            _csv.WriteRow(new[]
-            {
-                row.Timestamp, row.Controller, row.Version, row.Mode, row.Serial1, row.Serial2, row.Raw,
-            });
+            _csv.WriteRow(row);
             written++;
         }
 
@@ -148,8 +160,4 @@ public sealed class DiagnosticProcessor : IDiagnosticProcessor
             StatsChanged?.Invoke();
         }
     }
-
-    private readonly record struct DiagnosticRow(
-        string Timestamp, string Controller, string Version, string Mode,
-        string Serial1, string Serial2, string Raw);
 }
