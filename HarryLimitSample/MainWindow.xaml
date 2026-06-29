@@ -3,11 +3,11 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="HarryLimitSample" Height="760" Width="1100"
         WindowStartupLocation="CenterScreen"
-        Background="{StaticResource WindowBg}">
+        Background="{DynamicResource WindowBg}">
     <DockPanel>
         <!-- ===== Top bar ===== -->
-        <Border DockPanel.Dock="Top" Background="{StaticResource PanelBg}" Padding="14,8"
-                BorderBrush="{StaticResource Accent}" BorderThickness="0,0,0,2">
+        <Border DockPanel.Dock="Top" Background="{DynamicResource PanelBg}" Padding="14,8"
+                BorderBrush="{DynamicResource Accent}" BorderThickness="0,0,0,2">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
@@ -18,8 +18,12 @@
                        Source="pack://application:,,,/HarryShared;component/Assets/CustomHelpLogo.png" />
                 <TextBlock Grid.Column="1" Text="{Binding AppName}" FontSize="18" FontWeight="Bold"
                            VerticalAlignment="Center" />
-                <TextBlock Grid.Column="2" Text="{Binding AppVersion}" Foreground="{StaticResource TextDimBrush}"
-                           HorizontalAlignment="Right" VerticalAlignment="Center" />
+                <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <Button x:Name="ThemeToggle" Click="OnThemeToggle" Content="Theme"
+                            Padding="8,3" Margin="0,0,12,0" ToolTip="Switch light / dark theme" />
+                    <TextBlock Text="{Binding AppVersion}" Foreground="{DynamicResource TextDimBrush}"
+                               VerticalAlignment="Center" />
+                </StackPanel>
             </Grid>
         </Border>
 
@@ -58,7 +62,7 @@
                     <Button Content="Clear marks" Command="{Binding ClearMarksCommand}" Margin="0,0,4,0" />
                     <StackPanel Orientation="Vertical">
                         <Button Content="Save MSA_module.json" Command="{Binding SaveCommand}" Width="170" />
-                        <TextBlock Text="{Binding SavePathPreview}" Foreground="{StaticResource TextDimBrush}"
+                        <TextBlock Text="{Binding SavePathPreview}" Foreground="{DynamicResource TextDimBrush}"
                                    FontSize="11" Margin="0,3,0,0" TextTrimming="CharacterEllipsis" MaxWidth="360" />
                     </StackPanel>
                 </WrapPanel>

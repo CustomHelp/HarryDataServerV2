@@ -1,5 +1,6 @@
 using System.Windows;
 using HarryDataServer.ViewModels;
+using HarryDataServer.Theming;
 
 namespace HarryDataServer;
 
@@ -14,5 +15,16 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         DataContext = viewModel;
+        ThemeManager.Initialize();
+        UpdateThemeButton();
     }
+
+    private void OnThemeToggle(object sender, RoutedEventArgs e)
+    {
+        ThemeManager.Toggle();
+        UpdateThemeButton();
+    }
+
+    private void UpdateThemeButton() =>
+        ThemeToggle.Content = ThemeManager.Current == AppTheme.Dark ? "☀ Light" : "🌙 Dark";
 }

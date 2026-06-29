@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using HarryShared.Theming;
 
 namespace HarryAnalysis;
 
@@ -10,10 +11,21 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        ThemeManager.Initialize();
+        UpdateThemeButton();
         Loaded += (_, _) => ScanBox.Focus();
         // Right-click selects the row under the cursor so the context menu acts on it.
         HistoryGrid.PreviewMouseRightButtonDown += OnHistoryRightClick;
     }
+
+    private void OnThemeToggle(object sender, RoutedEventArgs e)
+    {
+        ThemeManager.Toggle();
+        UpdateThemeButton();
+    }
+
+    private void UpdateThemeButton() =>
+        ThemeToggle.Content = ThemeManager.Current == AppTheme.Dark ? "☀ Light" : "🌙 Dark";
 
     private static void OnHistoryRightClick(object sender, MouseButtonEventArgs e)
     {

@@ -19,7 +19,7 @@
                                   IsChecked="{Binding PickerOpen}" HorizontalContentAlignment="Left" Padding="8,4" />
                     <Popup IsOpen="{Binding PickerOpen}" PlacementTarget="{Binding ElementName=PickerToggle}"
                            Placement="Bottom" StaysOpen="False" AllowsTransparency="True" MinWidth="320" MaxHeight="380">
-                        <Border Background="#FF22262F" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                        <Border Background="#FF22262F" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
                                 CornerRadius="4" Padding="6">
                             <DockPanel>
                                 <TextBox DockPanel.Dock="Top" Margin="0,0,0,4"
@@ -40,7 +40,7 @@
                     <CheckBox Content="Live" IsChecked="{Binding LiveMode}" Margin="0,0,12,0" />
                     <CheckBox Content="Show limits" IsChecked="{Binding ShowLimits}" Margin="0,0,12,0" />
                     <CheckBox Content="Lock Y axis" IsChecked="{Binding LockY}" Margin="0,0,12,0" />
-                    <TextBlock Text="{Binding StatusText}" Foreground="{StaticResource TextDimBrush}"
+                    <TextBlock Text="{Binding StatusText}" Foreground="{DynamicResource TextDimBrush}"
                                VerticalAlignment="Center" />
                 </WrapPanel>
             </StackPanel>

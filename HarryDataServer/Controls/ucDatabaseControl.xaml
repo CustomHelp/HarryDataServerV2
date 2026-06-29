@@ -17,7 +17,7 @@
             <Ellipse Width="13" Height="13" Fill="{Binding TablesLed}" VerticalAlignment="Center" />
             <TextBlock Text="Tables initialized" Margin="6,0,20,0" VerticalAlignment="Center" />
             <TextBlock Text="{Binding DatabaseStatusText}" VerticalAlignment="Center"
-                       Foreground="{StaticResource TextDimBrush}" />
+                       Foreground="{DynamicResource TextDimBrush}" />
         </StackPanel>
 
         <DataGrid Grid.Row="2" ItemsSource="{Binding TableRows}" MaxWidth="520" HorizontalAlignment="Left">
@@ -30,9 +30,9 @@
         <Border Grid.Row="3" Style="{StaticResource Card}" Margin="0,14,0,0" HorizontalAlignment="Left" MaxWidth="700">
             <StackPanel>
                 <TextBlock Text="Retention" FontWeight="Bold" Margin="0,0,0,4" />
-                <TextBlock Text="{Binding RetentionInfo}" TextWrapping="Wrap" Foreground="{StaticResource TextDimBrush}" />
+                <TextBlock Text="{Binding RetentionInfo}" TextWrapping="Wrap" Foreground="{DynamicResource TextDimBrush}" />
                 <TextBlock Text="Row counts refresh every 30 s (approximate, from INFORMATION_SCHEMA)."
-                           Foreground="{StaticResource TextDimBrush}" FontSize="11" Margin="0,6,0,0" />
+                           Foreground="{DynamicResource TextDimBrush}" FontSize="11" Margin="0,6,0,0" />
             </StackPanel>
         </Border>
     </Grid>

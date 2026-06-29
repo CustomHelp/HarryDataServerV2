@@ -1,5 +1,6 @@
 using System.Collections.Specialized;
 using System.Windows;
+using HarryShared.Theming;
 
 namespace HarryGraph;
 
@@ -8,6 +9,8 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        ThemeManager.Initialize();
+        UpdateThemeButton();
         Loaded += OnLoaded;
         SizeChanged += (_, _) => QueueLayout();
         StateChanged += (_, _) => QueueLayout();
@@ -30,6 +33,15 @@ public partial class MainWindow : Window
     }
 
     private void OnPanelsChanged(object? sender, NotifyCollectionChangedEventArgs e) => LayoutPanels();
+
+    private void OnThemeToggle(object sender, RoutedEventArgs e)
+    {
+        ThemeManager.Toggle();
+        UpdateThemeButton();
+    }
+
+    private void UpdateThemeButton() =>
+        ThemeToggle.Content = ThemeManager.Current == AppTheme.Dark ? "☀ Light" : "🌙 Dark";
 
     private static void OnMaximizeRequested(GraphPanelViewModel panel)
     {

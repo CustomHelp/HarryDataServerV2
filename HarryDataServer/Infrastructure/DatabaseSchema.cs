@@ -69,6 +69,22 @@ public static class DatabaseSchema
     };
 
     /// <summary>
+    /// Serial columns whose width is enforced by a table rebuild at startup. Serial1
+    /// (SZID / Virtual Serial / MSA BaseID+loop) is stored in VARCHAR(22) (CLAUDE.md §4).
+    /// Changing a column type with ALTER is awkward on the partitioned measurement tables, and
+    /// the data is disposable during trial operation, so the cleanest migration is DROP +
+    /// re-CREATE at the new width: <see cref="MySqlRepository"/> drops and recreates a table
+    /// only when its serial column is not already the expected width (one-time transition).
+    /// </summary>
+    public static readonly IReadOnlyList<(string Table, string Column, int Length)> SerialColumnWidths = new[]
+    {
+        ("dmcserial", "serial_number", 22),
+        ("dmcserial", "serial_trimmer", 22),
+        ("measurements_serial", "serial_number", 22),
+        ("measurements_serial_trimmer", "serial_trimmer", 22),
+    };
+
+    /// <summary>
     /// Every expected secondary index. New installs get these from the CREATE
     /// statements; existing installs get any missing one applied by the startup
     /// index-check (CREATE TABLE IF NOT EXISTS never alters an existing table).
@@ -234,9 +250,9 @@ CREATE TABLE IF NOT EXISTS settings (
         Columns = new ColumnSpec[]
         {
             new("id", "INT AUTO_INCREMENT PRIMARY KEY"),
-            new("serial_number", "VARCHAR(50) NOT NULL"),
-            new("serial_trimmer", "VARCHAR(50) NULL"),
-            new("dmc", "VARCHAR(50) NULL"),
+            new("serial_number", "VARCHAR(22) NOT NULL"),   // Serial1 (SZID) — 22 chars (CLAUDE.md §4)
+            new("serial_trimmer", "VARCHAR(22) NULL"),       // Serial1 (Virtual Serial, M2X) — 22 chars
+            new("dmc", "VARCHAR(50) NULL"),                  // Serial2 (DMC) — full width
             new("m1x_module", "TINYINT NULL"),
             new("m1x_nest", "INT NULL"),
             new("m2x_module", "TINYINT NULL"),
@@ -253,8 +269,8 @@ CREATE TABLE IF NOT EXISTS settings (
         CreateSql = $@"
 CREATE TABLE IF NOT EXISTS dmcserial (
   id              INT AUTO_INCREMENT PRIMARY KEY,
-  serial_number   VARCHAR(50)  NOT NULL,
-  serial_trimmer  VARCHAR(50),
+  serial_number   VARCHAR(22)  NOT NULL,
+  serial_trimmer  VARCHAR(22),
   dmc             VARCHAR(50),
   m1x_module      TINYINT,
   m1x_nest        INT,
@@ -281,7 +297,7 @@ CREATE TABLE IF NOT EXISTS dmcserial (
     private static ColumnSpec[] MeasurementColumns(string serialColumn) => new ColumnSpec[]
     {
         new("id", "BIGINT NOT NULL AUTO_INCREMENT"),
-        new(serialColumn, "VARCHAR(50) NOT NULL DEFAULT ''"),
+        new(serialColumn, "VARCHAR(22) NOT NULL DEFAULT ''"),   // Serial1 — 22 chars (CLAUDE.md §4)
         new("definition_id", "INT NOT NULL"),
         new("measurement_value", "DOUBLE NULL"),
         new("measurement_string", "VARCHAR(20) NULL"),
@@ -298,7 +314,7 @@ CREATE TABLE IF NOT EXISTS dmcserial (
         CreateSql = $@"
 CREATE TABLE IF NOT EXISTS measurements_serial (
   id                 BIGINT      NOT NULL AUTO_INCREMENT,
-  serial_number      VARCHAR(50) NOT NULL,
+  serial_number      VARCHAR(22) NOT NULL,
   definition_id      INT         NOT NULL,
   measurement_value  DOUBLE,
   measurement_string VARCHAR(20),
@@ -325,7 +341,7 @@ PARTITION BY RANGE (TO_DAYS(measured_at)) (
         CreateSql = $@"
 CREATE TABLE IF NOT EXISTS measurements_serial_trimmer (
   id                 BIGINT      NOT NULL AUTO_INCREMENT,
-  serial_trimmer     VARCHAR(50) NOT NULL,
+  serial_trimmer     VARCHAR(22) NOT NULL,
   definition_id      INT         NOT NULL,
   measurement_value  DOUBLE,
   measurement_string VARCHAR(20),

@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Globalization;
+using System.IO;
 using HarryDataServer.Communication;
 using HarryDataServer.Configuration;
 using HarryDataServer.Infrastructure;
@@ -371,8 +372,11 @@ ORDER BY evaluated_at, base_id, id;";
 
             var passed = results.Count > 0 && results.All(r => r.Passed);
             await StoreResultsAsync(conn, baseId, msaType, rows[0], results, ct).ConfigureAwait(false);
+
+            // Gather the whole run under <ResultPath>\YYYY\MM\DD\<BaseID>\{CSV,PDF,IMG}.
             ExportCsv(baseId, module, msaType, rows[0], results);
             GeneratePdf(baseId, module, msaType, rows[0], results, passed);
+            MoveRunImages(baseId);
 
             _evaluations[baseId] = passed ? "OK" : "NG";
             _log.Information("MSA {Type} for BaseID {Base}: {Verdict} ({Count} measurements).",
@@ -546,12 +550,16 @@ VALUES
     private void ExportCsv(string baseId, string module, MsaType msaType, MsaRow sample, List<MsaMeasurementResult> results)
     {
         var csv = _config.Config.Csv;
-        if (!csv.MsaSave || string.IsNullOrWhiteSpace(csv.MsaPath))
+        if (!csv.MsaSave)
             return;
 
         try
         {
-            using var writer = new CsvFileWriter(csv.MsaPath, int.MaxValue, dateSubfolders: true, _log);
+            // The MSA CSV goes into the run's CSV subfolder (the date is already in the path,
+            // so the writer does not add its own YYYY\MM\DD level).
+            var msa = _config.Config.Msa;
+            var csvDir = MsaResultLayout.CsvDir(msa.ResultPath, msa.ReferencePath, baseId);
+            using var writer = new CsvFileWriter(csvDir, int.MaxValue, dateSubfolders: false, _log);
             // Filename label: module + type (CsvFileWriter prepends the DDMMYY_HHMMSS stamp, SOW §5.1.2).
             writer.Configure(
                 new[] { "BaseID", "Module", "Controller", "MsaType", "DMC", "DisplayName", "Cg", "Cgk", "PctTolerance", "Passed" },
@@ -573,6 +581,49 @@ VALUES
         catch (Exception ex)
         {
             _log.Error(ex, "Failed to write MSA CSV for BaseID {Base}.", baseId);
+        }
+    }
+
+    /// <summary>
+    /// Move every image of this run out of the GoldenSample input folder into the run's IMG
+    /// subfolder (<c>&lt;ResultPath&gt;\YYYY\MM\DD\&lt;BaseID&gt;\IMG</c>). A run's images are those whose
+    /// filename Field 1 starts with the 14-char BaseID (the loop counter + zero padding follow).
+    /// Best-effort: never fails the evaluation.
+    /// </summary>
+    private void MoveRunImages(string baseId)
+    {
+        var src = ImageFileName.SortedRoot(_config.Config.Nas.HighResGoldenSamplePath);
+        if (src is null || !Directory.Exists(src))
+            return;
+
+        try
+        {
+            var msa = _config.Config.Msa;
+            var imgDir = MsaResultLayout.ImgDir(msa.ResultPath, msa.ReferencePath, baseId);
+            var moved = 0;
+
+            foreach (var file in Directory.EnumerateFiles(src, "*", SearchOption.AllDirectories))
+            {
+                if (!ImageFileName.MatchesBaseId(Path.GetFileName(file), baseId))
+                    continue;
+                try
+                {
+                    Directory.CreateDirectory(imgDir);
+                    File.Move(file, Path.Combine(imgDir, Path.GetFileName(file)), overwrite: true);
+                    moved++;
+                }
+                catch (Exception ex)
+                {
+                    _log.Debug("Could not move MSA image {File}: {Message}", file, ex.Message);
+                }
+            }
+
+            if (moved > 0)
+                _log.Information("Moved {Count} run image(s) for BaseID {Base} into {Dir}.", moved, baseId, imgDir);
+        }
+        catch (Exception ex)
+        {
+            _log.Error(ex, "Failed to move run images for BaseID {Base}.", baseId);
         }
     }
 

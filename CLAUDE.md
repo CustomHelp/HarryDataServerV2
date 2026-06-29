@@ -93,12 +93,24 @@ Everything that happens in Strand 1 happens identically in Strand 2.
 
 | Positions | Normal Mode | MSA Modes |
 |-----------|-------------|-----------|
-| 4–35 (32 chars) | SZID (frame serial) or Virtual Serial (M20/M21) | BaseID (14 chars) + 3-digit loop counter |
-| 36–67 (32 chars) | Virtual Serial (M20/M21) / empty otherwise | DMC code of test part |
+| 4–35 → **Serial1** (transmitted 32 chars, **stored 22**) | SZID (frame serial) or Virtual Serial (M20/M21) | BaseID (14 chars) + 3-digit loop counter |
+| 36–67 → **Serial2** (32 chars) | Virtual Serial (M20/M21) / empty otherwise | DMC code of test part |
 
+> **Serial1 length:** the field is transmitted as 32 chars but only the **first 22 are
+> meaningful** (SPS agreement); the rest is padding. The parser (`TelegramParser`) truncates
+> Serial1 to **22 chars** at parse time, and the DB serial columns are `VARCHAR(22)`, so the
+> stored value matches the 22-char Field 1 of the image filename (§11). The single width
+> definition is `Infrastructure/SerialField.cs` (`SerialField.MaxLength = 22`). **Serial2 keeps
+> its full 32 chars** (needed for DMC uniqueness in MSA).
+>
+> **Routing (Normal mode):** M1X/M5X carry the SZID in Serial1 → `measurements_serial`;
+> M2X (M20/M21) carry the Virtual Serial in Serial1 → `measurements_serial_trimmer`. The module
+> is taken from each camera's INI config (`MeasurementProcessor`).
+>
 > In MSA/LimitSample mode the BaseID lives in the **first** serial field (positions 4–35),
-> immediately followed by the 3-digit loop counter (e.g. `10260623083000` + `001`); the DMC
-> of the test part is in the **second** serial field (positions 36–67).
+> immediately followed by the 3-digit loop counter (e.g. `10260623083000` + `001`, then padding);
+> the DMC of the test part is in the **second** serial field (positions 36–67). In storage the
+> `base_id` column holds only the 14-char BaseID and the loop counter goes to `loop_number`.
 
 ### Telegram Types (detected by signal word at position 2)
 
@@ -626,9 +638,8 @@ Password=1234Set
 RetentionPeriodDays=35
 
 [CSV]
-CSV_BasePath=Y:\02_CSV_Merge
-CSV_MSAPath=Y:\01_CSV_Evaluation
-CSV_DiagnosticPath=Y:\03_CSV_Diagnostic
+CSV_BasePath=Y:\02_CSV_Merge      ; production CSV → CSV_BasePath\YYYY\MM\DD
+CSV_DiagnosticPath=Y:\03_CSV_Diagnostic  ; diagnostic CSV → \YYYY\MM\DD
 DataSetsPerFile=10000
 CSV_Save=true
 CSVMSA_Save=true
@@ -645,6 +656,7 @@ FullResRetentionDays=30   ; default full-res retention (SOW §5.2.3); per-type k
 RetentionNGDays=30
 RetentionDiagnosticDays=30
 RetentionGoldenSampleDays=30
+RetentionCollageDays=30   ; finished-collage retention; falls back to FullResRetentionDays
 DeleteAfterCollage=true
 
 [Collage]
@@ -653,8 +665,8 @@ Collage_Generate=true
 MaxFileSizeKB=128         ; max collage output size in KB (SOW §5.2.2)
 
 [MSA]
-ReferencePath=MSA_References   ; per-module MSA_<module>.json reference files
-ReportPath=MSA_Reports         ; MSA PDF report output (SOW §3.2.1); empty → ReferencePath\Reports
+ReferencePath=MSA_References   ; per-module MSA_<module>.json INPUT definitions (persistent)
+ResultPath=Y:\01_MSA_Results   ; per-run OUTPUT root → ResultPath\YYYY\MM\DD\<BaseID>\{PDF,CSV,IMG}
 
 [SPS]
 IP=172.29.1.5
@@ -698,24 +710,59 @@ Z:\Images\
 NAS auto-sorts images into date subfolders (YYYY\MM\DD).
 
 ### Image Filename Format
-`123456789012_12345678901234567890_1_M50_ST120_KF1_1_&Cam1Img.bmp`
 
-| Part | Meaning |
-|------|---------|
-| `123456789012` | First 12 chars of serial (with underscore after char 12) |
-| `12345678901234567890` | Serial number continuation |
-| `1` | Camera result (1=OK, 0=NG) |
-| `M50_ST120_KF1` | Controller name |
-| `1` | Image index |
-| `&Cam1Img` | Image variable name |
+The Keyence controller writes the filename. The **same** camera program runs in Normal and MSA
+mode, so the structure is identical — only the first two fields differ. The field separator is
+the **hyphen `-`** (the SZID contains an underscore after char 12, so `_` cannot be the separator):
 
-**Image search key:** use only the first 12 characters of SZID.
+```
+<Field1 22>-<Field2 32>-<overall 1|0>-<Controller>-<Nest>-&<ImageName>.png
+```
+
+| Field | Normal mode | MSA / LimitSample mode |
+|-------|-------------|------------------------|
+| Field 1 (≤22 chars) | SZID (frame serial) | BaseID(14) + Loop(3) + padding |
+| Field 2 (32 chars) | 32 zeros (ignore) | DMC printed on the test part |
+| overall `1\|0` | overall camera result (1=OK, 0=NG) | same |
+| Controller | camera controller name (e.g. `M50_ST040_KF1`) | same |
+| Nest | nest number under the camera | same |
+| `&<ImageName>` | image identifier (a camera may save several images per part, e.g. height/bright-light) — may contain dots | same |
+
+> Parser: `Infrastructure/ImageFileName.cs`. Field 1 is everything up to the first `-` (it never
+> contains a `-`), capped to **22 chars** (`SerialField.MaxLength`) to match the stored Serial1.
+> Field 2 (DMC) **may** contain hyphens, so it is recovered by anchoring on the `&ImageName` tail
+> rather than a naive split.
+> **Search keys:** Normal = first 12 chars of Field 1 (SZID, NG cleanup linkage); MSA = first 14
+> chars of Field 1 (BaseID, run-image collection — matches all loops regardless of the 22-char
+> Serial1). The 22-char Serial1 is the stored/DB form; image matching uses the shorter prefixes.
+
+### MSA Result Collection (on run complete)
+
+When the SPS sends `Request;<14-char BaseID>` (run finished), the server gathers everything for
+that run under `[MSA] ResultPath` (date folder from the **BaseID timestamp**, not now):
+
+```
+<ResultPath>\YYYY\MM\DD\<BaseID>\
+      ├── PDF\   (AllResults + FailuresOnly PDF reports)
+      ├── CSV\   (the MSA measurement CSV)
+      └── IMG\   (all run images, MOVED from the GoldenSample input folder)
+```
+
+Run images are those whose Field 1 starts with the 14-char BaseID (loop + padding follow).
+`[MSA] ResultPath` (per-run OUTPUT) is kept **separate** from `[MSA] ReferencePath` (the persistent
+`MSA_<module>.json` INPUT definitions written by HarryLimitSample). Helper: `Infrastructure/MsaResultLayout.cs`.
 
 ### Delete Logic
-- **NG / Diagnostic / GoldenSample images:** auto-delete after configured days
-- **OK images:** delete after collage is created (if configured)
-- **OK images of NG final part:** delete immediately when Part Exit result = NG (images from M10/M20 that are now orphaned)
-- **Age-based cleanup:** delete any images older than configured retention regardless of type
+- **NG / Diagnostic / GoldenSample images + finished collages:** the NAS sorts them out of each
+  `\Input` folder into sibling `YYYY\MM\DD` day-folders. `ImageCleanupService` walks those
+  day-folders and deletes a **whole day-folder** once its date (from the **folder name**, not the
+  file timestamp) is older than retention. Per-type retention keys: `RetentionNGDays`,
+  `RetentionDiagnosticDays`, `RetentionGoldenSampleDays`, `RetentionCollageDays` (each falls back
+  to `FullResRetentionDays`).
+- **NG low-res linkage:** when an NG day-folder is deleted, the matching low-res individual images
+  (linked by the 12-char serial prefix) are deleted with it.
+- **OK images:** deleted after the collage is created (if configured).
+- **Image search key:** use only the first 12 characters of the SZID (Field 1).
 
 ---
 
@@ -762,7 +809,8 @@ KeyName=M50_ST120_KF1
 - Path: `CSV_BasePath\YYYY\MM\DD\`
 
 ### MSA/Evaluation CSV
-- Exported on MSA evaluation completion
+- Exported on MSA evaluation completion into the per-run folder
+  `[MSA] ResultPath\YYYY\MM\DD\<BaseID>\CSV\` (not a global CSV path)
 - Contains: Cg, Cgk (MSA1) or %Tolerance (MSA3) per measurement
 - Failed measurements highlighted in export (add column `Passed` 0/1)
 
@@ -853,6 +901,17 @@ services.AddSingleton<IImageCleanupService, ImageCleanupService>();
 services.AddSingleton<ILogService, SerilogService>();
 services.AddTransient<TcpCameraClient>();
 ```
+
+### Theming (suite-wide light/dark)
+All apps support a runtime **light/dark** switch via a `ThemeManager` static
+(`HarryDataServer/Theming/ThemeManager.cs` for the server, `HarryShared/Theming/ThemeManager.cs`
+for the companion tools — same logic). It mutates the palette `SolidColorBrush` instances in the
+application resources **in place**, so every `DynamicResource` consumer (views + implicit styles in
+`Themes/DarkTheme.xaml`) updates live without reloading any window. `Accent`/`AccentLight` and the
+semantic LED colours stay constant across both themes. The choice is persisted to
+`%LOCALAPPDATA%\HarrySuite\theme.txt` and is therefore **shared across the whole suite**. Each
+window calls `ThemeManager.Initialize()` at startup and exposes a toggle button (top bar on the
+server; per-tool on the companions). Default is Dark when nothing is saved.
 
 ---
 

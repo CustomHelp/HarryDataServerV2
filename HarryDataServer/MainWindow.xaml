@@ -4,11 +4,11 @@
         xmlns:ctrl="clr-namespace:HarryDataServer.Controls"
         Title="HarryDataServer V2" Height="800" Width="1320"
         WindowStartupLocation="CenterScreen"
-        Background="{StaticResource WindowBg}">
+        Background="{DynamicResource WindowBg}">
     <DockPanel>
         <!-- ===== Top bar ===== -->
-        <Border DockPanel.Dock="Top" Background="{StaticResource PanelBg}" Padding="14,8"
-                BorderBrush="{StaticResource Accent}" BorderThickness="0,0,0,2">
+        <Border DockPanel.Dock="Top" Background="{DynamicResource PanelBg}" Padding="14,8"
+                BorderBrush="{DynamicResource Accent}" BorderThickness="0,0,0,2">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
@@ -26,7 +26,9 @@
 
                 <!-- Version + status (right) -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                    <TextBlock Text="{Binding AppVersion}" Foreground="{StaticResource TextDimBrush}"
+                    <Button x:Name="ThemeToggle" Click="OnThemeToggle" Content="Theme"
+                            Padding="8,3" Margin="0,0,14,0" ToolTip="Switch light / dark theme" />
+                    <TextBlock Text="{Binding AppVersion}" Foreground="{DynamicResource TextDimBrush}"
                                VerticalAlignment="Center" Margin="0,0,14,0" />
                     <Ellipse Width="12" Height="12" Fill="{Binding SystemStatusBrush}" VerticalAlignment="Center" />
                     <TextBlock Text="{Binding SystemStatus}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="6,0,0,0" />

@@ -34,24 +34,24 @@
 
     <!-- ===== Implicit styles ===== -->
     <Style TargetType="{x:Type TextBlock}">
-        <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
         <Setter Property="TextOptions.TextFormattingMode" Value="Ideal" />
     </Style>
 
     <Style TargetType="{x:Type Label}">
-        <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
     </Style>
 
     <Style TargetType="{x:Type Border}" x:Key="Card">
-        <Setter Property="Background" Value="{StaticResource CardBg}" />
-        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+        <Setter Property="Background" Value="{DynamicResource CardBg}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="6" />
         <Setter Property="Padding" Value="10" />
     </Style>
 
     <Style TargetType="{x:Type Button}">
-        <Setter Property="Background" Value="{StaticResource Accent}" />
+        <Setter Property="Background" Value="{DynamicResource Accent}" />
         <Setter Property="Foreground" Value="White" />
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="Padding" Value="10,5" />
@@ -68,7 +68,7 @@
         </Setter>
         <Style.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
-                <Setter Property="Background" Value="{StaticResource AccentLight}" />
+                <Setter Property="Background" Value="{DynamicResource AccentLight}" />
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
                 <Setter Property="Background" Value="{StaticResource LedGray}" />
@@ -78,8 +78,8 @@
     </Style>
 
     <Style TargetType="{x:Type ToggleButton}">
-        <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
-        <Setter Property="Background" Value="{StaticResource CardBg}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+        <Setter Property="Background" Value="{DynamicResource CardBg}" />
         <Setter Property="Padding" Value="9,4" />
         <Setter Property="Margin" Value="0,0,4,0" />
         <Setter Property="Cursor" Value="Hand" />
@@ -87,18 +87,18 @@
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type ToggleButton}">
                     <Border Name="Bd" Background="{TemplateBinding Background}" CornerRadius="4"
-                            BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
                             Padding="{TemplateBinding Padding}">
                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsChecked" Value="True">
-                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource Accent}" />
-                            <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource AccentLight}" />
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Accent}" />
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource AccentLight}" />
                             <Setter Property="Foreground" Value="White" />
                         </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource AccentLight}" />
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource AccentLight}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -107,28 +107,28 @@
     </Style>
 
     <Style TargetType="{x:Type TabControl}">
-        <Setter Property="Background" Value="{StaticResource WindowBg}" />
+        <Setter Property="Background" Value="{DynamicResource WindowBg}" />
         <Setter Property="BorderThickness" Value="0" />
     </Style>
 
     <Style TargetType="{x:Type TabItem}">
-        <Setter Property="Foreground" Value="{StaticResource TextDimBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextDimBrush}" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type TabItem}">
-                    <Border Name="Bd" Background="{StaticResource PanelBg}" Margin="0,0,2,0"
-                            BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,2"
+                    <Border Name="Bd" Background="{DynamicResource PanelBg}" Margin="0,0,2,0"
+                            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,2"
                             Padding="14,8">
                         <ContentPresenter ContentSource="Header" />
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsSelected" Value="True">
-                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource CardBg}" />
-                            <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource AccentLight}" />
-                            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource CardBg}" />
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource AccentLight}" />
+                            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
                         </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+                            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -137,50 +137,50 @@
     </Style>
 
     <Style TargetType="{x:Type ListBox}">
-        <Setter Property="Background" Value="{StaticResource PanelBg}" />
-        <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
-        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+        <Setter Property="Background" Value="{DynamicResource PanelBg}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
     </Style>
     <Style TargetType="{x:Type ListBoxItem}">
-        <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
         <Setter Property="Background" Value="Transparent" />
     </Style>
 
     <Style TargetType="{x:Type DataGrid}">
-        <Setter Property="Background" Value="{StaticResource PanelBg}" />
-        <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
-        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
-        <Setter Property="RowBackground" Value="{StaticResource PanelBg}" />
-        <Setter Property="AlternatingRowBackground" Value="{StaticResource CardBg}" />
+        <Setter Property="Background" Value="{DynamicResource PanelBg}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+        <Setter Property="RowBackground" Value="{DynamicResource PanelBg}" />
+        <Setter Property="AlternatingRowBackground" Value="{DynamicResource CardBg}" />
         <Setter Property="GridLinesVisibility" Value="Horizontal" />
-        <Setter Property="HorizontalGridLinesBrush" Value="{StaticResource BorderBrush}" />
+        <Setter Property="HorizontalGridLinesBrush" Value="{DynamicResource BorderBrush}" />
         <Setter Property="HeadersVisibility" Value="Column" />
         <Setter Property="IsReadOnly" Value="True" />
         <Setter Property="AutoGenerateColumns" Value="False" />
         <Setter Property="CanUserAddRows" Value="False" />
     </Style>
     <Style TargetType="{x:Type DataGridColumnHeader}">
-        <Setter Property="Background" Value="{StaticResource Accent}" />
+        <Setter Property="Background" Value="{DynamicResource Accent}" />
         <Setter Property="Foreground" Value="White" />
         <Setter Property="Padding" Value="8,5" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="BorderThickness" Value="0" />
     </Style>
     <Style TargetType="{x:Type DataGridCell}">
-        <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="Padding" Value="6,3" />
         <Style.Triggers>
             <Trigger Property="IsSelected" Value="True">
-                <Setter Property="Background" Value="{StaticResource Accent}" />
+                <Setter Property="Background" Value="{DynamicResource Accent}" />
                 <Setter Property="Foreground" Value="White" />
             </Trigger>
         </Style.Triggers>
     </Style>
 
     <Style TargetType="{x:Type StatusBar}">
-        <Setter Property="Background" Value="{StaticResource PanelBg}" />
-        <Setter Property="Foreground" Value="{StaticResource TextDimBrush}" />
+        <Setter Property="Background" Value="{DynamicResource PanelBg}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextDimBrush}" />
     </Style>
     <Style TargetType="{x:Type ScrollViewer}">
         <Setter Property="Background" Value="Transparent" />

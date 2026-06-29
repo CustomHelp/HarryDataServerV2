@@ -4,7 +4,7 @@
         xmlns:local="clr-namespace:HarryGraph"
         Title="HarryGraph — Detail" Height="780" Width="1180"
         WindowStartupLocation="CenterScreen" ResizeMode="CanResize"
-        Background="{StaticResource WindowBg}">
+        Background="{DynamicResource WindowBg}">
     <!-- A normal resizable window: use the title-bar maximize/restore freely. -->
     <local:GraphPanelControl x:Name="Host" Width="Auto" Height="Auto" Margin="6" />
 </Window>

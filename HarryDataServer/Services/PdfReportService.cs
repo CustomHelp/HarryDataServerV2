@@ -12,8 +12,8 @@ namespace HarryDataServer.Services;
 /// Renders the MSA PDF reports (SOW §3.2.1) with QuestPDF. Two reports per run:
 /// one listing all measurements, one listing only the failed measurements. Files
 /// are named <c>&lt;Module&gt;_&lt;Type&gt;_&lt;DDMMYY_HHMMSS&gt;_AllResults.pdf</c> /
-/// <c>_FailuresOnly.pdf</c> and written to <c>[MSA] ReportPath</c> (fallback
-/// <c>[MSA] ReferencePath\Reports</c>).
+/// <c>_FailuresOnly.pdf</c> and written to the run's PDF subfolder
+/// <c>[MSA] ResultPath\YYYY\MM\DD\&lt;BaseID&gt;\PDF</c> (see <see cref="MsaResultLayout"/>).
 /// </summary>
 public sealed class PdfReportService : IPdfReportService
 {
@@ -34,7 +34,9 @@ public sealed class PdfReportService : IPdfReportService
 
     public MsaReportPaths ResolvePaths(MsaReportData report)
     {
-        var dir = ReportDirectory();
+        // Per-run collection folder: <ResultPath>\YYYY\MM\DD\<BaseID>\PDF (date from the BaseID).
+        var msa = _config.Config.Msa;
+        var dir = MsaResultLayout.PdfDir(msa.ResultPath, msa.ReferencePath, report.BaseId);
         var baseName = $"{Sanitize(report.Module)}_{Sanitize(report.TestType)}_{FileNaming.Stamp(report.RunAt)}";
         return new MsaReportPaths(
             Path.Combine(dir, baseName + "_AllResults.pdf"),
@@ -54,17 +56,6 @@ public sealed class PdfReportService : IPdfReportService
         _log.Information("MSA PDF reports written for {Module}/{Type} ({Failures} failure(s)): {All} | {Fail}",
             report.Module, report.TestType, failures.Count, paths.AllResults, paths.FailuresOnly);
         return paths;
-    }
-
-    /// <summary>Configured report folder, defaulting to ReferencePath\Reports, then app dir.</summary>
-    private string ReportDirectory()
-    {
-        var msa = _config.Config.Msa;
-        if (!string.IsNullOrWhiteSpace(msa.ReportPath))
-            return msa.ReportPath;
-        if (!string.IsNullOrWhiteSpace(msa.ReferencePath))
-            return Path.Combine(msa.ReferencePath, "Reports");
-        return Path.Combine(AppContext.BaseDirectory, "Reports");
     }
 
     private static IDocument BuildDocument(MsaReportData report, IReadOnlyList<MsaReportRow> rows) =>

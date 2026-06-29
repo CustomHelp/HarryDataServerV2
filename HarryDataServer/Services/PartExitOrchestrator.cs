@@ -196,8 +196,8 @@ ON DUPLICATE KEY UPDATE
         {
             await using var conn = await _database.OpenConnectionAsync(ct).ConfigureAwait(false);
             await using var cmd = new MySqlCommand(sql, conn);
-            cmd.Parameters.AddWithValue("@serial", part.Szid);
-            cmd.Parameters.AddWithValue("@trimmer", Nullable(part.VirtualSerial));
+            cmd.Parameters.AddWithValue("@serial", CapSerial(part.Szid, "serial_number"));
+            cmd.Parameters.AddWithValue("@trimmer", NullableSerial(part.VirtualSerial, "serial_trimmer"));
             cmd.Parameters.AddWithValue("@dmc", Nullable(part.Dmc));
             cmd.Parameters.AddWithValue("@m1xmod", (object?)part.M1xModule ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@m1xnest", (object?)part.M1xNest ?? DBNull.Value);
@@ -222,4 +222,23 @@ ON DUPLICATE KEY UPDATE
 
     private static object Nullable(string value) =>
         string.IsNullOrWhiteSpace(value) ? DBNull.Value : value;
+
+    /// <summary>
+    /// Cap a Serial1 value to the DB column width (<see cref="SerialField.MaxLength"/>), logging
+    /// a WARNING on truncation. The part-exit telegram comes from the SPS (not the camera parser),
+    /// so this is the enforcement point for the VARCHAR(22) serial columns (CLAUDE.md §4).
+    /// </summary>
+    private string CapSerial(string value, string column)
+    {
+        if (!string.IsNullOrEmpty(value) && value.Length > SerialField.MaxLength)
+        {
+            _log.Warning("Part exit {Column} '{Value}' exceeds {Max} chars; truncated.",
+                column, value, SerialField.MaxLength);
+            return value[..SerialField.MaxLength];
+        }
+        return value;
+    }
+
+    private object NullableSerial(string value, string column) =>
+        string.IsNullOrWhiteSpace(value) ? DBNull.Value : CapSerial(value, column);
 }

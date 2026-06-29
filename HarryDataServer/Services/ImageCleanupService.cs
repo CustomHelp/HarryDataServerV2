@@ -5,10 +5,12 @@ using HarryDataServer.Models;
 namespace HarryDataServer.Services;
 
 /// <summary>
-/// Implements the retention job (CLAUDE.md section 14, "RetentionJob"): runs at
-/// startup and then daily. Deletes aged NG/Diagnostic/GoldenSample images, drops
-/// expired DB partitions, and (on Part Exit = NG) removes the now-orphaned OK
-/// images of that part. Never blocks other subsystems; all failures are logged.
+/// Implements the retention job (CLAUDE.md section 14, "RetentionJob"): runs at startup and
+/// then daily. The NAS moves full-res NG/Diagnostic/GoldenSample images and finished collages
+/// out of their <c>…\Input</c> folder into <c>…\YYYY\MM\DD</c> day-folders. This service walks
+/// those day-folders and deletes whole folders whose date (taken from the FOLDER NAME, not the
+/// file timestamps) is older than the configured retention. It also drops expired DB partitions
+/// and, for NG, removes the linked low-res individual images. Never blocks other subsystems.
 /// </summary>
 public sealed class ImageCleanupService : IImageCleanupService
 {
@@ -77,12 +79,13 @@ public sealed class ImageCleanupService : IImageCleanupService
     {
         var nas = _config.Config.Nas;
 
-        // NG full-res images also drag their linked low-res individual images with them
-        // (SOW §5.2.3): NG parts produce no collage, so the low-res images are kept until
-        // the matching full-res NG image is deleted here — never earlier.
-        DeleteAgedNgImages(nas.HighResNgPath, nas.LowResIndividualPath, nas.RetentionNgDays);
-        DeleteAgedFiles(nas.HighResDiagnosticPath, nas.RetentionDiagnosticDays);
-        DeleteAgedFiles(nas.HighResGoldenSamplePath, nas.RetentionGoldenSampleDays);
+        // NG day-folders also drag their linked low-res individual images (SOW §5.2.3): NG parts
+        // produce no collage, so the low-res images are kept until the matching full-res NG image
+        // is deleted here — never earlier.
+        CleanupSortedDayFolders(nas.HighResNgPath, nas.RetentionNgDays, nas.LowResIndividualPath);
+        CleanupSortedDayFolders(nas.HighResDiagnosticPath, nas.RetentionDiagnosticDays, null);
+        CleanupSortedDayFolders(nas.HighResGoldenSamplePath, nas.RetentionGoldenSampleDays, null);
+        CleanupSortedDayFolders(nas.CollagePath, nas.RetentionCollageDays, null);
 
         // Drop expired DB partitions (never DELETE) once the database is ready.
         if (_database.Status == DatabaseStatus.Ready)
@@ -94,53 +97,103 @@ public sealed class ImageCleanupService : IImageCleanupService
     }
 
     /// <summary>
-    /// Delete aged full-resolution NG images and, for each one removed, the matching
-    /// low-resolution individual images (linked by the 12-char serial prefix, SOW §5.2.3).
-    /// The low-res images of an NG part are deliberately retained until this point — they
-    /// are not deleted at part exit because no collage consumes them.
+    /// Delete whole NAS-sorted day-folders (YYYY\MM\DD) older than the retention period. The age
+    /// comes from the FOLDER NAME — every image in a day-folder shares that date — not from file
+    /// timestamps (which a NAS move may not preserve). For NG, the matching low-res individual
+    /// images (linked by the 12-char serial prefix) are deleted alongside the full-res folder.
     /// </summary>
-    private void DeleteAgedNgImages(string ngDirectory, string lowResDirectory, int retentionDays)
+    private void CleanupSortedDayFolders(string basePath, int retentionDays, string? linkedLowResBase)
     {
-        if (retentionDays <= 0 || string.IsNullOrWhiteSpace(ngDirectory) || !Directory.Exists(ngDirectory))
+        if (retentionDays <= 0)
             return;
 
-        var cutoff = DateTime.Now.AddDays(-retentionDays);
-        var deletedNg = 0;
+        var root = ImageFileName.SortedRoot(basePath);
+        if (root is null || !Directory.Exists(root))
+            return;
+
+        var cutoff = DateTime.Today.AddDays(-retentionDays);
+        var lowResRoot = string.IsNullOrWhiteSpace(linkedLowResBase) ? null : ImageFileName.SortedRoot(linkedLowResBase);
+
+        var deletedFolders = 0;
         var deletedLowRes = 0;
 
-        foreach (var file in EnumerateFilesSafe(ngDirectory))
+        foreach (var (dayPath, date) in EnumerateDayFolders(root))
         {
+            if (date >= cutoff)
+                continue;
+
             try
             {
-                if (File.GetLastWriteTime(file) >= cutoff)
-                    continue;
+                if (lowResRoot is not null && Directory.Exists(lowResRoot))
+                {
+                    var prefixes = EnumerateFilesSafe(dayPath)
+                        .Select(f => SerialPrefix(Path.GetFileName(f)))
+                        .Where(p => p is not null)
+                        .Select(p => p!)
+                        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                    deletedLowRes += DeleteLinkedLowRes(lowResRoot, prefixes);
+                }
 
-                var prefix = SerialPrefix(Path.GetFileName(file));
-                File.Delete(file);
-                deletedNg++;
-                deletedLowRes += DeleteLowResByPrefix(lowResDirectory, prefix);
+                Directory.Delete(dayPath, recursive: true);
+                deletedFolders++;
             }
             catch (Exception ex)
             {
-                _log.Debug("Could not delete NG image {File}: {Message}", file, ex.Message);
+                _log.Debug("Could not delete day-folder {Dir}: {Message}", dayPath, ex.Message);
             }
         }
 
-        if (deletedNg > 0)
-            _log.Information("Retention: deleted {Ng} NG image(s) + {Low} linked low-res image(s) older than {Days} days in {Dir}.",
-                deletedNg, deletedLowRes, retentionDays, ngDirectory);
+        if (deletedFolders > 0)
+            _log.Information("Retention: deleted {Folders} day-folder(s) older than {Days} days in {Root}{Linked}.",
+                deletedFolders, retentionDays, root,
+                deletedLowRes > 0 ? $" (+{deletedLowRes} linked low-res)" : string.Empty);
     }
 
-    /// <summary>Delete every low-res image whose filename starts with the given 12-char serial prefix.</summary>
-    private int DeleteLowResByPrefix(string lowResDirectory, string? serialPrefix)
+    /// <summary>
+    /// Yield each <c>YYYY\MM\DD</c> day-folder under a sorted root together with its date
+    /// (parsed from the folder names). Non-date folders such as <c>Input</c> are skipped.
+    /// </summary>
+    private IEnumerable<(string Path, DateTime Date)> EnumerateDayFolders(string root)
     {
-        if (string.IsNullOrEmpty(serialPrefix) || string.IsNullOrWhiteSpace(lowResDirectory) || !Directory.Exists(lowResDirectory))
+        foreach (var yearDir in EnumerateDirsSafe(root))
+        {
+            if (!TryNum(Path.GetFileName(yearDir), 1000, 9999, out var year))
+                continue;
+            foreach (var monthDir in EnumerateDirsSafe(yearDir))
+            {
+                if (!TryNum(Path.GetFileName(monthDir), 1, 12, out var month))
+                    continue;
+                foreach (var dayDir in EnumerateDirsSafe(monthDir))
+                {
+                    if (!TryNum(Path.GetFileName(dayDir), 1, 31, out var day))
+                        continue;
+
+                    DateTime date;
+                    try { date = new DateTime(year, month, day); }
+                    catch (ArgumentOutOfRangeException) { continue; }
+                    yield return (dayDir, date);
+                }
+            }
+        }
+    }
+
+    private static bool TryNum(string text, int min, int max, out int value) =>
+        int.TryParse(text, out value) && value >= min && value <= max;
+
+    /// <summary>
+    /// Delete every low-res image under the low-res sorted root whose filename starts with one
+    /// of the given 12-char serial prefixes (the NG full-res images being removed, SOW §5.2.3).
+    /// </summary>
+    private int DeleteLinkedLowRes(string lowResRoot, IReadOnlySet<string> serialPrefixes)
+    {
+        if (serialPrefixes.Count == 0)
             return 0;
 
         var deleted = 0;
-        foreach (var file in EnumerateFilesSafe(lowResDirectory))
+        foreach (var file in EnumerateFilesSafe(lowResRoot))
         {
-            if (!Path.GetFileName(file).StartsWith(serialPrefix, StringComparison.OrdinalIgnoreCase))
+            var name = Path.GetFileName(file);
+            if (name.Length < 12 || !serialPrefixes.Contains(name[..12]))
                 continue;
             try
             {
@@ -156,41 +209,11 @@ public sealed class ImageCleanupService : IImageCleanupService
     }
 
     /// <summary>
-    /// The image search key (CLAUDE.md §6/§11): the first 12 characters of the serial,
-    /// which every related image filename starts with. Null if the name is too short.
+    /// The image search key (CLAUDE.md §6/§11): the first 12 characters of the serial, which
+    /// every related image filename starts with. Null if the name is too short.
     /// </summary>
     private static string? SerialPrefix(string fileName) =>
         fileName.Length >= 12 ? fileName[..12] : null;
-
-    /// <summary>Delete files older than <paramref name="retentionDays"/> under a directory tree.</summary>
-    private void DeleteAgedFiles(string directory, int retentionDays)
-    {
-        if (retentionDays <= 0 || string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory))
-            return;
-
-        var cutoff = DateTime.Now.AddDays(-retentionDays);
-        var deleted = 0;
-
-        foreach (var file in EnumerateFilesSafe(directory))
-        {
-            try
-            {
-                if (File.GetLastWriteTime(file) < cutoff)
-                {
-                    File.Delete(file);
-                    deleted++;
-                }
-            }
-            catch (Exception ex)
-            {
-                _log.Debug("Could not delete {File}: {Message}", file, ex.Message);
-            }
-        }
-
-        if (deleted > 0)
-            _log.Information("Retention: deleted {Count} file(s) older than {Days} days in {Dir}.",
-                deleted, retentionDays, directory);
-    }
 
     private IEnumerable<string> EnumerateFilesSafe(string directory)
     {
@@ -201,6 +224,19 @@ public sealed class ImageCleanupService : IImageCleanupService
         catch (Exception ex)
         {
             _log.Debug("Could not enumerate {Dir}: {Message}", directory, ex.Message);
+            return Array.Empty<string>();
+        }
+    }
+
+    private IEnumerable<string> EnumerateDirsSafe(string directory)
+    {
+        try
+        {
+            return Directory.EnumerateDirectories(directory);
+        }
+        catch (Exception ex)
+        {
+            _log.Debug("Could not enumerate dirs in {Dir}: {Message}", directory, ex.Message);
             return Array.Empty<string>();
         }
     }

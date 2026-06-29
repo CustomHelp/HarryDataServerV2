@@ -86,4 +86,28 @@ public sealed class BaseId
 
         return true;
     }
+
+    /// <summary>The run timestamp encoded in the BaseID (2000 + the 2-digit year).</summary>
+    public DateTime ToDateTime() => new(2000 + Year, Month, Day, Hour, Minute, Second);
+
+    /// <summary>
+    /// Derive the run date/time from a (bare 14-char) BaseID string. Used to place the MSA
+    /// result folder under YYYY\MM\DD by the BaseID timestamp — not the current time
+    /// (the completion request can arrive later than the run started).
+    /// </summary>
+    public static bool TryGetTimestamp(string baseId, out DateTime timestamp)
+    {
+        timestamp = default;
+        if (TryParse(baseId) is not { } b)
+            return false;
+        try
+        {
+            timestamp = b.ToDateTime();
+            return true;
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            return false; // impossible date components
+        }
+    }
 }

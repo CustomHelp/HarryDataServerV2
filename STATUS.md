@@ -194,7 +194,8 @@ GDI+ (`System.Drawing.Common`, Windows-only) composition on a background task.
 ## UI notes (Phase 11)
 
 Dark theme (`#1A1D23` bg, purple `#6B21A8` accent) via `Themes/DarkTheme.xaml` (implicit
-styles, merged in App.xaml). App icon (`HarrySuite_Icons\HarryDataServer.ico`) + CustomHelp
+styles, merged in App.xaml), **runtime-switchable to a light theme** via `ThemeManager`
+(top-bar toggle button; see the "Suite-wide light/dark theming" section below). App icon (`HarrySuite_Icons\HarryDataServer.ico`) + CustomHelp
 logo (top-left, 32px, embedded WPF resource). MVVM via CommunityToolkit.Mvvm; one 1 s
 UI-thread `DispatcherTimer` drives all refresh (row counts every 30 s) — background events
 (SPS activity, log) captured into thread-safe buffers, synced on the tick.
@@ -438,6 +439,121 @@ in the serial field; the completion signal `Request;<BaseID>` carries the **bare
 
 Docs updated: `CLAUDE.md` §4/§5/§6/§7/§8, `DATABASE_SCHEMA.md` (msa_measurements/msa_results).
 Full solution builds **0 warnings / 0 errors**.
+
+---
+
+## Image naming, MSA result folders, CSV structure, cleanup fix (2026-06-23)
+
+1. **Hyphen image filename format.** New `Infrastructure/ImageFileName.cs` parses the Keyence
+   filename `<Field1 32>-<Field2>-<overall>-<Controller>-<Nest>-&<ImageName>.png` (same structure
+   Normal/MSA; only Field1/Field2 differ). Separator is `-` (SZID has `_` after char 12). Field1 =
+   SZID (Normal) / BaseID(14)+Loop(3)+padding (MSA); Field2 = zeros / DMC. Field1 read up to the
+   first `-`; Field2 (DMC, may contain `-`) recovered by anchoring on the `&ImageName` tail.
+   Helpers: `MatchesBaseId(14)`, `MatchesSerialPrefix(12)`, `SortedRoot`.
+2. **Per-run MSA result collection.** `Infrastructure/MsaResultLayout.cs` resolves
+   `<ResultPath>\YYYY\MM\DD\<BaseID>\{PDF,CSV,IMG}` (date from the BaseID timestamp). On run
+   completion `MsaService` now: writes the MSA CSV into `…\CSV\`, the 2 PDFs into `…\PDF\`
+   (`PdfReportService`), and **moves** the GoldenSample run images (Field1 starts with the 14-char
+   BaseID) into `…\IMG\`. New `[MSA] ResultPath`; **removed** `[MSA] ReportPath` and `[CSV] CSV_MSAPath`.
+3. **CSV structure (verified).** Production (`CsvExportService`) and diagnostic (`DiagnosticProcessor`)
+   CSVs already write directly into `CSV_BasePath\YYYY\MM\DD` / `CSV_DiagnosticPath\YYYY\MM\DD`
+   (`dateSubfolders:true`) — confirmed, no change needed.
+4. **ImageCleanupService — search SORTED folders.** Rewritten: iterates `YYYY\MM\DD` day-folders
+   under the **sorted root** (parent of each `\Input`), takes age from the **folder name** (not file
+   timestamps), and deletes whole day-folders past retention. Applies to NG (+ linked low-res by
+   12-char prefix), Diagnostic, GoldenSample, **and Collage**. New **`[NAS] RetentionCollageDays`**
+   (separately adjustable; falls back to `FullResRetentionDays`). Partition-drop unchanged.
+5. **LimitSample reference path sync (verified).** HarryLimitSample reads/saves
+   `MSA_<module>.json` via `HarryConfig.MsaReferencePath` (`[MSA] ReferencePath`); the server reads
+   `MsaConfig.ReferencePath` (same key, same central Harry.ini). No hardcoded path. `ReferencePath`
+   (input) and `ResultPath` (output) are distinct folders.
+6. **Harry.ini + docs.** Template updated (removed `CSV_MSAPath`/`ReportPath`, added `ResultPath` +
+   `RetentionCollageDays`, documented the hyphen filename format and the ResultPath subfolder
+   layout). CLAUDE.md §10/§11/§13 updated.
+
+New files: `Infrastructure/{ImageFileName,MsaResultLayout}.cs`. Config: `MsaConfig.ResultPath`
+(replaces `ReportPath`), `NasConfig.RetentionCollageDays`, `CsvConfig.MsaPath` removed.
+
+---
+
+## Suite-wide light/dark theming (2026-06-29)
+
+A runtime **light/dark theme switch** was added across the whole suite (all 6 WPF apps).
+
+1. **`ThemeManager`** — `HarryDataServer/Theming/ThemeManager.cs` (server dashboard) and
+   `HarryShared/Theming/ThemeManager.cs` (the 5 companion tools), same logic. It mutates the
+   palette `SolidColorBrush` instances held in the application resources **in place**, so every
+   `DynamicResource` consumer (views + implicit styles) updates **live** without reloading any
+   window. `AppTheme` enum = `{Dark, Light}`.
+2. **Palette** — per-key (dark ARGB, light ARGB) pairs: `WindowBg`, `PanelBg`, `CardBg`,
+   `BorderBrush`, `TextBrush`, `TextDimBrush`, `PopupBg`, `HoverBg`, `ItemText`. `Accent`
+   (`#6B21A8`), `AccentLight` (`#8B5CF6`) and the semantic LED colours stay **constant** across
+   both themes. Keys absent in a given app are skipped.
+3. **DarkTheme.xaml (both projects)** — palette brushes the implicit styles reference were
+   converted from `StaticResource` → **`DynamicResource`** so the in-place colour swap propagates.
+   New surface keys `PopupBg`/`HoverBg`/`ItemText` added for popups/menus to read well in light mode.
+4. **Persistence** — the chosen theme is written to `%LOCALAPPDATA%\HarrySuite\theme.txt`, so the
+   choice is **shared across the whole suite** and survives restarts. Best-effort (falls back to
+   Dark on any I/O error). Each window calls `ThemeManager.Initialize()` at startup.
+5. **Toggle UI** — server: a `ThemeToggle` button in the top bar; companion tools: a per-app
+   toggle button. Content flips between `☀ Light` / `🌙 Dark` (`OnThemeToggle` → `Toggle()` →
+   `UpdateThemeButton()`). Default is Dark when nothing is saved.
+
+### Theme toggle freeze-fix (2026-06-29)
+
+The toggle button switched the persisted state but had **no visual effect** — the UI stayed
+dark. Root cause: `ThemeManager.Apply` mutated each palette brush in place (`brush.Color = …`)
+behind a `!brush.IsFrozen` guard, but the palette brushes are **frozen** once consumed by the
+sealed implicit-style setters, so every mutation was silently skipped. (The `StaticResource →
+DynamicResource` conversion of all palette consumers was already in place — verified: 0 palette
+`StaticResource` references remain in any XAML.) Fix: `Apply` now **replaces** each resource with
+a fresh `SolidColorBrush` (`app.Resources[key] = new SolidColorBrush(color)`); since consumers use
+`DynamicResource`, they re-resolve to the new brush and the UI updates live. Applied to **both**
+`HarryDataServer/Theming/ThemeManager.cs` and `HarryShared/Theming/ThemeManager.cs`. **Verified
+live on the server (2026-06-29):** the toggle switches dark⇄light instantly across all apps and
+the choice persists across restarts.
+
+New files: `HarryDataServer/Theming/ThemeManager.cs`, `HarryShared/Theming/ThemeManager.cs`.
+Touched: both `Themes/DarkTheme.xaml` + all 6 `MainWindow.xaml`/`.xaml.cs` (server top bar +
+`HarryGraph/GraphPanelControl.xaml`/`GraphWindow.xaml`). CLAUDE.md §14 documents the mechanism.
+
+---
+
+## Serial field rework — 22-char Serial1 (2026-06-29)
+
+Serial1 (positions 4–35) is transmitted as 32 chars but only the first **22 are meaningful**
+(SPS agreement); Serial2 (36–67) stays **32 chars**. Serial1 is now truncated to 22 at parse
+time and the DB serial columns are `VARCHAR(22)`, so stored values match the 22-char Field 1 of
+the Keyence image filenames (collage / MSA image collection / cleanup).
+
+1. **Parse-time truncation.** `TelegramParser.ParseLine` caps Serial1 to 22 chars (single
+   chokepoint); Serial2 untouched. New `ParsedTelegram.Serial1MaxLength = 22` + updated doc-comments.
+2. **Shared width + guard.** New `Infrastructure/SerialField.cs` (`MaxLength = 22`, `Cap()`): the
+   single definition of the width, used by the parser, the image-filename parser, and the inserts.
+3. **DB inserts.** `PartExitOrchestrator.SaveDmcAsync` caps `serial_number`/`serial_trimmer` to 22
+   and logs a WARNING on truncation (the part-exit telegram comes from the SPS, not the camera
+   parser, so this is the enforcement point). `MeasurementProcessor` caps defensively.
+4. **Schema → VARCHAR(22).** All four Serial1 columns: `dmcserial.serial_number`,
+   `dmcserial.serial_trimmer`, `measurements_serial.serial_number`,
+   `measurements_serial_trimmer.serial_trimmer` (`dmc` stays VARCHAR(50) = Serial2).
+   `msa_measurements.base_id` unchanged (14-char BaseID).
+5. **Migration = DROP + CREATE (not ALTER).** Tables are disposable in trial operation, so
+   `MySqlRepository.RebuildOutdatedSerialTablesAsync` checks each serial column's
+   `CHARACTER_MAXIMUM_LENGTH` at startup and, only on a width mismatch, **drops and recreates** the
+   table at the new width (logged WARNING; data cleared). Idempotent — fires once on transition.
+   Runs after `EnsureTables`, before the ADD-COLUMN check; index/partition checks repopulate the
+   recreated tables. Driven by `DatabaseSchema.SerialColumnWidths`.
+6. **Image filename.** `ImageFileName` Field 1 capped to 22 chars (`Field1Of` + `TryParse`); format
+   documented as `<Field1 22>-<Field2 32>-…`. MSA run-image collection keeps matching on the
+   **14-char BaseID prefix** (`MatchesBaseId`, used by `MsaService.MoveRunImages`) so all loops are
+   gathered regardless of the 22-char Serial1; NG cleanup linkage stays at the **12-char** prefix.
+7. **Routing (verified, unchanged).** M2X → `measurements_serial_trimmer`, M1X/M5X →
+   `measurements_serial`, keyed on the camera's INI `Module` in `MeasurementProcessor` (comment
+   clarified). Already correct — left in place per the spec's "leave alone if correct" note.
+
+New file: `Infrastructure/SerialField.cs`. Touched: `TelegramParser`, `ParsedTelegram`,
+`MeasurementProcessor`, `PartExitOrchestrator`, `DatabaseSchema`, `MySqlRepository`, `ImageFileName`.
+CLAUDE.md §4/§11 updated. Full solution builds **0 errors** (`net8.0-windows`).
 
 ---
 

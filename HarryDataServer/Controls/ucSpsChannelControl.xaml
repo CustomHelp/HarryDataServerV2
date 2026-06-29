@@ -8,19 +8,19 @@
                 <TextBlock Text="{Binding Title}" FontWeight="Bold" FontSize="13" TextTrimming="CharacterEllipsis" />
             </DockPanel>
             <DockPanel Margin="0,2,0,8">
-                <TextBlock DockPanel.Dock="Right" Foreground="{StaticResource TextDimBrush}">
+                <TextBlock DockPanel.Dock="Right" Foreground="{DynamicResource TextDimBrush}">
                     <Run Text="Msgs:" /><Run Text="{Binding Messages, Mode=OneWay}" />
                 </TextBlock>
-                <TextBlock Foreground="{StaticResource TextDimBrush}">
+                <TextBlock Foreground="{DynamicResource TextDimBrush}">
                     <Run Text="Port" /><Run Text="{Binding Port, Mode=OneWay}" />
                 </TextBlock>
             </DockPanel>
 
-            <TextBlock Text="Last requests" Foreground="{StaticResource TextDimBrush}" FontSize="11" />
+            <TextBlock Text="Last requests" Foreground="{DynamicResource TextDimBrush}" FontSize="11" />
             <ListBox ItemsSource="{Binding LastRequests}" Height="44" Margin="0,2,0,6"
                      FontFamily="Consolas" FontSize="11" />
 
-            <TextBlock Text="Last responses" Foreground="{StaticResource TextDimBrush}" FontSize="11" />
+            <TextBlock Text="Last responses" Foreground="{DynamicResource TextDimBrush}" FontSize="11" />
             <ListBox ItemsSource="{Binding LastResponses}" Height="44" Margin="0,2,0,0"
                      FontFamily="Consolas" FontSize="11" />
         </StackPanel>

@@ -10,7 +10,7 @@
                 <!-- Cameras -->
                 <Border Style="{StaticResource Card}" Width="270" Margin="0,0,12,12">
                     <StackPanel>
-                        <TextBlock Text="Cameras" Foreground="{StaticResource TextDimBrush}" />
+                        <TextBlock Text="Cameras" Foreground="{DynamicResource TextDimBrush}" />
                         <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
                             <Ellipse Width="14" Height="14" Fill="{Binding OverviewCamerasBrush}" VerticalAlignment="Center" />
                             <TextBlock Text="{Binding OverviewCameras}" FontSize="16" FontWeight="Bold" Margin="8,0,0,0" />
@@ -28,7 +28,7 @@
                 <!-- Today's parts -->
                 <Border Style="{StaticResource Card}" Width="270" Margin="0,0,12,12">
                     <StackPanel>
-                        <TextBlock Text="Today's parts" Foreground="{StaticResource TextDimBrush}" />
+                        <TextBlock Text="Today's parts" Foreground="{DynamicResource TextDimBrush}" />
                         <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
                             <Border Background="{StaticResource LedGreen}" CornerRadius="4" Padding="12,4" Margin="0,0,8,0">
                                 <StackPanel>
@@ -49,10 +49,10 @@
                 <!-- Order / last exit -->
                 <Border Style="{StaticResource Card}" Width="270" Margin="0,0,12,12">
                     <StackPanel>
-                        <TextBlock Text="Active order" Foreground="{StaticResource TextDimBrush}" />
+                        <TextBlock Text="Active order" Foreground="{DynamicResource TextDimBrush}" />
                         <TextBlock Text="{Binding ActiveOrder}" FontSize="16" FontWeight="Bold" Margin="0,4,0,10"
                                    TextTrimming="CharacterEllipsis" />
-                        <TextBlock Text="Last part exit" Foreground="{StaticResource TextDimBrush}" />
+                        <TextBlock Text="Last part exit" Foreground="{DynamicResource TextDimBrush}" />
                         <TextBlock Text="{Binding LastPartExit}" FontWeight="SemiBold" Margin="0,4,0,0" />
                     </StackPanel>
                 </Border>

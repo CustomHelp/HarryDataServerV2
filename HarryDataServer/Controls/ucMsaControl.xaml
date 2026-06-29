@@ -35,7 +35,7 @@
                                 <Button Content="Open Failures Only" Command="{Binding OpenFailuresOnlyCommand}" DockPanel.Dock="Right" Margin="0,0,6,0" />
                                 <Button Content="↻" Command="{Binding RefreshCommand}" DockPanel.Dock="Right" Margin="0,0,6,0" />
                                 <TextBlock Text="{Binding RunInfo}" VerticalAlignment="Center" Margin="12,0,8,0"
-                                           Foreground="{StaticResource TextDimBrush}" TextTrimming="CharacterEllipsis" />
+                                           Foreground="{DynamicResource TextDimBrush}" TextTrimming="CharacterEllipsis" />
                             </DockPanel>
                             <DataGrid Grid.Row="1" ItemsSource="{Binding Rows}">
                                 <DataGrid.Columns>
@@ -75,7 +75,7 @@
                                 <Button Content="Open Failures Only" Command="{Binding OpenFailuresOnlyCommand}" DockPanel.Dock="Right" Margin="0,0,6,0" />
                                 <Button Content="↻" Command="{Binding RefreshCommand}" DockPanel.Dock="Right" Margin="0,0,6,0" />
                                 <TextBlock Text="{Binding RunInfo}" VerticalAlignment="Center" Margin="12,0,8,0"
-                                           Foreground="{StaticResource TextDimBrush}" TextTrimming="CharacterEllipsis" />
+                                           Foreground="{DynamicResource TextDimBrush}" TextTrimming="CharacterEllipsis" />
                             </DockPanel>
                             <DataGrid Grid.Row="1" ItemsSource="{Binding Rows}">
                                 <DataGrid.Columns>
@@ -115,7 +115,7 @@
                                 <Button Content="Open Failures Only" Command="{Binding OpenFailuresOnlyCommand}" DockPanel.Dock="Right" Margin="0,0,6,0" />
                                 <Button Content="↻" Command="{Binding RefreshCommand}" DockPanel.Dock="Right" Margin="0,0,6,0" />
                                 <TextBlock Text="{Binding RunInfo}" VerticalAlignment="Center" Margin="12,0,8,0"
-                                           Foreground="{StaticResource TextDimBrush}" TextTrimming="CharacterEllipsis" />
+                                           Foreground="{DynamicResource TextDimBrush}" TextTrimming="CharacterEllipsis" />
                             </DockPanel>
                             <DataGrid Grid.Row="1" ItemsSource="{Binding Rows}">
                                 <DataGrid.Columns>
@@ -135,7 +135,7 @@
                                     </DataGridTemplateColumn>
                                 </DataGrid.Columns>
                             </DataGrid>
-                            <TextBlock Grid.Row="2" Margin="0,6,0,0" FontSize="11" Foreground="{StaticResource TextDimBrush}"
+                            <TextBlock Grid.Row="2" Margin="0,6,0,0" FontSize="11" Foreground="{DynamicResource TextDimBrush}"
                                        Text="Expected = prepared error (reject/accept); Actual = observed outcome." />
                         </Grid>
                     </TabItem>

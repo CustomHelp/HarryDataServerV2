@@ -52,7 +52,7 @@ public sealed class IniConfigManager
         return new MsaConfig
         {
             ReferencePath = ResolvePath(Str(s, "ReferencePath", string.Empty), configDir),
-            ReportPath = ResolvePath(Str(s, "ReportPath", string.Empty), configDir),
+            ResultPath = ResolvePath(Str(s, "ResultPath", string.Empty), configDir),
         };
     }
 
@@ -95,7 +95,6 @@ public sealed class IniConfigManager
         return new CsvConfig
         {
             BasePath = Str(s, "CSV_BasePath", string.Empty),
-            MsaPath = Str(s, "CSV_MSAPath", string.Empty),
             DiagnosticPath = Str(s, "CSV_DiagnosticPath", string.Empty),
             DataSetsPerFile = Int(s, "DataSetsPerFile", 10000),
             Save = Bool(s, "CSV_Save", true),
@@ -121,6 +120,7 @@ public sealed class IniConfigManager
             RetentionNgDays = Int(s, "RetentionNGDays", fullRes),
             RetentionDiagnosticDays = Int(s, "RetentionDiagnosticDays", fullRes),
             RetentionGoldenSampleDays = Int(s, "RetentionGoldenSampleDays", fullRes),
+            RetentionCollageDays = Int(s, "RetentionCollageDays", fullRes),
             DeleteAfterCollage = Bool(s, "DeleteAfterCollage", true),
             DeletePictures = Bool(s, "DeletePictures", true),
             BackupFolder = Str(s, "BackupFolder", string.Empty),

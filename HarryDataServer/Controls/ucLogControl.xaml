@@ -6,7 +6,7 @@
         <!-- Toolbar -->
         <StackPanel DockPanel.Dock="Top" Margin="0,0,0,6">
             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                <TextBlock Text="Level:" VerticalAlignment="Center" Margin="0,0,8,0" Foreground="{StaticResource TextDimBrush}" />
+                <TextBlock Text="Level:" VerticalAlignment="Center" Margin="0,0,8,0" Foreground="{DynamicResource TextDimBrush}" />
                 <Button Content="ALL" Command="{Binding AllCommand}" Margin="0,0,8,0" />
                 <ToggleButton Content="INFO" IsChecked="{Binding ShowInfo}" />
                 <ToggleButton Content="WARNING" IsChecked="{Binding ShowWarning}" />
@@ -14,7 +14,7 @@
                 <Button Content="Export" Command="{Binding ExportCommand}" Margin="20,0,0,0" />
             </StackPanel>
             <StackPanel Orientation="Horizontal">
-                <TextBlock Text="Source:" VerticalAlignment="Center" Margin="0,0,8,0" Foreground="{StaticResource TextDimBrush}" />
+                <TextBlock Text="Source:" VerticalAlignment="Center" Margin="0,0,8,0" Foreground="{DynamicResource TextDimBrush}" />
                 <ToggleButton Content="CAMERA" IsChecked="{Binding ShowCamera}" />
                 <ToggleButton Content="SPS" IsChecked="{Binding ShowSps}" />
                 <ToggleButton Content="DATABASE" IsChecked="{Binding ShowDatabase}" />

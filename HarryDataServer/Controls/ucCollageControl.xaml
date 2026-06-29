@@ -24,7 +24,7 @@
                         <StackPanel>
                             <Image Source="{Binding Image}" MaxHeight="180" Stretch="Uniform" />
                             <TextBlock Text="{Binding Timestamp}" HorizontalAlignment="Center"
-                                       Foreground="{StaticResource TextDimBrush}" Margin="0,4,0,0" />
+                                       Foreground="{DynamicResource TextDimBrush}" Margin="0,4,0,0" />
                         </StackPanel>
                     </Border>
                 </DataTemplate>
@@ -32,6 +32,6 @@
         </ItemsControl>
 
         <TextBlock Text="Collages appear here as they are generated (OK parts, when Collage_Generate=true)."
-                   Foreground="{StaticResource TextDimBrush}" FontSize="11" Margin="0,8,0,0" />
+                   Foreground="{DynamicResource TextDimBrush}" FontSize="11" Margin="0,8,0,0" />
     </StackPanel>
 </UserControl>

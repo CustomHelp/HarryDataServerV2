@@ -14,12 +14,12 @@
                     <RowDefinition /><RowDefinition /><RowDefinition />
                 </Grid.RowDefinitions>
 
-                <TextBlock Grid.Row="0" Grid.Column="0" Text="Active file" Foreground="{StaticResource TextDimBrush}" Margin="0,3" />
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="Active file" Foreground="{DynamicResource TextDimBrush}" Margin="0,3" />
                 <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding CsvActivePath}" Margin="0,3"
                            TextTrimming="CharacterEllipsis" FontFamily="Consolas" />
-                <TextBlock Grid.Row="1" Grid.Column="0" Text="Rows written" Foreground="{StaticResource TextDimBrush}" Margin="0,3" />
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="Rows written" Foreground="{DynamicResource TextDimBrush}" Margin="0,3" />
                 <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding CsvRows}" Margin="0,3" />
-                <TextBlock Grid.Row="2" Grid.Column="0" Text="Last write" Foreground="{StaticResource TextDimBrush}" Margin="0,3" />
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="Last write" Foreground="{DynamicResource TextDimBrush}" Margin="0,3" />
                 <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding CsvLastWrite}" Margin="0,3" />
             </Grid>
         </Border>
@@ -31,7 +31,7 @@
             </StackPanel>
         </Border>
 
-        <TextBlock Margin="0,12,0,0" TextWrapping="Wrap" Foreground="{StaticResource TextDimBrush}">
+        <TextBlock Margin="0,12,0,0" TextWrapping="Wrap" Foreground="{DynamicResource TextDimBrush}">
             One row per finished part with every measurement value from every camera (two-row
             header), rotated on order change or when DataSetsPerFile rows are reached. After
             dmcserial is saved, CSV / Collage / image handling run in parallel, then the SPS

@@ -1,3 +1,4 @@
+using System.Linq;
 using HarryDataServer.Models;
 using HarryDataServer.Services;
 using MySqlConnector;
@@ -78,7 +79,64 @@ public sealed class MySqlRepository
     {
         await EnsureDatabaseAsync(ct).ConfigureAwait(false);
         await EnsureTablesAsync(ct).ConfigureAwait(false);
+        await RebuildOutdatedSerialTablesAsync(ct).ConfigureAwait(false);
         await SchemaCheckAsync(ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Bring serial columns to their current width by rebuilding any table whose serial column
+    /// is still the old width. Serial1 (SZID / Virtual Serial / MSA BaseID+loop) is stored in
+    /// VARCHAR(22) (CLAUDE.md §4). Because an ALTER ... MODIFY is awkward on the partitioned
+    /// measurement tables and the data is disposable during trial operation, the migration is a
+    /// DROP + re-CREATE at the new width. Idempotent: a table already at the expected width is
+    /// left untouched, so this only fires on the one-time transition. Runs after the tables are
+    /// ensured (so the column can be inspected) and before the ADD COLUMN schema-check; the
+    /// index- and partition-checks run later in startup and repopulate the recreated tables.
+    /// </summary>
+    private async Task RebuildOutdatedSerialTablesAsync(CancellationToken ct)
+    {
+        await using var conn = await OpenAsync(ct).ConfigureAwait(false);
+        var rebuilt = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (table, column, length) in DatabaseSchema.SerialColumnWidths)
+        {
+            if (rebuilt.Contains(table))
+                continue;
+
+            var actual = await GetColumnLengthAsync(conn, table, column, ct).ConfigureAwait(false);
+            if (actual is null || actual == length)
+                continue; // column absent (fresh install already at the new width) or already correct
+
+            _log.Warning(
+                "Schema rebuild: {Table}.{Column} is VARCHAR({Actual}) but VARCHAR({Length}) is expected; " +
+                "dropping and recreating the table (existing rows are cleared).",
+                table, column, actual.Value, length);
+
+            var schema = DatabaseSchema.Tables.First(t => t.Name == table);
+            await using (var drop = new MySqlCommand($"DROP TABLE IF EXISTS `{table}`;", conn))
+                await drop.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+            await using (var create = new MySqlCommand(schema.CreateSql, conn))
+                await create.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+
+            rebuilt.Add(table);
+            _log.Information("Schema rebuild: recreated {Table} with the current schema.", table);
+        }
+    }
+
+    /// <summary>The declared length of a VARCHAR column, or null if the table/column is absent.</summary>
+    private static async Task<int?> GetColumnLengthAsync(
+        MySqlConnection conn, string table, string column, CancellationToken ct)
+    {
+        const string sql = @"
+SELECT CHARACTER_MAXIMUM_LENGTH
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = @table AND COLUMN_NAME = @column;";
+
+        await using var cmd = new MySqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@table", table);
+        cmd.Parameters.AddWithValue("@column", column);
+        var result = await cmd.ExecuteScalarAsync(ct).ConfigureAwait(false);
+        return result is null or DBNull ? null : Convert.ToInt32(result);
     }
 
     private async Task EnsureDatabaseAsync(CancellationToken ct)

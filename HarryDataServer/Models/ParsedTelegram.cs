@@ -20,6 +20,14 @@ public sealed class ParsedTelegram
     public const int Serial2Start = 36;
     public const int Serial2End = 68;   // exclusive
 
+    /// <summary>
+    /// Serial1 is transmitted in a 32-char field but only the first 22 characters are
+    /// meaningful (SPS agreement); the rest is padding. The parser truncates Serial1 to this
+    /// length so the stored value matches the 22-char Field 1 of the image filename (§4/§11).
+    /// Serial2 keeps its full 32 chars (needed for DMC uniqueness in MSA).
+    /// </summary>
+    public const int Serial1MaxLength = 22;
+
     public required string[] Fields { get; init; }
 
     /// <summary>The original telegram line (without the trailing carriage return).</summary>
@@ -32,15 +40,16 @@ public sealed class ParsedTelegram
     public CameraOperatingMode Mode { get; init; }
 
     /// <summary>
-    /// Positions 4–35: SZID / Virtual Serial in Normal mode; in MSA modes this carries the
-    /// BaseID (14 chars) followed by the 3-digit loop counter (split via
+    /// Positions 4–35, truncated by the parser to the first <see cref="Serial1MaxLength"/> (22)
+    /// meaningful characters. Normal mode: SZID (M1X/M5X) or Virtual Serial (M2X). MSA modes:
+    /// the BaseID (14 chars) followed by the 3-digit loop counter (split via
     /// <see cref="BaseId.TrySplitRun"/>). Empty if the telegram is too short (e.g. Settings).
     /// </summary>
     public string Serial1 { get; init; } = string.Empty;
 
     /// <summary>
-    /// Positions 36–67: Virtual Serial (M20/M21) in Normal mode; the DMC of the test part
-    /// in MSA modes.
+    /// Positions 36–67, full 32 chars: Virtual Serial (M20/M21) in Normal mode; the DMC of the
+    /// test part in MSA modes (kept at full width for DMC uniqueness).
     /// </summary>
     public string Serial2 { get; init; } = string.Empty;
 

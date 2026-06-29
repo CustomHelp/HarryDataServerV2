@@ -37,7 +37,6 @@ public sealed class MySqlConfig
 public sealed class CsvConfig
 {
     public string BasePath { get; init; } = string.Empty;
-    public string MsaPath { get; init; } = string.Empty;
     public string DiagnosticPath { get; init; } = string.Empty;
     public int DataSetsPerFile { get; init; } = 10000;
     public bool Save { get; init; } = true;
@@ -56,6 +55,10 @@ public sealed class NasConfig
     public int RetentionNgDays { get; init; } = 30;
     public int RetentionDiagnosticDays { get; init; } = 30;
     public int RetentionGoldenSampleDays { get; init; } = 30;
+
+    /// <summary>Retention (days) for finished collages, configurable independently of the
+    /// full-res image types. Falls back to <see cref="FullResRetentionDays"/> when unset.</summary>
+    public int RetentionCollageDays { get; init; } = 30;
 
     /// <summary>Default full-resolution image retention in days (SOW §5.2.3). Used as the
     /// fallback for the per-type NG/Diagnostic/GoldenSample retention when those are unset.</summary>
@@ -107,10 +110,13 @@ public sealed class SqlSettingsConfig
 
 public sealed class MsaConfig
 {
-    /// <summary>Folder holding the per-module MSA reference JSON files (relative to the config dir).</summary>
+    /// <summary>Folder holding the per-module MSA reference JSON files (input definitions,
+    /// persistent; written by HarryLimitSample, read here). Relative to the config dir.</summary>
     public string ReferencePath { get; init; } = string.Empty;
 
-    /// <summary>Folder where MSA PDF reports are written (SOW §3.2.1). When empty, falls
-    /// back to <see cref="ReferencePath"/>\Reports.</summary>
-    public string ReportPath { get; init; } = string.Empty;
+    /// <summary>Root folder for per-run MSA/LimitSample result collection (output). On run
+    /// completion the server gathers the PDF reports, the measurement CSV and the run images
+    /// under <c>&lt;ResultPath&gt;\YYYY\MM\DD\&lt;BaseID&gt;\{PDF,CSV,IMG}</c>. Kept SEPARATE from
+    /// <see cref="ReferencePath"/>. When empty, falls back to ReferencePath\MSA_Results.</summary>
+    public string ResultPath { get; init; } = string.Empty;
 }

@@ -73,7 +73,13 @@ public sealed class TelegramParser
         var serial2 = string.Empty;
         if (signal is TelegramSignal.Results or TelegramSignal.Diagnostic)
         {
+            // Serial1 (pos 4–35) is transmitted as 32 chars but only the first 22 are meaningful
+            // (SPS agreement); the trailing chars are padding. Truncating here, at the single
+            // parse chokepoint, makes the stored value match the 22-char Field 1 of the Keyence
+            // image filenames (CLAUDE.md §4/§11). Serial2 keeps its full 32 chars.
             serial1 = ConcatRange(fields, ParsedTelegram.Serial1Start, ParsedTelegram.Serial1End);
+            if (serial1.Length > ParsedTelegram.Serial1MaxLength)
+                serial1 = serial1[..ParsedTelegram.Serial1MaxLength];
             serial2 = ConcatRange(fields, ParsedTelegram.Serial2Start, ParsedTelegram.Serial2End);
         }
 

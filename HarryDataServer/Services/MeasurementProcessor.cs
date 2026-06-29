@@ -54,7 +54,10 @@ public sealed class MeasurementProcessor : IMeasurementProcessor
         _batchSize = Math.Max(1, config.Config.SqlSettings.BatchSize);
         _flushInterval = TimeSpan.FromSeconds(Math.Max(1, config.Config.SqlSettings.SaveIntervalSeconds));
 
-        // M20/M21 measurements belong to the trimmer table (CLAUDE.md section 8).
+        // Routing (CLAUDE.md §4/§8): in Normal mode M2X (M20/M21) cameras carry the Virtual
+        // Serial in Serial1 and their measurements go to measurements_serial_trimmer; M1X/M5X
+        // carry the SZID and go to measurements_serial. The module is taken from the camera's
+        // INI config (authoritative) rather than re-parsing the controller name per telegram.
         _isTrimmerByCamera = config.Config.Cameras.ToDictionary(
             c => c.CameraName,
             c => c.Module is "M20" or "M21",
@@ -105,7 +108,9 @@ public sealed class MeasurementProcessor : IMeasurementProcessor
         if (telegram.Mode != CameraOperatingMode.Normal)
             return;
 
-        var serial = telegram.Serial1;
+        // Serial1 is already capped to 22 chars by the parser; cap again defensively so a value
+        // can never exceed the VARCHAR(22) serial column (CLAUDE.md §4).
+        var serial = SerialField.Cap(telegram.Serial1);
         if (string.IsNullOrWhiteSpace(serial))
         {
             _log.Debug("{Camera}: results telegram without serial; skipped.", telegram.ControllerName);
