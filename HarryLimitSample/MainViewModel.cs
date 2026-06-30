@@ -93,7 +93,9 @@ public partial class MainViewModel : ObservableObject
 
         try
         {
-            var part = await _query.FindPartAsync(scan);
+            // Resolve via dmcserial when a finished-part record exists, otherwise directly from the
+            // measurement tables (camera data before the PLC part-exit is still inspectable).
+            var part = await _query.FindPartForInspectionAsync(scan);
             if (part is null)
             {
                 StatusMessage = $"No part found for '{scan}'.";

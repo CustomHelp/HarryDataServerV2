@@ -1097,6 +1097,8 @@ server; per-tool on the companions). Default is Dark when nothing is saved.
 - Mark each measurement as "should pass" / "should fail" / "ignore"
 - Save as LimitSample JSON reference file
 - Manage (add/delete) entries
+- Uses `FindPartForInspectionAsync` (like HarryAnalysis), so a part is found even without a
+  `dmcserial` record (direct measurements resolution by serial).
 
 ---
 

@@ -816,11 +816,13 @@ lookup is an exact `=` and would match the stored 22-char value.
 header), else synthesizes a `PartInfo` directly from `measurements_serial` (by `serial_number`) or
 `measurements_serial_trimmer` (by `serial_trimmer`), with `CreatedAt` = latest `measured_at`.
 `PartInfo` gained an init-only `Synthetic` flag (`ResultText` shows "— (no part record)").
-`GetPartMeasurementsAsync` is unchanged and yields the rows from the synthetic part. HarryAnalysis
-now calls the new method. No 32-char/length assumptions exist in the path. HarryLimitSample (same
-old pattern) was left as-is (out of scope).
+`GetPartMeasurementsAsync` is unchanged and yields the rows from the synthetic part. No
+32-char/length assumptions exist in the path. **HarryAnalysis and HarryLimitSample** both call
+`FindPartForInspectionAsync` (HarryLimitSample shared the identical old `FindPartAsync` pattern), so
+both find parts via the direct measurements resolution when no `dmcserial` row exists.
 
-Touched: `HarryShared/Data/{QueryService.cs, Models.cs}`, `HarryAnalysis/MainViewModel.cs`.
+Touched: `HarryShared/Data/{QueryService.cs, Models.cs}`, `HarryAnalysis/MainViewModel.cs`,
+`HarryLimitSample/MainViewModel.cs`.
 CLAUDE.md §16 updated. Affected projects build 0/0 (the full-solution build was blocked only by the
 running `HarryDataServer.exe` file lock — a copy step, not a compile error).
 
