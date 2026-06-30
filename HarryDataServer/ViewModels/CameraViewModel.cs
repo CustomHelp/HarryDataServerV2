@@ -67,7 +67,9 @@ public sealed partial class CameraViewModel : ObservableObject
     private void OnTelegram(object? sender, ParsedTelegram telegram)
     {
         // Background thread: only touch the thread-safe queue / guarded fields here.
-        var line = $"{DateTime.Now:HH:mm:ss} | {Describe(telegram)} | {Trim(telegram.Serial1)}";
+        // Format: "HH:mm:ss | OK/NG | <full 22-char Serial1>" — the operating mode is shown in the
+        // tile header (not repeated here), and Serial1 is shown in full (no truncation).
+        var line = $"{DateTime.Now:HH:mm:ss} | {Describe(telegram)} | {telegram.Serial1}";
         lock (_gate)
         {
             _recent.Enqueue(line);
@@ -148,9 +150,10 @@ public sealed partial class CameraViewModel : ObservableObject
     };
 
     /// <summary>
-    /// One-line description of a telegram for the recent-telegram list. Results telegrams lead
-    /// with the overall OK/NG result (Total_Result, token 71) followed by the operating mode;
-    /// Settings/Diagnostic telegrams carry no overall result, so they show the signal word instead.
+    /// Status token for the recent-telegram list. Results telegrams show the overall OK/NG result
+    /// (Total_Result, token 71), or "NoSerial" for a bad/all-zero SZID; Settings/Diagnostic
+    /// telegrams carry no overall result, so they show the signal word instead. The operating mode
+    /// is deliberately omitted here — it is already shown in the tile header.
     /// </summary>
     private static string Describe(ParsedTelegram t)
     {
@@ -159,7 +162,7 @@ public sealed partial class CameraViewModel : ObservableObject
         // Bad telegram (all-zero/empty SZID): surface NoSerial in the result slot.
         if (t.IsNoSerial)
             return "NoSerial";
-        return $"{OverallToText(t.OverallResult)} | {ModeToText(t.Mode)}{(t.IsDiagnostic ? " ·Diag" : string.Empty)}";
+        return OverallToText(t.OverallResult);
     }
 
     /// <summary>
@@ -173,6 +176,4 @@ public sealed partial class CameraViewModel : ObservableObject
         0 => "NG",
         _ => "?",
     };
-
-    private static string Trim(string s) => s.Length <= 20 ? s : s[..20] + "…";
 }

@@ -67,7 +67,7 @@
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <ItemsControl ItemsSource="{Binding Cameras}" Margin="6">
                         <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                            <ItemsPanelTemplate><UniformGrid Columns="4" /></ItemsPanelTemplate>
                         </ItemsControl.ItemsPanel>
                         <ItemsControl.ItemTemplate>
                             <DataTemplate><ctrl:ucCameraControl /></DataTemplate>

@@ -708,6 +708,18 @@ Touched: `Communication/TcpCameraClient.cs`, `Models/ParsedTelegram.cs`,
 
 ---
 
+## Camera tile layout polish (2026-06-30)
+
+- **Fixed 4 tiles per row.** Cameras tab panel switched from `WrapPanel` to
+  `UniformGrid Columns="4"` (14 cameras → 3 rows of 4 + 1 row of 2); the fixed `Width="280"` on
+  the `ucCameraControl` card was removed so each tile fills its column (uses the freed width).
+- **Telegram line.** Now reads `HH:mm:ss | OK/NG | <full 22-char Serial1>` — the operating-mode
+  segment was dropped (already shown in the tile header) and the serial is no longer truncated
+  (the `Trim` helper was removed). OK/NG, NoSerial, and the Settings/Diagnostic signal-word slot
+  are unchanged. (`MainWindow.xaml`, `Controls/ucCameraControl.xaml`, `ViewModels/CameraViewModel.cs`)
+
+---
+
 ## Build & Repo
 - `dotnet build HarryDataServer.sln -c Release` → 0 warnings, 0 errors (`net8.0-windows`).
 - Branch `main`, pushed to `https://github.com/CustomHelp/HarryDataServerV2`.
