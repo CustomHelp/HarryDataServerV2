@@ -79,7 +79,10 @@ public partial class MainViewModel : ObservableObject
     {
         try
         {
-            _definitions = await _query.GetActiveDefinitionsAsync();
+            // Only the Result (R_) definitions: each measurement appears once, and the float
+            // measurement_value lives on the Result-keyed row (the Value defs have no rows of their
+            // own — see MeasurementRowBuilder), so this lists each trend once and still plots the value.
+            _definitions = await _query.GetActiveDefinitionsAsync("Result");
             StatusMessage = $"{_definitions.Count} active measurements. Pick one per graph.";
             if (Panels.Count == 0)
                 AddPanel(); // start with one graph window

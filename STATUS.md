@@ -828,6 +828,35 @@ running `HarryDataServer.exe` file lock — a copy step, not a compile error).
 
 ---
 
+## HarryGraph: picker lists Value trends once (Result-keyed defs) (2026-06-30)
+
+The "Select measurements" dropdown showed every measurement **twice** (the `R_` Result def and the
+`V_` Value def share `display_name`), ~694 entries — double the real count, with no way to tell them
+apart, and picking the V_ one plotted nothing.
+
+**Storage reality (key finding):** `MeasurementRowBuilder` stores each R_/V_ pair as **one**
+`measurements_serial` row keyed by the **Result (R_) definition_id**, carrying *both* `result_status`
+and the float `measurement_value`. The Value (V_) definitions have **no rows of their own**
+(confirmed: stored rows use the odd/R_ definition_ids). So the float trend is queryable **only** via
+the Result definition — filtering the picker to *Value* defs (as first proposed) would have produced
+empty graphs. Decision (confirmed with user): filter to **Result** defs — each measurement appears
+once and the existing `measurement_value` query plots the float, no query rewrite.
+
+**Change:** `GetActiveDefinitionsAsync` gained an optional `varType` filter (data-layer); HarryGraph
+calls `GetActiveDefinitionsAsync("Result")`. The label is the shared `display_name`, so "Result" is
+never shown; count ≈ halves. Date/time range, Live-last-N and multi-graph are untouched.
+
+**HarryCounter (checked, NOT changed):** it has **no** measurement dropdown (never calls
+`GetActiveDefinitionsAsync`); it counts `measurements_serial` rows by `result_status` and joins
+`measurement_definitions` on the stored (Result) `definition_id` — one definition per row, so **no
+duplication and no double-count**. The R/V duplication is a non-issue there; no change needed.
+
+Touched: `HarryShared/Data/QueryService.cs`, `HarryGraph/MainViewModel.cs`. CLAUDE.md §16 updated.
+HarryGraph (+ HarryShared) builds 0/0 (full-solution build may be blocked only by the running
+`HarryDataServer.exe` file lock — not a compile error).
+
+---
+
 ## Build & Repo
 - `dotnet build HarryDataServer.sln -c Release` → 0 warnings, 0 errors (`net8.0-windows`).
 - Branch `main`, pushed to `https://github.com/CustomHelp/HarryDataServerV2`.

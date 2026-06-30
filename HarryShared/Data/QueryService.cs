@@ -35,20 +35,32 @@ public sealed class QueryService
 
     // ===== Definitions =====================================================
 
-    /// <summary>All currently-active measurement definitions (effective_end IS NULL) with camera info.</summary>
-    public async Task<List<MeasurementDefinitionRow>> GetActiveDefinitionsAsync(CancellationToken ct = default)
+    /// <summary>
+    /// Currently-active measurement definitions (effective_end IS NULL) with camera info, optionally
+    /// restricted to one <paramref name="varType"/> ("Result" or "Value"). Note: each R_/V_ pair is
+    /// stored as ONE <c>measurements_serial</c> row keyed by the <b>Result</b> definition that carries
+    /// both <c>result_status</c> and the float <c>measurement_value</c> (see
+    /// <c>MeasurementRowBuilder</c>). So HarryGraph requests <c>varType="Result"</c> to list each
+    /// measurement once and still plot the float value (the Value definitions have no rows of their own).
+    /// </summary>
+    public async Task<List<MeasurementDefinitionRow>> GetActiveDefinitionsAsync(
+        string? varType = null, CancellationToken ct = default)
     {
-        const string sql = @"
+        var sql = @"
 SELECT d.id, d.camera_id, c.camera_name, c.module, d.telegram_place,
        d.variable_name, d.display_name, d.var_type, d.parameter_set, d.feature_group
 FROM measurement_definitions d
 JOIN cameras c ON c.id = d.camera_id
-WHERE d.effective_end IS NULL
+WHERE d.effective_end IS NULL"
+            + (varType is null ? string.Empty : " AND d.var_type = @varType")
+            + @"
 ORDER BY c.camera_name, d.telegram_place;";
 
         var list = new List<MeasurementDefinitionRow>();
         await using var conn = await _config.OpenAsync(ct).ConfigureAwait(false);
         await using var cmd = new MySqlCommand(sql, conn);
+        if (varType is not null)
+            cmd.Parameters.AddWithValue("@varType", varType);
         await using var r = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
         while (await r.ReadAsync(ct).ConfigureAwait(false))
         {

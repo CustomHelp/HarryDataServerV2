@@ -1066,6 +1066,12 @@ server; per-tool on the companions). Default is Dark when nothing is saved.
   `measured_at`), so production-rate data can be narrowed. **Live view** shows the **last N points
   per series** via an editable combo (presets 10/100/1000/10000 + custom), applied as a SQL
   `LIMIT N` (`LiveView` in `HarryShared`).
+- **Picker lists each measurement once (Result definitions only).** Each R_/V_ pair is stored as one
+  `measurements_serial` row keyed by the **Result** definition that carries *both* `result_status`
+  and the float `measurement_value` (`MeasurementRowBuilder`); the Value definitions have no rows of
+  their own. So HarryGraph loads `GetActiveDefinitionsAsync("Result")` — each trend appears once
+  (count ≈ halved) and the series plots the float value via the existing `measurement_value` query
+  (no query rewrite). The label is the shared `display_name`, so "Result" is never visible.
 
 ### HarryMSA — MSA Analysis Tool (or integrate as tab in main app)
 - Per-module view of MSA runs
