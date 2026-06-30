@@ -37,21 +37,25 @@ public sealed class TcpCameraClient
     private readonly CameraTemplates _templates;
     private readonly TelegramParser _parser;
     private readonly ILogService _log;
+    private readonly ITelegramCapture? _capture;
 
     private CancellationTokenSource? _cts;
     private CancellationTokenSource? _connCts;
     private Task? _runTask;
     private CameraConnectionState _state = CameraConnectionState.Disconnected;
+    private bool _loggedOffline;   // outage logged once per Connected→Disconnected transition (RunAsync thread only)
     private int _failedPings;
     private long _telegramCount;
     private DateTime _lastPingUtc;
 
-    public TcpCameraClient(CameraConfig config, CameraTemplates templates, TelegramParser parser, ILogService log)
+    public TcpCameraClient(CameraConfig config, CameraTemplates templates, TelegramParser parser, ILogService log,
+        ITelegramCapture? capture = null)
     {
         _config = config;
         _templates = templates;
         _parser = parser;
         _log = log;
+        _capture = capture;
     }
 
     public string CameraName => _config.CameraName;
@@ -147,7 +151,17 @@ public sealed class TcpCameraClient
                 State = CameraConnectionState.Connected;
                 MarkDataReceived();
                 backoff = ReconnectInitial;
-                _log.Information("{Camera}: connected to {Endpoint}.", CameraName, Endpoint);
+
+                // Option 1: one Information line on recovery, plain connect otherwise.
+                if (_loggedOffline)
+                {
+                    _loggedOffline = false;
+                    _log.Information("{Camera}: reconnected to {Endpoint}.", CameraName, Endpoint);
+                }
+                else
+                {
+                    _log.Information("{Camera}: connected to {Endpoint}.", CameraName, Endpoint);
+                }
 
                 await using var stream = client.GetStream();
                 await CommunicateAsync(stream, ct).ConfigureAwait(false);
@@ -165,7 +179,21 @@ public sealed class TcpCameraClient
                 break;
 
             State = CameraConnectionState.Disconnected;
-            _log.Warning("{Camera}: disconnected; reconnecting in {Seconds:0}s.", CameraName, backoff.TotalSeconds);
+
+            // Option 1 (CLAUDE.md §3): log the outage as a WARNING only once, on the
+            // Connected→Disconnected transition. Subsequent retry attempts for an
+            // already-known-offline controller are logged at Debug so an unreachable
+            // camera no longer inflates the warning counter (one Warning per outage).
+            if (!_loggedOffline)
+            {
+                _loggedOffline = true;
+                _log.Warning("{Camera}: controller unreachable; reconnecting (retry up to every {Seconds:0}s).",
+                    CameraName, ReconnectMax.TotalSeconds);
+            }
+            else
+            {
+                _log.Debug("{Camera}: still disconnected; reconnecting in {Seconds:0}s.", CameraName, backoff.TotalSeconds);
+            }
 
             try { await Task.Delay(backoff, ct).ConfigureAwait(false); }
             catch (OperationCanceledException) { break; }
@@ -256,10 +284,17 @@ public sealed class TcpCameraClient
     {
         try
         {
-            // Keyence command replies ("MR,..." version reply / "ER" error reply) are
-            // keepalive traffic: reset the watchdog (silence timer + failed-ping count)
-            // and return immediately — never pass them to the telegram parser.
-            if (_parser.IsKeepAliveReply(text))
+            // Keyence command replies ("MR,..." version reply / "ER" error reply) are keepalive
+            // traffic, not telegrams. They are excluded from the raw capture (Part B) and never
+            // passed to the parser; any inbound data still resets the watchdog.
+            var isKeepAlive = _parser.IsKeepAliveReply(text);
+
+            // Raw debug capture (test/commissioning): real telegrams (Results/Settings/Diagnostic,
+            // incl. NoSerial bad telegrams) are written exactly as received, before parsing.
+            if (!isKeepAlive)
+                _capture?.Capture(CameraName, text);
+
+            if (isKeepAlive)
             {
                 MarkDataReceived();
                 _log.Debug("{Camera}: keepalive reply received: {Reply}.", CameraName, text);
@@ -276,6 +311,17 @@ public sealed class TcpCameraClient
             switch (telegram.Signal)
             {
                 case TelegramSignal.Results:
+                    // NoSerial guard (CLAUDE.md §4): an all-zero/empty Serial1 means the controller
+                    // produced a bad telegram. Drop it from the DB pipeline entirely — do not raise
+                    // ResultsReceived, so neither MeasurementProcessor nor MsaService writes anything.
+                    // It is still captured above and shown as "NoSerial" in the camera control.
+                    if (telegram.IsNoSerial)
+                    {
+                        _log.Warning("{Camera}: Results telegram with no/zero serial (bad telegram); not written to DB.",
+                            CameraName);
+                        break;
+                    }
+
                     var measurements = _templates.Result is not null
                         ? _parser.ExtractMeasurements(telegram, _templates.Result)
                         : Array.Empty<MeasurementSample>();
@@ -383,7 +429,9 @@ public sealed class TcpCameraClient
         if (_failedPings < MaxFailedPings)
             return false;
 
-        _log.Warning("{Camera}: {Count} consecutive failed pings; marking offline and reconnecting.",
+        // The resulting disconnect surfaces the single per-outage WARNING via RunAsync's
+        // state-change logging, so this internal detail stays at Debug (no double-counting).
+        _log.Debug("{Camera}: {Count} consecutive failed pings; marking offline and reconnecting.",
             CameraName, _failedPings);
         connCts.Cancel();
         return true;

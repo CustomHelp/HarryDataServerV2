@@ -26,6 +26,7 @@ public sealed partial class CameraViewModel : ObservableObject
     // properties on the UI thread in Update()).
     private CameraOperatingMode _lastMode = CameraOperatingMode.Unknown;
     private bool _lastDiagnostic;
+    private bool _lastNoSerial;
     private bool _hasModeInfo;
 
     public CameraViewModel(TcpCameraClient client)
@@ -66,7 +67,7 @@ public sealed partial class CameraViewModel : ObservableObject
     private void OnTelegram(object? sender, ParsedTelegram telegram)
     {
         // Background thread: only touch the thread-safe queue / guarded fields here.
-        var line = $"{DateTime.Now:HH:mm:ss}  {Describe(telegram)}  {Trim(telegram.Serial1)}";
+        var line = $"{DateTime.Now:HH:mm:ss} | {Describe(telegram)} | {Trim(telegram.Serial1)}";
         lock (_gate)
         {
             _recent.Enqueue(line);
@@ -78,6 +79,7 @@ public sealed partial class CameraViewModel : ObservableObject
             {
                 _lastMode = telegram.Mode;
                 _lastDiagnostic = telegram.IsDiagnostic;
+                _lastNoSerial = telegram.IsNoSerial;
                 _hasModeInfo = true;
             }
         }
@@ -103,12 +105,14 @@ public sealed partial class CameraViewModel : ObservableObject
         bool hasMode;
         CameraOperatingMode lastMode;
         bool lastDiag;
+        bool lastNoSerial;
         string[]? snapshot = null;
         lock (_gate)
         {
             hasMode = _hasModeInfo;
             lastMode = _lastMode;
             lastDiag = _lastDiagnostic;
+            lastNoSerial = _lastNoSerial;
             if (_recentDirty)
             {
                 _recentDirty = false;
@@ -118,7 +122,9 @@ public sealed partial class CameraViewModel : ObservableObject
 
         if (hasMode)
         {
-            ModeText = ModeToText(lastMode);
+            // A NoSerial telegram (bad/all-zero SZID) shows "NoSerial" instead of the mode so the
+            // operator sees the controller misbehaved (CLAUDE.md §4).
+            ModeText = lastNoSerial ? "NoSerial" : ModeToText(lastMode);
             IsDiagnostic = lastDiag;
         }
 
@@ -141,22 +147,31 @@ public sealed partial class CameraViewModel : ObservableObject
         _ => "—",
     };
 
-    /// <summary>One-line description of a telegram for the recent-telegram list.</summary>
-    private static string Describe(ParsedTelegram t) =>
-        t.Signal == TelegramSignal.Results
-            ? $"{ModeToText(t.Mode)}{(t.IsDiagnostic ? " ·Diag" : string.Empty)}  {ResultToText(t.OverallResult)}"
-            : t.RawSignal;
-
-    /// <summary>Total_Result code → short display token (display only; not a routing decision).</summary>
-    private static string ResultToText(int? result) => result switch
+    /// <summary>
+    /// One-line description of a telegram for the recent-telegram list. Results telegrams lead
+    /// with the overall OK/NG result (Total_Result, token 71) followed by the operating mode;
+    /// Settings/Diagnostic telegrams carry no overall result, so they show the signal word instead.
+    /// </summary>
+    private static string Describe(ParsedTelegram t)
     {
-        1 => "IO",
+        if (t.Signal != TelegramSignal.Results)
+            return t.RawSignal;
+        // Bad telegram (all-zero/empty SZID): surface NoSerial in the result slot.
+        if (t.IsNoSerial)
+            return "NoSerial";
+        return $"{OverallToText(t.OverallResult)} | {ModeToText(t.Mode)}{(t.IsDiagnostic ? " ·Diag" : string.Empty)}";
+    }
+
+    /// <summary>
+    /// Overall part result (Total_Result, token 71) → OK/NG for the telegram line. The overall
+    /// result is only ever 0 or 1; anything else (incl. missing) shows "?" defensively. Display
+    /// only — the authoritative OK/NG decision comes from the PLC at part-exit (CLAUDE.md §4).
+    /// </summary>
+    private static string OverallToText(int? result) => result switch
+    {
+        1 => "OK",
         0 => "NG",
-        -1 => "PosErr",
-        -2 => "NotVal",
-        2 => "Off",
-        null => string.Empty,
-        _ => result.Value.ToString(),
+        _ => "?",
     };
 
     private static string Trim(string s) => s.Length <= 20 ? s : s[..20] + "…";

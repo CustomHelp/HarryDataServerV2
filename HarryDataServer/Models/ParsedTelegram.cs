@@ -112,6 +112,26 @@ public sealed class ParsedTelegram
     /// <summary>Whether the telegram came from an MSA / LimitSample run.</summary>
     public bool IsMsa => Mode is CameraOperatingMode.Msa1 or CameraOperatingMode.Msa3 or CameraOperatingMode.LimitSample;
 
+    /// <summary>
+    /// True when this is a Results telegram whose Serial1 (SZID) is missing or all-zero. The
+    /// controller produced a bad telegram and the data must not be trusted (CLAUDE.md §4): it is
+    /// dropped from the DB pipeline and surfaced as <c>NoSerial</c> in the camera control. Only
+    /// Results telegrams are checked — Settings/Diagnostic have their own paths. Uses the
+    /// already-parsed (concatenated + 22-char-truncated) <see cref="Serial1"/>.
+    /// </summary>
+    public bool IsNoSerial => Signal == TelegramSignal.Results && IsBlankOrAllZero(Serial1);
+
+    /// <summary>True when the string is empty/whitespace or consists solely of '0' characters.</summary>
+    private static bool IsBlankOrAllZero(string s)
+    {
+        if (string.IsNullOrWhiteSpace(s))
+            return true;
+        foreach (var c in s)
+            if (c != '0')
+                return false;
+        return true;
+    }
+
     /// <summary>Safe field accessor; returns null when the index is out of range.</summary>
     public string? Field(int index) => index >= 0 && index < Fields.Length ? Fields[index] : null;
 }

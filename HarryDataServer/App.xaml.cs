@@ -162,6 +162,7 @@ public partial class App : Application
 
         // --- Cameras (Phase 3): telegram parser + per-camera TCP clients ---
         services.AddSingleton<TelegramParser>();
+        services.AddSingleton<ITelegramCapture, TelegramCaptureService>();
         services.AddSingleton<ICameraService, CameraConnectionService>();
 
         // --- Measurement pipeline (Phase 4): definition cache + queue processor ---

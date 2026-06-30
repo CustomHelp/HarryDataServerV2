@@ -35,6 +35,7 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly ISpsServer _sps;
     private readonly ISystemHealth _health;
     private readonly ILogBuffer _log;
+    private readonly ITelegramCapture _capture;
 
     private readonly Dictionary<SpsChannel, SpsChannelViewModel> _channelByKey = new();
     private readonly DispatcherTimer _timer;
@@ -51,12 +52,13 @@ public sealed partial class MainViewModel : ObservableObject
         IConfigService config, ICameraService cameras, IDatabaseService database,
         IMeasurementProcessor measurements, ISettingsProcessor settings, IDiagnosticProcessor diagnostics,
         IPartExitOrchestrator partExit, ICsvService csv, ICollageService collage, IMsaService msa,
-        IPdfReportService pdf, ISpsServer sps, ISystemHealth health, ILogBuffer log)
+        IPdfReportService pdf, ISpsServer sps, ISystemHealth health, ILogBuffer log,
+        ITelegramCapture capture)
     {
         _config = config; _cameras = cameras; _database = database;
         _measurements = measurements; _settings = settings; _diagnostics = diagnostics;
         _partExit = partExit; _csv = csv; _collage = collage; _msa = msa;
-        _pdf = pdf; _sps = sps; _health = health; _log = log;
+        _pdf = pdf; _sps = sps; _health = health; _log = log; _capture = capture;
 
         ConfigFile = System.IO.Path.GetFileName(_config.IniPath);
         AppVersion = "v" + (Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "2.0.0");
@@ -98,6 +100,9 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty] private string _lastPartExit = "—";
     [ObservableProperty] private string _activeOrder = "—";
     [ObservableProperty] private bool _hasActiveErrors;
+
+    /// <summary>Global raw-telegram capture toggle (test aid, OFF by default, not persisted).</summary>
+    [ObservableProperty] private bool _captureTelegrams;
 
     [ObservableProperty] private string _systemStatus = "Starting…";
     [ObservableProperty] private Brush _systemStatusBrush = Brushes.Gray;
@@ -162,6 +167,8 @@ public sealed partial class MainViewModel : ObservableObject
         if (_channelByKey.TryGetValue(channel, out var vm))
             vm.Record(isResponse, text);
     }
+
+    partial void OnCaptureTelegramsChanged(bool value) => _capture.SetEnabled(value);
 
     private void Refresh()
     {

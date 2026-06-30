@@ -42,6 +42,11 @@
         <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
     </Style>
 
+    <Style TargetType="{x:Type CheckBox}">
+        <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+
     <Style TargetType="{x:Type Border}" x:Key="Card">
         <Setter Property="Background" Value="{DynamicResource CardBg}" />
         <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />

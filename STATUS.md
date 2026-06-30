@@ -658,6 +658,56 @@ Full solution builds **0 errors / 0 code warnings** (`net8.0-windows`; only envi
 
 ---
 
+## Test-day helpers: OK/NG badge + raw telegram capture (2026-06-30)
+
+Three test-day aids for the live line.
+
+1. **OK/NG badge on telegram lines.** The camera control's "Last telegrams" list now leads each
+   Results line with the overall result from `Total_Result` (token 71): `1 → OK`, `0 → NG`, else
+   `?` — e.g. `09:21:14 | OK | Normal Operation | 0000…`. Display only (the authoritative OK/NG
+   still comes from the PLC at part-exit). Plain text via `DynamicResource` brushes (theme-legible).
+   (`ViewModels/CameraViewModel.cs`)
+2. **Global raw telegram capture.** New `ITelegramCapture`/`TelegramCaptureService` (singleton,
+   `IDisposable`) + a top-bar checkbox **"Telegramme mitschneiden"** (OFF by default, not
+   persisted). While on, every incoming real telegram is written verbatim (before parsing) to
+   `Capture\Capture_<Controller>_<ddMMyy_HHmmss>.csv` next to the exe — `<stamp>,<raw line>`, one
+   file per controller, `AutoFlush`, lock-serialized across receive threads, flushed/closed on
+   toggle-off or app exit. Hooked in `TcpCameraClient.ProcessFrame`. (New
+   `Services/TelegramCaptureService.cs`; touched `TcpCameraClient`, `CameraConnectionService`,
+   `MainViewModel`, `MainWindow.xaml`, `App.xaml.cs`, `Themes/DarkTheme.xaml` for a CheckBox style.)
+
+---
+
+## Warning noise reduction + capture/NoSerial hardening (2026-06-30)
+
+Follow-up to the warning-count diagnosis (idle controllers inflated the cumulative warning counter;
+the 1000-entry all-level Log buffer hid recent warnings under Debug chatter).
+
+1. **Option 1 — per-outage logging (`TcpCameraClient`).** A controller going offline now logs a
+   WARNING **once**, on the `Connected → Disconnected` transition (`_loggedOffline` flag, touched
+   only on the RunAsync thread). Subsequent retries for an already-offline controller log at
+   **Debug**; recovery logs one **Information** (`reconnected`). The keepalive "consecutive failed
+   pings" line was demoted Warning → Debug (the disconnect it triggers already emits the single
+   per-outage Warning). Net: one Warning per outage instead of ~1/min/offline-camera.
+2. **Option 4 — dedicated Warning+Error ring (`InMemoryLogSink`).** Alongside the general
+   all-level buffer (max 1000), a second buffer holds Warning+Error entries (max 1000). The same
+   `LogEntry` instance is enqueued in both; `Snapshot()` merges them de-duplicated (by reference)
+   and time-ordered. Recent warnings/errors now stay visible in the Log tab regardless of Debug
+   volume. No `LogViewModel` change needed.
+3. **Part B — keepalive excluded from capture (`TcpCameraClient.ProcessFrame`).** `MR,…`/`ER…`
+   keepalive replies are no longer written to the capture files; only real Results/Settings/
+   Diagnostic telegrams (incl. NoSerial) are captured. `IsKeepAliveReply` is evaluated once.
+4. **Part C — NoSerial drop.** `ParsedTelegram.IsNoSerial` (Results with empty/all-zero Serial1).
+   `ProcessFrame` skips raising `ResultsReceived` for such telegrams, so nothing reaches
+   `MeasurementProcessor`/`MsaService` (no DB writes); it is logged WARNING, still captured (capture
+   precedes the drop), and shown as **`NoSerial`** in the camera control (status text + telegram
+   line). Results-only.
+
+Touched: `Communication/TcpCameraClient.cs`, `Models/ParsedTelegram.cs`,
+`ViewModels/CameraViewModel.cs`, `Services/InMemoryLogSink.cs`. CLAUDE.md §3/§4 updated.
+
+---
+
 ## Build & Repo
 - `dotnet build HarryDataServer.sln -c Release` → 0 warnings, 0 errors (`net8.0-windows`).
 - Branch `main`, pushed to `https://github.com/CustomHelp/HarryDataServerV2`.

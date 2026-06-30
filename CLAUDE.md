@@ -79,6 +79,33 @@ Everything that happens in Strand 1 happens identically in Strand 2.
 - TCP buffer: 8192 bytes
 - Reconnect strategy: exponential backoff (3s, 6s, 12s, max 60s)
 - Keepalive: continuously send version variable request; if no response → camera offline
+- **Outage logging (`TcpCameraClient`):** a controller going offline is logged as a **WARNING
+  exactly once**, on the `Connected → Disconnected` transition. Subsequent failed reconnect
+  attempts for an already-offline controller are logged at **Debug**, and recovery logs one
+  **Information** (`reconnected`). This keeps an unreachable camera from inflating the warning
+  counter during idle (one Warning per outage, not one per retry).
+
+### NoSerial (bad Results telegram)
+
+A **Results** telegram whose **Serial1** (SZID, the token 3–34 region) is **empty or all `0`
+characters** — checked on the already-parsed, 22-char-truncated `ParsedTelegram.Serial1` via
+`ParsedTelegram.IsNoSerial` — means the controller produced a **bad telegram** and the data must
+not be trusted. Such a telegram is **dropped from the DB pipeline** (`TcpCameraClient.ProcessFrame`
+does **not** raise `ResultsReceived`, so neither `MeasurementProcessor` nor `MsaService` writes
+anything — no measurement rows, no dmcserial), is logged as a WARNING, and is surfaced as
+**`NoSerial`** in the camera control (status text + the "Last telegrams" line). It is still written
+to the raw capture file (capture happens before the drop). The check applies to **Results only** —
+Settings/Diagnostic have their own paths.
+
+### Raw telegram capture (test/commissioning aid)
+
+A global **"Telegramme mitschneiden"** checkbox (main-window top bar, OFF by default, not
+persisted) writes **every incoming real telegram** — exactly as received, before parsing — to
+`Capture\Capture_<Controller>_<ddMMyy_HHmmss>.csv` next to the executable (one file per controller,
+opened lazily, reused until capture is turned off). Each line is `<ddMMyy_HHmmss>,<raw telegram>`.
+**Keepalive lines (`MR,…` / `ER…`) are excluded** — only Results/Settings/Diagnostic telegrams
+(incl. NoSerial bad telegrams) are captured. This is intentionally separate from the Diagnostic-CSV
+feature (`ITelegramCapture` / `TelegramCaptureService`).
 
 A telegram is one of **three kinds — `Results`, `Settings`, or `Diagnostic`.** Results and
 Settings share a header with the signal word at **token 2**. A **Diagnostic** telegram has a

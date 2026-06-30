@@ -19,7 +19,8 @@ public sealed class CameraConnectionService : ICameraService
         IConfigService config,
         JsonTemplateLoader templateLoader,
         TelegramParser parser,
-        ILogService log)
+        ILogService log,
+        ITelegramCapture capture)
     {
         _log = log;
         _cameras = config.Config.Cameras.ToList();
@@ -31,7 +32,7 @@ public sealed class CameraConnectionService : ICameraService
             if (!templates.TryGetValue(cam.CameraName, out var camTemplates))
                 camTemplates = new CameraTemplates { CameraName = cam.CameraName };
 
-            var client = new TcpCameraClient(cam, camTemplates, parser, log)
+            var client = new TcpCameraClient(cam, camTemplates, parser, log, capture)
             {
                 // Keyence version-variable request (confirmed from production V1).
                 KeepAliveCommand = "MR,#Version\r",

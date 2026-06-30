@@ -26,6 +26,9 @@
 
                 <!-- Version + status (right) -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <CheckBox Content="Telegramme mitschneiden" IsChecked="{Binding CaptureTelegrams}"
+                              VerticalAlignment="Center" Margin="0,0,14,0"
+                              ToolTip="Alle eingehenden Roh-Telegramme in den Capture-Ordner neben der EXE schreiben (Testfunktion)" />
                     <Button x:Name="ThemeToggle" Click="OnThemeToggle" Content="Theme"
                             Padding="8,3" Margin="0,0,14,0" ToolTip="Switch light / dark theme" />
                     <TextBlock Text="{Binding AppVersion}" Foreground="{DynamicResource TextDimBrush}"
