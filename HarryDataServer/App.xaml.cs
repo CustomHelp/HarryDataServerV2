@@ -19,6 +19,17 @@ public partial class App : Application
     private ILogService? _log;
     private readonly CancellationTokenSource _shutdownCts = new();
 
+    // --- Single-instance guard (CLAUDE.md §14): a named mutex prevents a second process from
+    // binding the same TCP ports / DB. A named event lets the second process ask the first to come
+    // to the foreground. (Per-session names; a crashed primary releases the kernel mutex, so there
+    // is no stale-lock problem — we only read createdNew, never WaitOne the mutex.) ---
+    private const string SingleInstanceMutexName = "HarryDataServer.SingleInstance.Mutex";
+    private const string SingleInstanceEventName = "HarryDataServer.SingleInstance.Activate";
+    private Mutex? _singleInstanceMutex;
+    private EventWaitHandle? _activateEvent;
+    private RegisteredWaitHandle? _activateRegistration;
+    private MainWindow? _mainWindow;
+
     /// <summary>Resolved service provider, available to controls/windows after startup.</summary>
     public IServiceProvider Services =>
         _services ?? throw new InvalidOperationException("Service provider is not initialized yet.");
@@ -26,6 +37,15 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        // Single instance: if another instance already holds the mutex, ask it to come to the
+        // foreground and quit this one (don't bind ports / DB twice).
+        if (!TryAcquireSingleInstance())
+        {
+            SignalExistingInstance();
+            Shutdown();
+            return;
+        }
 
         try
         {
@@ -37,6 +57,7 @@ public partial class App : Application
                 config.IniPath, config.Config.Cameras.Count);
 
             var window = _services.GetRequiredService<MainWindow>();
+            _mainWindow = window;
             window.Show();
 
             // Kick off the database startup sequence in the background so the UI
@@ -92,10 +113,71 @@ public partial class App : Application
         }
     }
 
+    /// <summary>
+    /// Acquire the single-instance mutex. Returns true if this is the primary instance (and wires
+    /// up the activation listener); false if another instance already owns it. Fails open (returns
+    /// true) if the mutex mechanism itself errors, so a guard failure never blocks startup.
+    /// </summary>
+    private bool TryAcquireSingleInstance()
+    {
+        try
+        {
+            _singleInstanceMutex = new Mutex(initiallyOwned: true, SingleInstanceMutexName, out var isPrimary);
+            if (isPrimary)
+            {
+                _activateEvent = new EventWaitHandle(false, EventResetMode.AutoReset, SingleInstanceEventName);
+                _activateRegistration = ThreadPool.RegisterWaitForSingleObject(
+                    _activateEvent, (_, _) => ActivateExistingWindow(), null, Timeout.Infinite, executeOnlyOnce: false);
+            }
+            return isPrimary;
+        }
+        catch
+        {
+            return true;
+        }
+    }
+
+    /// <summary>Signal the already-running instance to bring its window to the foreground.</summary>
+    private static void SignalExistingInstance()
+    {
+        try
+        {
+            if (EventWaitHandle.TryOpenExisting(SingleInstanceEventName, out var existing))
+            {
+                existing.Set();
+                existing.Dispose();
+            }
+        }
+        catch { /* the primary may still be starting up; best effort */ }
+    }
+
+    /// <summary>Bring the primary instance's main window to the foreground (called off-thread).</summary>
+    private void ActivateExistingWindow()
+    {
+        Dispatcher.Invoke(() =>
+        {
+            var w = _mainWindow;
+            if (w is null)
+                return;
+            if (w.WindowState == WindowState.Minimized)
+                w.WindowState = WindowState.Normal;
+            w.Show();
+            w.Activate();
+            w.Topmost = true;   // bump to front, then release so it doesn't stay always-on-top
+            w.Topmost = false;
+            w.Focus();
+        });
+    }
+
     protected override void OnExit(ExitEventArgs e)
     {
         _log?.Information("HarryDataServer shutting down.");
         _shutdownCts.Cancel();
+
+        // Release the single-instance guard.
+        _activateRegistration?.Unregister(null);
+        _activateEvent?.Dispose();
+        _singleInstanceMutex?.Dispose();
 
         // Best-effort final flush of all queue-backed processors before the process exits.
         try

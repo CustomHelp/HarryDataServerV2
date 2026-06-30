@@ -176,6 +176,14 @@ position — this check runs *before* the signal-word dispatch (`TelegramParser.
 
 - Sent at controller startup or when limits change.
 - Structure defined per camera in `Settings_CameraName.json` (telegram_place from token 3).
+- **Requesting a Settings telegram:** the controller does not send Settings on demand by itself;
+  it must be asked by writing a Keyence variable. The Cameras tab has a **"Settings anfordern"**
+  button that sends `MW,#Send_Settings,1\r` to **every connected camera** over the existing
+  connection (the same socket as the `MR,#Version\r` keepalive — writes are serialized so they
+  never interleave). The trailing **CR is mandatory** (without it the controller answers
+  `ER,MW,<code>`); on success it replies `MW` (echo, no `OK`). The reply arrives on the receive
+  loop and is not inspected — the controller then emits a normal Settings telegram on its next
+  trigger, handled by the existing Settings pipeline. (`TcpCameraClient.RequestSettingsAsync`.)
 
 ### "Diagnostic" Telegram Layout (different layout — detected by token scan)
 
@@ -995,6 +1003,21 @@ semantic LED colours stay constant across both themes. The choice is persisted t
 `%LOCALAPPDATA%\HarrySuite\theme.txt` and is therefore **shared across the whole suite**. Each
 window calls `ThemeManager.Initialize()` at startup and exposes a toggle button (top bar on the
 server; per-tool on the companions). Default is Dark when nothing is saved.
+
+### App-level UI behaviours (server)
+- **Single instance:** the server is single-instance (named `Mutex`). A second launch signals the
+  running instance (named `EventWaitHandle`) to bring its window to the foreground, then exits — it
+  never binds the TCP ports / DB twice. A crashed primary leaves no stale lock (the kernel mutex is
+  released on process death; only `createdNew` is read, never `WaitOne`). (`App.xaml.cs`)
+- **Tools tab:** lists the companion apps (HarryAnalysis, HarryGraph, HarryCounter, HarryLimitSample,
+  HarryCollageCreator) and launches them with `Process.Start`. Each exe is discovered **next to the
+  running exe** (`<name>.exe` or a `<name>\<name>.exe` sibling) — no hardcoded paths; a missing exe
+  shows a disabled button with a "not found next to exe" hint. (`CompanionToolViewModel`)
+- **Log tab autoscroll:** console/chat style — follows the newest entry (now at the **bottom**) only
+  while the view is scrolled to the bottom; scrolling up holds position across the per-tick rebuild;
+  returning to the bottom resumes following. (`ucLogControl.xaml.cs`)
+- **Copy serial:** right-clicking a line in a camera tile's "Last telegrams" list offers
+  *"Seriennummer kopieren"*, copying just the 22-char Serial1 to the clipboard. (`ucCameraControl`)
 
 ---
 

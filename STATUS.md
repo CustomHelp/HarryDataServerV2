@@ -720,6 +720,41 @@ Touched: `Communication/TcpCameraClient.cs`, `Models/ParsedTelegram.cs`,
 
 ---
 
+## DataServer improvements: single-instance, Tools tab, log autoscroll, copy-serial, request-settings (2026-06-30)
+
+Five independent server improvements.
+
+1. **Single instance.** Named `Mutex` guard in `App.xaml.cs`; a second launch opens the named
+   `EventWaitHandle` to signal the primary (which brings its window to the foreground via
+   `Dispatcher.Invoke` + `Activate`/`Topmost` toggle) and then `Shutdown()`s. Fails open if the
+   guard mechanism errors; no stale-lock issue (kernel mutex released on crash, `createdNew` only).
+   Guard released in `OnExit`.
+2. **Tools tab.** New `CompanionToolViewModel` discovers the 5 companion exes next to the running
+   exe (`<name>.exe` or `<name>\<name>.exe`) — found → enabled button launches via `Process.Start`;
+   missing → disabled with "not found next to exe". New "Tools" tab in `MainWindow.xaml`. No
+   hardcoded paths.
+3. **Log autoscroll at bottom only.** `LogViewModel.Tick` now orders oldest→newest (newest at the
+   **bottom**); `ucLogControl.xaml.cs` handles `ScrollViewer.ScrollChanged` to follow the tail only
+   when at the bottom, hold the user's offset across the per-tick rebuild otherwise, and resume on
+   return to bottom.
+4. **Right-click → copy serial.** `RecentTelegram` record (Text + Serial) replaces the plain-string
+   telegram lines; per-item `ContextMenu` in the camera tile's list with *"Seriennummer kopieren"*
+   copies only the 22-char Serial1 (`ucCameraControl.xaml(.cs)`, `CameraViewModel`).
+5. **Request settings.** `TcpCameraClient.RequestSettingsAsync` writes `MW,#Send_Settings,1\r` over
+   the existing connection (serialized against the keepalive ping via a `SemaphoreSlim`; the stream
+   is exposed for out-of-band writes). `ICameraService.RequestSettingsAllAsync` fans out to all
+   **connected** cameras (offline skipped), logs one Information per camera + a summary; surfaced by
+   a "Settings anfordern" button on the Cameras tab (`MainViewModel.RequestSettingsCommand`).
+   Fire-and-log: the immediate `MW`/`ER` reply is consumed by the receive loop and not inspected;
+   the resulting Settings telegram flows through the existing pipeline.
+
+Touched: `App.xaml.cs`, `Communication/TcpCameraClient.cs`, `Services/{ICameraService,
+CameraConnectionService}.cs`, `ViewModels/{MainViewModel,CameraViewModel,LogViewModel}.cs`,
+`Controls/{ucCameraControl,ucLogControl}.xaml(.cs)`, `MainWindow.xaml`; new
+`ViewModels/CompanionToolViewModel.cs`. CLAUDE.md §4/§14 updated. Build 0 warnings / 0 errors.
+
+---
+
 ## Build & Repo
 - `dotnet build HarryDataServer.sln -c Release` → 0 warnings, 0 errors (`net8.0-windows`).
 - Branch `main`, pushed to `https://github.com/CustomHelp/HarryDataServerV2`.

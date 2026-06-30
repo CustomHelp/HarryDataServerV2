@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Windows.Media;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using HarryDataServer.Communication;
 using HarryDataServer.Infrastructure;
 using HarryDataServer.Models;
@@ -36,6 +37,7 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly ISystemHealth _health;
     private readonly ILogBuffer _log;
     private readonly ITelegramCapture _capture;
+    private readonly ILogService _logService;
 
     private readonly Dictionary<SpsChannel, SpsChannelViewModel> _channelByKey = new();
     private readonly DispatcherTimer _timer;
@@ -53,12 +55,13 @@ public sealed partial class MainViewModel : ObservableObject
         IMeasurementProcessor measurements, ISettingsProcessor settings, IDiagnosticProcessor diagnostics,
         IPartExitOrchestrator partExit, ICsvService csv, ICollageService collage, IMsaService msa,
         IPdfReportService pdf, ISpsServer sps, ISystemHealth health, ILogBuffer log,
-        ITelegramCapture capture)
+        ITelegramCapture capture, ILogService logService)
     {
         _config = config; _cameras = cameras; _database = database;
         _measurements = measurements; _settings = settings; _diagnostics = diagnostics;
         _partExit = partExit; _csv = csv; _collage = collage; _msa = msa;
         _pdf = pdf; _sps = sps; _health = health; _log = log; _capture = capture;
+        _logService = logService;
 
         ConfigFile = System.IO.Path.GetFileName(_config.IniPath);
         AppVersion = "v" + (Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "2.0.0");
@@ -68,6 +71,8 @@ public sealed partial class MainViewModel : ObservableObject
         Msa = new MsaViewModel(_msa, _pdf);
         Log = new LogViewModel(_log, _config);
         CollageView = new CollageViewModel(_collage);
+        Tools = new ObservableCollection<CompanionToolViewModel>(CompanionToolViewModel.Discover(_logService));
+        RequestSettingsCommand = new AsyncRelayCommand(RequestSettingsAsync);
 
         _sps.ChannelActivity += OnChannelActivity;
 
@@ -88,6 +93,15 @@ public sealed partial class MainViewModel : ObservableObject
     public MsaViewModel Msa { get; }
     public LogViewModel Log { get; }
     public CollageViewModel CollageView { get; }
+
+    /// <summary>Companion apps launchable from the Tools tab.</summary>
+    public ObservableCollection<CompanionToolViewModel> Tools { get; }
+
+    /// <summary>Request the Settings telegram from every connected camera (Cameras tab button).</summary>
+    public IAsyncRelayCommand RequestSettingsCommand { get; }
+
+    /// <summary>Feedback shown next to the "Request settings" button.</summary>
+    [ObservableProperty] private string _settingsRequestStatus = string.Empty;
     public ObservableCollection<string> HealthFaults { get; } = new();
     public ObservableCollection<TableCountVm> TableRows { get; } = new();
     public ObservableCollection<string> OfflineCameras { get; } = new();
@@ -169,6 +183,13 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     partial void OnCaptureTelegramsChanged(bool value) => _capture.SetEnabled(value);
+
+    private async Task RequestSettingsAsync()
+    {
+        SettingsRequestStatus = "Requesting settings…";
+        var (sent, total) = await _cameras.RequestSettingsAllAsync().ConfigureAwait(true);
+        SettingsRequestStatus = $"Settings requested from {sent}/{total} cameras (offline skipped)";
+    }
 
     private void Refresh()
     {

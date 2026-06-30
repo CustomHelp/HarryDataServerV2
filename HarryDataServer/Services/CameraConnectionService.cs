@@ -73,4 +73,12 @@ public sealed class CameraConnectionService : ICameraService
         await Task.WhenAll(_clients.Select(c => c.StopAsync())).ConfigureAwait(false);
         _log.Information("Camera service stopped.");
     }
+
+    public async Task<(int Sent, int Total)> RequestSettingsAllAsync()
+    {
+        var results = await Task.WhenAll(_clients.Select(c => c.RequestSettingsAsync())).ConfigureAwait(false);
+        var sent = results.Count(ok => ok);
+        _log.Information("Settings requested from {Sent}/{Total} connected camera(s).", sent, _clients.Count);
+        return (sent, _clients.Count);
+    }
 }

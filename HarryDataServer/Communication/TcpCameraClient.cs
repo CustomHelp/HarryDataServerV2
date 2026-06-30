@@ -39,6 +39,10 @@ public sealed class TcpCameraClient
     private readonly ILogService _log;
     private readonly ITelegramCapture? _capture;
 
+    // Keyence write command that asks the controller to emit its Settings telegram (CLAUDE.md §4).
+    // Must end with CR or the controller answers "ER,MW,<code>".
+    private const string RequestSettingsCommand = "MW,#Send_Settings,1\r";
+
     private CancellationTokenSource? _cts;
     private CancellationTokenSource? _connCts;
     private Task? _runTask;
@@ -47,6 +51,11 @@ public sealed class TcpCameraClient
     private int _failedPings;
     private long _telegramCount;
     private DateTime _lastPingUtc;
+
+    // All writes to the shared connection (keepalive ping + settings request) go through this gate
+    // so they never interleave on the same NetworkStream (NetworkStream is not write-safe concurrently).
+    private readonly SemaphoreSlim _writeGate = new(1, 1);
+    private volatile NetworkStream? _stream;
 
     public TcpCameraClient(CameraConfig config, CameraTemplates templates, TelegramParser parser, ILogService log,
         ITelegramCapture? capture = null)
@@ -78,6 +87,42 @@ public sealed class TcpCameraClient
     {
         try { _connCts?.Cancel(); }
         catch { /* connection already being torn down */ }
+    }
+
+    /// <summary>
+    /// Ask the controller to emit its Settings telegram by writing the Keyence variable
+    /// <c>MW,#Send_Settings,1\r</c> over the existing connection (CLAUDE.md §4). The write is
+    /// serialized against the keepalive ping (same stream). Fire-and-log: the controller's
+    /// immediate "MW"/"ER,MW" reply arrives on the receive loop and is not inspected here; the
+    /// resulting Settings telegram is handled by the normal Settings pipeline. Returns true if the
+    /// command was written, false if the camera is not connected or the write failed.
+    /// </summary>
+    public async Task<bool> RequestSettingsAsync()
+    {
+        var stream = _stream;
+        if (_state != CameraConnectionState.Connected || stream is null)
+        {
+            _log.Debug("{Camera}: settings request skipped (not connected).", CameraName);
+            return false;
+        }
+
+        var command = Encoding.Latin1.GetBytes(RequestSettingsCommand);
+        await _writeGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            await stream.WriteAsync(command).ConfigureAwait(false);
+            _log.Information("Settings requested: {Camera}.", CameraName);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _log.Warning("{Camera}: settings request failed: {Message}", CameraName, ex.Message);
+            return false;
+        }
+        finally
+        {
+            _writeGate.Release();
+        }
     }
 
     public CameraConnectionState State
@@ -210,6 +255,7 @@ public sealed class TcpCameraClient
     {
         using var connCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         _connCts = connCts;
+        _stream = stream;   // expose for serialized out-of-band writes (settings request)
         var token = connCts.Token;
 
         Task? keepAlive = string.IsNullOrEmpty(KeepAliveCommand)
@@ -222,6 +268,7 @@ public sealed class TcpCameraClient
         }
         finally
         {
+            _stream = null;
             _connCts = null;
             connCts.Cancel();
             if (keepAlive is not null)
@@ -399,7 +446,9 @@ public sealed class TcpCameraClient
 
             try
             {
-                await stream.WriteAsync(command, token).ConfigureAwait(false);
+                await _writeGate.WaitAsync(token).ConfigureAwait(false);
+                try { await stream.WriteAsync(command, token).ConfigureAwait(false); }
+                finally { _writeGate.Release(); }
                 _lastPingUtc = DateTime.UtcNow;
                 _log.Debug("{Camera}: sent keepalive (version request).", CameraName);
             }

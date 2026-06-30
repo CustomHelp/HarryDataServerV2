@@ -8,6 +8,12 @@ using HarryDataServer.Models;
 namespace HarryDataServer.ViewModels;
 
 /// <summary>
+/// One line in a camera tile's "Last telegrams" list: the displayed text and the bare
+/// 22-char Serial1, so the right-click context menu can copy just the serial.
+/// </summary>
+public sealed record RecentTelegram(string Text, string Serial);
+
+/// <summary>
 /// View model for one camera client (one ucCameraControl per instance). Read-only
 /// mirror of <see cref="TcpCameraClient"/>; scalar fields are refreshed on the UI
 /// thread by the MainViewModel timer. The last 3 telegrams are kept in a small
@@ -19,7 +25,7 @@ public sealed partial class CameraViewModel : ObservableObject
 
     private readonly TcpCameraClient _client;
     private readonly object _gate = new();
-    private readonly Queue<string> _recent = new(RecentTelegramCount);
+    private readonly Queue<RecentTelegram> _recent = new(RecentTelegramCount);
     private volatile bool _recentDirty;
 
     // Last received Results-telegram state (guarded by _gate; applied to the bound
@@ -50,7 +56,7 @@ public sealed partial class CameraViewModel : ObservableObject
     public string Endpoint { get; }
     public IRelayCommand ReconnectCommand { get; }
 
-    public ObservableCollection<string> RecentTelegrams { get; } = new();
+    public ObservableCollection<RecentTelegram> RecentTelegrams { get; } = new();
 
     [ObservableProperty] private string _stateText = "—";
     [ObservableProperty] private long _telegramCount;
@@ -69,10 +75,12 @@ public sealed partial class CameraViewModel : ObservableObject
         // Background thread: only touch the thread-safe queue / guarded fields here.
         // Format: "HH:mm:ss | OK/NG | <full 22-char Serial1>" — the operating mode is shown in the
         // tile header (not repeated here), and Serial1 is shown in full (no truncation).
-        var line = $"{DateTime.Now:HH:mm:ss} | {Describe(telegram)} | {telegram.Serial1}";
+        var item = new RecentTelegram(
+            $"{DateTime.Now:HH:mm:ss} | {Describe(telegram)} | {telegram.Serial1}",
+            telegram.Serial1);
         lock (_gate)
         {
-            _recent.Enqueue(line);
+            _recent.Enqueue(item);
             while (_recent.Count > RecentTelegramCount)
                 _recent.Dequeue();
 
@@ -108,7 +116,7 @@ public sealed partial class CameraViewModel : ObservableObject
         CameraOperatingMode lastMode;
         bool lastDiag;
         bool lastNoSerial;
-        string[]? snapshot = null;
+        RecentTelegram[]? snapshot = null;
         lock (_gate)
         {
             hasMode = _hasModeInfo;

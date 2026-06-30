@@ -64,16 +64,24 @@
             </TabItem>
 
             <TabItem Header="Cameras">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <ItemsControl ItemsSource="{Binding Cameras}" Margin="6">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate><UniformGrid Columns="4" /></ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate><ctrl:ucCameraControl /></DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </ScrollViewer>
+                <DockPanel>
+                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="6,6,6,0">
+                        <Button Content="Settings anfordern" Command="{Binding RequestSettingsCommand}"
+                                ToolTip="Settings-Telegramm von allen verbundenen Kameras anfordern" />
+                        <TextBlock Text="{Binding SettingsRequestStatus}" VerticalAlignment="Center"
+                                   Margin="12,0,0,0" Foreground="{DynamicResource TextDimBrush}" />
+                    </StackPanel>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <ItemsControl ItemsSource="{Binding Cameras}" Margin="6">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><UniformGrid Columns="4" /></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate><ctrl:ucCameraControl /></DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
             </TabItem>
 
             <TabItem Header="SPS">
@@ -104,6 +112,27 @@
             <TabItem Header="Collage">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <ctrl:ucCollageControl />
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="Tools">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <ItemsControl ItemsSource="{Binding Tools}" Margin="12">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Style="{StaticResource Card}" Margin="0,0,0,8">
+                                    <DockPanel>
+                                        <Button Content="{Binding Name}" Command="{Binding LaunchCommand}"
+                                                IsEnabled="{Binding IsAvailable}" Width="220"
+                                                HorizontalAlignment="Left" />
+                                        <TextBlock Text="{Binding Hint}" Foreground="{DynamicResource TextDimBrush}"
+                                                   VerticalAlignment="Center" Margin="12,0,0,0"
+                                                   TextTrimming="CharacterEllipsis" />
+                                    </DockPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
                 </ScrollViewer>
             </TabItem>
 

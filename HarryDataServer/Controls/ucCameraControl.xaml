@@ -65,10 +65,25 @@
                 </TextBlock>
             </DockPanel>
 
-            <!-- Last 3 telegrams -->
+            <!-- Last 3 telegrams (right-click a line to copy its serial) -->
             <TextBlock Text="Last telegrams" Foreground="{DynamicResource TextDimBrush}" FontSize="11" />
             <ListBox ItemsSource="{Binding RecentTelegrams}" Height="62" Margin="0,2,0,8"
-                     FontFamily="Consolas" FontSize="11" BorderThickness="1" />
+                     FontFamily="Consolas" FontSize="11" BorderThickness="1"
+                     HorizontalContentAlignment="Stretch">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <!-- Transparent background so the whole row is right-clickable. Each item
+                             gets its own ContextMenu (per-item DataContext = the RecentTelegram). -->
+                        <TextBlock Text="{Binding Text}" Background="Transparent">
+                            <TextBlock.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="Seriennummer kopieren" Click="OnCopySerial" />
+                                </ContextMenu>
+                            </TextBlock.ContextMenu>
+                        </TextBlock>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
 
             <Button Content="Reconnect" Command="{Binding ReconnectCommand}" HorizontalAlignment="Right" />
         </StackPanel>

@@ -77,10 +77,9 @@ public sealed partial class LogViewModel : ObservableObject
         _dirty = false;
 
         Entries.Clear();
-        var snapshot = _buffer.Snapshot();
-        for (var i = snapshot.Count - 1; i >= 0; i--) // newest on top
+        var snapshot = _buffer.Snapshot(); // oldest-first → newest at the bottom (console/chat style)
+        foreach (var e in snapshot)
         {
-            var e = snapshot[i];
             if (!LevelAllowed(e.Level) || !SourceAllowed(e.Source))
                 continue;
             Entries.Add(new LogEntryVm { Text = e.Text, Brush = BrushFor(e.Level) });

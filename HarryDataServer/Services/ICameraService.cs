@@ -22,4 +22,10 @@ public interface ICameraService
 
     /// <summary>Stop all camera clients and wait for their loops to finish.</summary>
     Task StopAsync();
+
+    /// <summary>
+    /// Ask every <b>connected</b> camera to emit its Settings telegram (disconnected ones are
+    /// skipped). Returns the number of cameras the command was sent to and the total camera count.
+    /// </summary>
+    Task<(int Sent, int Total)> RequestSettingsAllAsync();
 }
