@@ -755,6 +755,27 @@ CameraConnectionService}.cs`, `ViewModels/{MainViewModel,CameraViewModel,LogView
 
 ---
 
+## HarryCounter: tree expansion preserved on refresh + Reset Tree (2026-06-30)
+
+The error TreeView rebuilds its source collection on every (live) refresh, which regenerated the
+`TreeViewItem`s and collapsed the tree back to default — unusable while live.
+
+- **State preserved across refresh.** `ErrorTreeNode` gained `IsSelected` (TwoWay-bound in the
+  `ItemContainerStyle`, alongside the existing `IsExpanded`). `BuildTree(applyDefault)` now captures
+  the expanded nodes + selection by a **stable path key** (parent keys joined by the existing
+  `KeySep`) before `Tree.Clear()`, and re-applies them after rebuild. Nodes are built collapsed
+  (`BuildNodes` lost its `expandThisLevel` param); expansion is applied afterwards. New nodes (path
+  not in the captured set) stay **collapsed** by default.
+- **Default vs preserve.** First build, a grouping-dimension change, and Reset use
+  `applyDefault: true` (top-level groups expanded, rest collapsed — the prior default); periodic
+  refreshes use `applyDefault: false` (preserve). A `_treeBuilt` flag distinguishes the first build.
+- **Reset Tree button.** New `ResetTreeCommand` ("Reset Tree" in the filter bar) rebuilds to the
+  default state on demand.
+
+Touched: `HarryCounter/{ErrorTreeNode.cs, MainViewModel.cs, MainWindow.xaml}`. CLAUDE.md §16 noted.
+
+---
+
 ## Build & Repo
 - `dotnet build HarryDataServer.sln -c Release` → 0 warnings, 0 errors (`net8.0-windows`).
 - Branch `main`, pushed to `https://github.com/CustomHelp/HarryDataServerV2`.

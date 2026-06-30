@@ -33,6 +33,7 @@ public partial class MainViewModel : ObservableObject
     private readonly HarryConfig _config;
     private readonly DispatcherTimer _liveTimer;
     private List<ErrorAggRow> _rows = new();
+    private bool _treeBuilt;
 
     public MainViewModel(QueryService query, HarryConfig config)
     {
@@ -79,9 +80,10 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty] private string _summary = string.Empty;
     [ObservableProperty] private string _statusMessage = "Choose a range and grouping, then Refresh.";
 
-    partial void OnLevel1Changed(GroupDimension value) => BuildTree();
-    partial void OnLevel2Changed(GroupDimension value) => BuildTree();
-    partial void OnLevel3Changed(GroupDimension value) => BuildTree();
+    // A grouping change restructures the tree, so it returns to the default state (top level expanded).
+    partial void OnLevel1Changed(GroupDimension value) => BuildTree(applyDefault: true);
+    partial void OnLevel2Changed(GroupDimension value) => BuildTree(applyDefault: true);
+    partial void OnLevel3Changed(GroupDimension value) => BuildTree(applyDefault: true);
 
     partial void OnLiveModeChanged(bool value)
     {
@@ -109,7 +111,8 @@ public partial class MainViewModel : ObservableObject
             var ngMeas = _rows.Where(r => r.ResultStatus == 0).Sum(r => r.Count);
             Summary = $"Parts: {totalParts}   NG parts: {ngParts}   Yield: {yield:0.00}%   NG measurements: {ngMeas}";
 
-            BuildTree();
+            // First build uses the default expansion; later refreshes preserve the user's state.
+            BuildTree(applyDefault: !_treeBuilt);
             StatusMessage = $"Updated {DateTime.Now:HH:mm:ss} — {from:yyyy-MM-dd} to {to:yyyy-MM-dd}.";
         }
         catch (Exception ex)
@@ -121,14 +124,66 @@ public partial class MainViewModel : ObservableObject
     private List<GroupDimension> ActiveDimensions =>
         new[] { Level1, Level2, Level3 }.Where(d => d is { IsNone: false }).ToList();
 
-    private void BuildTree()
+    /// <summary>Collapse the tree back to the default state (top level expanded) on demand.</summary>
+    [RelayCommand] private void ResetTree() => BuildTree(applyDefault: true);
+
+    /// <summary>
+    /// Rebuild the tree from the current rows. The source collection is replaced (TreeViewItems are
+    /// regenerated), so the user's expand/collapse + selection is captured by a stable path key and
+    /// re-applied — unless <paramref name="applyDefault"/> (first build / grouping change / Reset),
+    /// which restores the default state (top-level groups expanded, the rest collapsed). Nodes that
+    /// only appear after a refresh are not in the captured set, so they default to collapsed.
+    /// </summary>
+    private void BuildTree(bool applyDefault)
     {
+        HashSet<string> expanded = new();
+        string? selected = null;
+        if (!applyDefault)
+            CaptureState(Tree, string.Empty, expanded, ref selected);
+
         Tree.Clear();
-        // First level expanded so the structure is visible at a glance.
-        foreach (var node in BuildNodes(_rows, ActiveDimensions, 0, expandThisLevel: true))
+        foreach (var node in BuildNodes(_rows, ActiveDimensions, 0))
             Tree.Add(node);
 
+        if (applyDefault)
+        {
+            // Default: top-level groups expanded so the structure is visible at a glance.
+            foreach (var node in Tree)
+                node.IsExpanded = true;
+        }
+        else
+        {
+            RestoreState(Tree, string.Empty, expanded, selected);
+        }
+
+        _treeBuilt = true;
         BuildChart();
+    }
+
+    /// <summary>Collect the path-keys of expanded nodes + the selected node's path (stable across rebuilds).</summary>
+    private static void CaptureState(
+        IEnumerable<ErrorTreeNode> nodes, string parentPath, HashSet<string> expanded, ref string? selected)
+    {
+        foreach (var n in nodes)
+        {
+            var path = parentPath.Length == 0 ? n.Key : parentPath + KeySep + n.Key;
+            if (n.IsExpanded) expanded.Add(path);
+            if (n.IsSelected) selected = path;
+            CaptureState(n.Children, path, expanded, ref selected);
+        }
+    }
+
+    /// <summary>Re-apply captured expansion/selection to the rebuilt tree; unseen nodes stay collapsed.</summary>
+    private static void RestoreState(
+        IEnumerable<ErrorTreeNode> nodes, string parentPath, HashSet<string> expanded, string? selected)
+    {
+        foreach (var n in nodes)
+        {
+            var path = parentPath.Length == 0 ? n.Key : parentPath + KeySep + n.Key;
+            if (expanded.Contains(path)) n.IsExpanded = true;
+            if (selected is not null && selected == path) n.IsSelected = true;
+            RestoreState(n.Children, path, expanded, selected);
+        }
     }
 
     /// <summary>Bar chart of the top-level groups' NG counts (the first chosen dimension).</summary>
@@ -189,9 +244,10 @@ public partial class MainViewModel : ObservableObject
         };
     }
 
-    /// <summary>Recursively group rows; the deepest level appends OK/NG result leaves.</summary>
+    /// <summary>Recursively group rows; the deepest level appends OK/NG result leaves. Nodes are
+    /// created collapsed — expansion is applied afterwards by <see cref="BuildTree"/>.</summary>
     private static List<ErrorTreeNode> BuildNodes(
-        IReadOnlyList<ErrorAggRow> rows, List<GroupDimension> dims, int index, bool expandThisLevel)
+        IReadOnlyList<ErrorAggRow> rows, List<GroupDimension> dims, int index)
     {
         if (index >= dims.Count)
             return ResultLeaves(rows);
@@ -201,8 +257,8 @@ public partial class MainViewModel : ObservableObject
         foreach (var group in rows.GroupBy(dim.KeyOf!))
         {
             var ng = group.Where(r => r.ResultStatus == 0).Sum(r => r.Count);
-            var node = new ErrorTreeNode(group.Key, ng, NodeKind.Group, expanded: expandThisLevel);
-            foreach (var child in BuildNodes(group.ToList(), dims, index + 1, expandThisLevel: false))
+            var node = new ErrorTreeNode(group.Key, ng, NodeKind.Group);
+            foreach (var child in BuildNodes(group.ToList(), dims, index + 1))
                 node.Children.Add(child);
             nodes.Add(node);
         }

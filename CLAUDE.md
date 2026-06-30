@@ -1070,6 +1070,9 @@ server; per-tool on the companions). Default is Dark when nothing is saved.
 - Group by error category (from JSON: FeatureGroup)
 - Group by nest number
 - Live view + historical
+- The TreeView **preserves the user's expand/collapse + selection across (live) refreshes** by a
+  stable path key; new nodes appear collapsed. A **"Reset Tree"** button collapses back to the
+  default state (top level expanded). First build / grouping change / Reset apply the default.
 
 ### HarryCollageCreator — Collage Layout Editor
 - Visual editor for Collage.ini

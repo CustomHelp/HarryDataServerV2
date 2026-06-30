@@ -31,6 +31,7 @@ public partial class ErrorTreeNode : ObservableObject
     public ObservableCollection<ErrorTreeNode> Children { get; } = new();
 
     [ObservableProperty] private bool _isExpanded;
+    [ObservableProperty] private bool _isSelected;
 
     private static Brush Frozen(byte r, byte g, byte b)
     {
