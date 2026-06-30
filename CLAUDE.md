@@ -1050,6 +1050,11 @@ server; per-tool on the companions). Default is Dark when nothing is saved.
 - Display: measurements + names + limits + general info (humidity etc.) + results
 - Export to CSV
 - DB user: `GetData` (read-only)
+- **Resolves measurements even without a `dmcserial` part record.** `FindPartForInspectionAsync`
+  first tries the `dmcserial` header (rich part info); if there is no part-exit row yet, it
+  synthesizes a part directly from `measurements_serial`/`measurements_serial_trimmer` matched by
+  serial, so camera-only data (before the PLC part-exit) is still inspectable. Matching is an exact
+  serial `=` (no length/32-char assumption), so 22-char Serial1 values match.
 
 ### HarryGraph — Measurement Graph
 - Select one or more measurements from DB definition list

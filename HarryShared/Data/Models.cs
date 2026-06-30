@@ -39,13 +39,22 @@ public sealed record PartInfo(
     int ResultStatus,
     DateTime CreatedAt)
 {
-    public string ResultText => ResultStatus switch
-    {
-        1 => "OK",
-        0 => "NG",
-        -1 => "Deleted",
-        _ => ResultStatus.ToString(),
-    };
+    /// <summary>
+    /// True when no <c>dmcserial</c> part record exists yet and the part was synthesized from
+    /// <c>measurements_serial(_trimmer)</c> by serial (camera data before the PLC part-exit). Such a
+    /// part has no overall result, so <see cref="ResultText"/> shows a neutral marker.
+    /// </summary>
+    public bool Synthetic { get; init; }
+
+    public string ResultText => Synthetic
+        ? "— (no part record)"
+        : ResultStatus switch
+        {
+            1 => "OK",
+            0 => "NG",
+            -1 => "Deleted",
+            _ => ResultStatus.ToString(),
+        };
 }
 
 /// <summary>One measurement of a part joined with its definition + limits (for HarryAnalysis).</summary>

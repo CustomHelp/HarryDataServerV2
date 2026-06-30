@@ -107,6 +107,61 @@ LIMIT 1;";
     }
 
     /// <summary>
+    /// Resolve a part for inspection, working even before the PLC part-exit. First tries the rich
+    /// <c>dmcserial</c> header (<see cref="FindPartAsync"/>); if there is no such row yet, falls back
+    /// to a <b>synthetic</b> part built directly from <c>measurements_serial</c> (matched by
+    /// <c>serial_number</c>) or <c>measurements_serial_trimmer</c> (matched by <c>serial_trimmer</c>),
+    /// so camera-only data is still inspectable. Returns null only when the serial has no rows
+    /// anywhere. Used by HarryAnalysis.
+    /// </summary>
+    public async Task<PartInfo?> FindPartForInspectionAsync(string scan, CancellationToken ct = default)
+    {
+        scan = scan.Trim();
+        if (scan.Length == 0)
+            return null;
+
+        // Prefer the full part header when a finished-part record exists.
+        var part = await FindPartAsync(scan, ct).ConfigureAwait(false);
+        if (part is not null)
+            return part;
+
+        // No dmcserial row yet — synthesize from the measurement tables (exact serial match).
+        await using var conn = await _config.OpenAsync(ct).ConfigureAwait(false);
+
+        var (hasSerial, serialAt) = await ProbeSerialAsync(
+            conn, "measurements_serial", "serial_number", scan, ct).ConfigureAwait(false);
+        if (hasSerial)
+            return SyntheticPart(serialNumber: scan, serialTrimmer: null, createdAt: serialAt);
+
+        var (hasTrimmer, trimmerAt) = await ProbeSerialAsync(
+            conn, "measurements_serial_trimmer", "serial_trimmer", scan, ct).ConfigureAwait(false);
+        if (hasTrimmer)
+            return SyntheticPart(serialNumber: string.Empty, serialTrimmer: scan, createdAt: trimmerAt);
+
+        return null;
+    }
+
+    /// <summary>Does this serial have rows in the given measurement table? Returns the latest measured_at.</summary>
+    private static async Task<(bool Exists, DateTime LatestAt)> ProbeSerialAsync(
+        MySqlConnection conn, string table, string serialColumn, string serial, CancellationToken ct)
+    {
+        var sql = $"SELECT COUNT(*), MAX(measured_at) FROM {table} WHERE {serialColumn} = @serial;";
+        await using var cmd = new MySqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@serial", serial);
+        await using var r = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        if (!await r.ReadAsync(ct).ConfigureAwait(false) || r.GetInt64(0) == 0)
+            return (false, default);
+        return (true, r.IsDBNull(1) ? default : r.GetDateTime(1));
+    }
+
+    /// <summary>A minimal part record (no dmcserial header) for camera-only inspection.</summary>
+    private static PartInfo SyntheticPart(string serialNumber, string? serialTrimmer, DateTime createdAt) =>
+        new(0, serialNumber, serialTrimmer, null, null, null, null, null, null, null, null, null, null, null, 0, createdAt)
+        {
+            Synthetic = true,
+        };
+
+    /// <summary>
     /// All measurements for a part: the serial_number rows plus, if present, the
     /// trimmer rows, each joined to its definition and the latest Min/Max limits.
     /// </summary>
