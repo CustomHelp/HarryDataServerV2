@@ -28,8 +28,11 @@ public partial class MainViewModel : ObservableObject
         _query = query;
         ConfigFile = config.IniPath;
 
+        var now = DateTime.Now;
         FromDate = DateTime.Today;
+        FromTime = TimeSpan.Zero;          // from = today 00:00
         ToDate = DateTime.Today;
+        ToTime = now.TimeOfDay;            // to = now
 
         _liveTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _liveTimer.Tick += async (_, _) => await TickLiveAsync();
@@ -45,9 +48,27 @@ public partial class MainViewModel : ObservableObject
     public ObservableCollection<GraphPanelViewModel> Panels { get; } = new();
 
     [ObservableProperty] private DateTime _fromDate;
+    [ObservableProperty] private TimeSpan _fromTime;
     [ObservableProperty] private DateTime _toDate;
-    [ObservableProperty] private int _liveWindowMinutes = 30;
+    [ObservableProperty] private TimeSpan _toTime;
     [ObservableProperty] private string _statusMessage = "Loading measurement list …";
+
+    // Live view: how many of the most recent points per series to show (editable combo).
+    public IReadOnlyList<int> LiveCountPresets { get; } = LiveView.Presets;
+    [ObservableProperty] private string _liveCountText = LiveView.DefaultCount.ToString();
+    private int _lastValidLiveCount = LiveView.DefaultCount;
+
+    /// <summary>Validated last-N count; remembers the last valid value on bad input.</summary>
+    public int LiveCount
+    {
+        get
+        {
+            _lastValidLiveCount = LiveView.ParseCount(LiveCountText, _lastValidLiveCount);
+            return _lastValidLiveCount;
+        }
+    }
+
+    partial void OnLiveCountTextChanged(string value) => _ = TickLiveAsync();
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(AddPanelCommand))]
@@ -69,15 +90,18 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
-    /// <summary>Range for a panel: rolling window when live, the shared from/to otherwise.</summary>
-    private (DateTime From, DateTime To) ResolveRange(bool isLive)
+    /// <summary>
+    /// Range + row limit for a panel. Live: the most recent <see cref="LiveCount"/> points (no
+    /// lower time bound). Non-live: the shared from/to date+time range, capped to a generous limit.
+    /// </summary>
+    private (DateTime From, DateTime To, int Limit) ResolveRange(bool isLive)
     {
         if (isLive)
-        {
-            var now = DateTime.Now;
-            return (now.AddMinutes(-Math.Max(1, LiveWindowMinutes)), now);
-        }
-        return (FromDate.Date, ToDate.Date.AddDays(1).AddSeconds(-1));
+            return (new DateTime(2000, 1, 1), DateTime.Now, LiveCount);
+
+        var from = FromDate.Date + FromTime;
+        var to = ToDate.Date + ToTime;
+        return (from, to, GraphPanelViewModel.MaxPoints);
     }
 
     private bool CanAddPanel => Panels.Count < MaxPanels;

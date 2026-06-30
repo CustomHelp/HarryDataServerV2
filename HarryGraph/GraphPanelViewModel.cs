@@ -15,7 +15,8 @@ namespace HarryGraph;
 /// </summary>
 public partial class GraphPanelViewModel : ObservableObject
 {
-    private const int MaxPoints = 50000;
+    /// <summary>Absolute ceiling on points fetched per series (protects the plot).</summary>
+    public const int MaxPoints = 50000;
 
     // One colour per selected measurement (cycled); the envelope reuses the series colour.
     private static readonly OxyColor[] Palette =
@@ -27,7 +28,7 @@ public partial class GraphPanelViewModel : ObservableObject
     };
 
     private readonly QueryService _query;
-    private readonly Func<bool, (DateTime From, DateTime To)> _rangeResolver;
+    private readonly Func<bool, (DateTime From, DateTime To, int Limit)> _rangeResolver;
     private readonly Action<GraphPanelViewModel>? _onMaximize;
     private readonly List<GraphDefItem> _allItems = new();
     private bool _ready;
@@ -35,7 +36,7 @@ public partial class GraphPanelViewModel : ObservableObject
     public GraphPanelViewModel(
         QueryService query,
         IReadOnlyList<MeasurementDefinitionRow> definitions,
-        Func<bool, (DateTime From, DateTime To)> rangeResolver,
+        Func<bool, (DateTime From, DateTime To, int Limit)> rangeResolver,
         Action<GraphPanelViewModel>? onMaximize,
         bool isDetached = false)
     {
@@ -132,7 +133,8 @@ public partial class GraphPanelViewModel : ObservableObject
             return;
         }
 
-        var (from, to) = _rangeResolver(LiveMode);
+        var (from, to, limit) = _rangeResolver(LiveMode);
+        limit = Math.Min(limit, MaxPoints);
 
         try
         {
@@ -143,7 +145,7 @@ public partial class GraphPanelViewModel : ObservableObject
             foreach (var def in defs)
             {
                 var color = Palette[colorIndex++ % Palette.Length];
-                var points = await _query.GetSeriesAsync(def, from, to, MaxPoints);
+                var points = await _query.GetSeriesAsync(def, from, to, limit);
                 totalPoints += points.Count;
 
                 var series = new LineSeries
@@ -186,7 +188,9 @@ public partial class GraphPanelViewModel : ObservableObject
             Model.Title = LiveMode
                 ? $"Live — {defs.Count} measurement(s), {totalPoints} pts"
                 : $"{defs.Count} measurement(s), {totalPoints} pts";
-            StatusText = $"{totalPoints} point(s), {from:yyyy-MM-dd} → {to:yyyy-MM-dd}";
+            StatusText = LiveMode
+                ? $"Live — last {limit} per series, {totalPoints} pts"
+                : $"{totalPoints} point(s), {from:yyyy-MM-dd HH:mm} → {to:yyyy-MM-dd HH:mm}";
             Model.InvalidatePlot(true);
         }
         catch (Exception ex)

@@ -47,11 +47,18 @@
                         ToolTip="Add a graph (max 6)" />
 
                 <TextBlock Text="From:" VerticalAlignment="Center" Margin="0,0,4,0" />
-                <DatePicker SelectedDate="{Binding FromDate}" Width="120" VerticalAlignment="Center" Margin="0,0,10,0" />
+                <DatePicker SelectedDate="{Binding FromDate}" Width="120" VerticalAlignment="Center" Margin="0,0,4,0" />
+                <TextBox Width="70" Text="{Binding FromTime, StringFormat=hh\\:mm\\:ss}" VerticalAlignment="Center"
+                         Margin="0,0,10,0" ToolTip="From time of day (HH:mm:ss)" />
                 <TextBlock Text="To:" VerticalAlignment="Center" Margin="0,0,4,0" />
-                <DatePicker SelectedDate="{Binding ToDate}" Width="120" VerticalAlignment="Center" Margin="0,0,12,0" />
-                <TextBlock Text="Live window (min):" VerticalAlignment="Center" Margin="0,0,4,0" />
-                <TextBox Width="50" Text="{Binding LiveWindowMinutes}" VerticalAlignment="Center" Margin="0,0,12,0" />
+                <DatePicker SelectedDate="{Binding ToDate}" Width="120" VerticalAlignment="Center" Margin="0,0,4,0" />
+                <TextBox Width="70" Text="{Binding ToTime, StringFormat=hh\\:mm\\:ss}" VerticalAlignment="Center"
+                         Margin="0,0,12,0" ToolTip="To time of day (HH:mm:ss)" />
+                <TextBlock Text="Live last N:" VerticalAlignment="Center" Margin="0,0,4,0" />
+                <ComboBox Width="90" IsEditable="True" ItemsSource="{Binding LiveCountPresets}"
+                          Text="{Binding LiveCountText, UpdateSourceTrigger=PropertyChanged}"
+                          VerticalAlignment="Center" Margin="0,0,12,0"
+                          ToolTip="Live view: number of most recent points per series (presets or custom)" />
                 <Button Content="Refresh all" Command="{Binding RefreshAllCommand}" />
             </WrapPanel>
         </Border>

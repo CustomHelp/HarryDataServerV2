@@ -776,6 +776,34 @@ Touched: `HarryCounter/{ErrorTreeNode.cs, MainViewModel.cs, MainWindow.xaml}`. C
 
 ---
 
+## HarryGraph + HarryCounter: date+time range search + "last N parts" live view (2026-06-30)
+
+Date-only search returned far too much data at production rates (~1 part/500 ms). Both tools now
+search a date+time range and the live view is bounded by a part count, applied as a SQL `LIMIT`.
+
+1. **Date + time range.** Both tools gained `FromTime`/`ToTime` (`TimeSpan`) bound to `HH:mm:ss`
+   text boxes next to the existing date pickers. The range is `FromDate.Date + FromTime` →
+   `ToDate.Date + ToTime`, filtered on the full `measured_at`/`created_at` datetime. Defaults:
+   from = today 00:00, to = now. HarryCounter's day-range presets (Today/7/30) set whole-day times
+   (00:00:00 → 23:59:59) so the old behaviour stays reachable.
+2. **Live "last N parts" selector.** Shared `HarryShared/Data/LiveView.cs` (presets
+   10/100/1000/10000, default 100, max 100 000, `ParseCount` validation). An **editable** ComboBox
+   in each tool (presets + free-typed custom value; invalid/empty/negative → last valid or default).
+   - **HarryGraph:** live mode shows the **last N points per series** — `ResolveRange` now returns a
+     `Limit` and live uses `(2000-01-01 … now, N)` so `GetSeriesAsync`'s existing
+     `ORDER BY measured_at DESC LIMIT N` returns the most recent N (capped at `MaxPoints`). The old
+     `LiveWindowMinutes` rolling window was replaced.
+   - **HarryCounter:** live mode aggregates over the **last N finished parts** — new
+     `QueryService.GetErrorTreeRowsLastNAsync(n)` / `GetPartStatsLastNAsync(n)` scope to the most
+     recent N `dmcserial` rows (`ORDER BY created_at DESC LIMIT @n` subquery). Non-live uses the
+     date+time range. (Interpretation: "a part" = a finished part in `dmcserial`; documented here.)
+
+Touched: `HarryShared/Data/{LiveView.cs (new), QueryService.cs}`,
+`HarryGraph/{MainViewModel,GraphPanelViewModel,MainWindow.xaml}`,
+`HarryCounter/{MainViewModel,MainWindow.xaml}`. CLAUDE.md §16 updated.
+
+---
+
 ## Build & Repo
 - `dotnet build HarryDataServer.sln -c Release` → 0 warnings, 0 errors (`net8.0-windows`).
 - Branch `main`, pushed to `https://github.com/CustomHelp/HarryDataServerV2`.

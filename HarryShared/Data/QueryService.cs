@@ -371,6 +371,65 @@ GROUP BY d.feature_group, measurement, m1x_nest, m3x_nest, m50_nest, m.result_st
         return list;
     }
 
+    /// <summary>
+    /// Live variant of <see cref="GetErrorTreeRowsAsync"/>: aggregate OK/NG measurements over the
+    /// <b>most recent N finished parts</b> (the last N <c>dmcserial</c> rows by <c>created_at</c>)
+    /// instead of a time range — the HarryCounter "last N parts" live view. The <c>LIMIT @n</c>
+    /// subquery keeps it fast on large tables.
+    /// </summary>
+    public async Task<List<ErrorAggRow>> GetErrorTreeRowsLastNAsync(int n, CancellationToken ct = default)
+    {
+        const string sql = @"
+SELECT d.feature_group,
+       CONCAT(c.camera_name, ' · ', d.display_name) AS measurement,
+       CAST(ds.m1x_nest AS CHAR) AS m1x_nest,
+       CAST(ds.m3x_nest AS CHAR) AS m3x_nest,
+       CAST(ds.m50_nest AS CHAR) AS m50_nest,
+       m.result_status,
+       COUNT(*) AS cnt
+FROM measurements_serial m
+JOIN measurement_definitions d ON d.id = m.definition_id
+JOIN cameras c ON c.id = d.camera_id
+JOIN (SELECT serial_number, m1x_nest, m3x_nest, m50_nest
+      FROM dmcserial ORDER BY created_at DESC LIMIT @n) ds ON ds.serial_number = m.serial_number
+WHERE m.run_type = 0
+  AND m.result_status IN (0, 1)
+GROUP BY d.feature_group, measurement, m1x_nest, m3x_nest, m50_nest, m.result_status;";
+
+        var list = new List<ErrorAggRow>();
+        await using var conn = await _config.OpenAsync(ct).ConfigureAwait(false);
+        await using var cmd = new MySqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@n", Math.Max(1, n));
+        await using var r = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        while (await r.ReadAsync(ct).ConfigureAwait(false))
+        {
+            list.Add(new ErrorAggRow(
+                r.IsDBNull(0) ? "(none)" : r.GetString(0),
+                r.IsDBNull(1) ? "(none)" : r.GetString(1),
+                r.IsDBNull(2) ? null : r.GetString(2),
+                r.IsDBNull(3) ? null : r.GetString(3),
+                r.IsDBNull(4) ? null : r.GetString(4),
+                r.GetInt32(5),
+                r.GetInt32(6)));
+        }
+        return list;
+    }
+
+    /// <summary>Total + NG part counts over the most recent N finished parts (for the live summary).</summary>
+    public async Task<(int Total, int Ng)> GetPartStatsLastNAsync(int n, CancellationToken ct = default)
+    {
+        const string sql = @"
+SELECT COUNT(*) AS total, COALESCE(SUM(result_status = 0), 0) AS ng
+FROM (SELECT result_status FROM dmcserial ORDER BY created_at DESC LIMIT @n) t;";
+        await using var conn = await _config.OpenAsync(ct).ConfigureAwait(false);
+        await using var cmd = new MySqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@n", Math.Max(1, n));
+        await using var r = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        if (!await r.ReadAsync(ct).ConfigureAwait(false))
+            return (0, 0);
+        return (Convert.ToInt32(r.GetValue(0)), Convert.ToInt32(r.GetValue(1)));
+    }
+
     /// <summary>Time-varying Min/Max limit history for a (camera, parameter_set) — for HarryGraph's envelope.</summary>
     public async Task<LimitHistory> GetLimitHistoryAsync(int cameraId, int parameterSet, CancellationToken ct = default)
     {

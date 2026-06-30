@@ -1057,6 +1057,10 @@ server; per-tool on the companions). Default is Dark when nothing is saved.
 - Modes: Live (auto-refresh) or fixed time range
 - Zoom/pan in chart, print option
 - Save/load graph configurations as JSON
+- **Range search is date+time** (from/to each a date picker + an `HH:mm:ss` time box, filtered on
+  `measured_at`), so production-rate data can be narrowed. **Live view** shows the **last N points
+  per series** via an editable combo (presets 10/100/1000/10000 + custom), applied as a SQL
+  `LIMIT N` (`LiveView` in `HarryShared`).
 
 ### HarryMSA — MSA Analysis Tool (or integrate as tab in main app)
 - Per-module view of MSA runs
@@ -1073,6 +1077,10 @@ server; per-tool on the companions). Default is Dark when nothing is saved.
 - The TreeView **preserves the user's expand/collapse + selection across (live) refreshes** by a
   stable path key; new nodes appear collapsed. A **"Reset Tree"** button collapses back to the
   default state (top level expanded). First build / grouping change / Reset apply the default.
+- **Range search is date+time** (from/to date picker + `HH:mm:ss` box, filtered on
+  `measured_at`/`created_at`). **Live view** aggregates over the **last N finished parts** (the most
+  recent N `dmcserial` rows by `created_at`, `LIMIT N` subquery) via the same editable combo
+  (10/100/1000/10000 + custom). Live ignores the date range; non-live uses it.
 
 ### HarryCollageCreator — Collage Layout Editor
 - Visual editor for Collage.ini

@@ -41,8 +41,11 @@ public partial class MainViewModel : ObservableObject
         _config = config;
         ConfigFile = config.IniPath;
 
+        var now = DateTime.Now;
         FromDate = DateTime.Today;
+        FromTime = TimeSpan.Zero;     // from = today 00:00
         ToDate = DateTime.Today;
+        ToTime = now.TimeOfDay;       // to = now
 
         _level1 = Dimensions[1]; // Feature Group
         _level2 = Dimensions[2]; // Measurement
@@ -75,10 +78,32 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty] private GroupDimension _level2;
     [ObservableProperty] private GroupDimension _level3;
     [ObservableProperty] private DateTime _fromDate;
+    [ObservableProperty] private TimeSpan _fromTime;
     [ObservableProperty] private DateTime _toDate;
+    [ObservableProperty] private TimeSpan _toTime;
     [ObservableProperty] private bool _liveMode;
     [ObservableProperty] private string _summary = string.Empty;
     [ObservableProperty] private string _statusMessage = "Choose a range and grouping, then Refresh.";
+
+    // Live view: aggregate over the most recent N finished parts (editable combo).
+    public IReadOnlyList<int> LiveCountPresets { get; } = LiveView.Presets;
+    [ObservableProperty] private string _liveCountText = LiveView.DefaultCount.ToString();
+    private int _lastValidLiveCount = LiveView.DefaultCount;
+
+    /// <summary>Validated last-N count; remembers the last valid value on bad input.</summary>
+    public int LiveCount
+    {
+        get
+        {
+            _lastValidLiveCount = LiveView.ParseCount(LiveCountText, _lastValidLiveCount);
+            return _lastValidLiveCount;
+        }
+    }
+
+    partial void OnLiveCountTextChanged(string value)
+    {
+        if (LiveMode) _ = RefreshAsync();
+    }
 
     // A grouping change restructures the tree, so it returns to the default state (top level expanded).
     partial void OnLevel1Changed(GroupDimension value) => BuildTree(applyDefault: true);
@@ -91,29 +116,49 @@ public partial class MainViewModel : ObservableObject
         _ = RefreshAsync();
     }
 
-    [RelayCommand] private void RangeToday() { FromDate = DateTime.Today; ToDate = DateTime.Today; _ = RefreshAsync(); }
-    [RelayCommand] private void Range7Days() { FromDate = DateTime.Today.AddDays(-6); ToDate = DateTime.Today; _ = RefreshAsync(); }
-    [RelayCommand] private void Range30Days() { FromDate = DateTime.Today.AddDays(-29); ToDate = DateTime.Today; _ = RefreshAsync(); }
+    // The day-range presets cover whole days (00:00:00 → 23:59:59); narrow the time fields to reduce volume.
+    private static readonly TimeSpan DayStart = TimeSpan.Zero;
+    private static readonly TimeSpan DayEnd = new(23, 59, 59);
+
+    [RelayCommand] private void RangeToday() { FromDate = DateTime.Today; FromTime = DayStart; ToDate = DateTime.Today; ToTime = DayEnd; _ = RefreshAsync(); }
+    [RelayCommand] private void Range7Days() { FromDate = DateTime.Today.AddDays(-6); FromTime = DayStart; ToDate = DateTime.Today; ToTime = DayEnd; _ = RefreshAsync(); }
+    [RelayCommand] private void Range30Days() { FromDate = DateTime.Today.AddDays(-29); FromTime = DayStart; ToDate = DateTime.Today; ToTime = DayEnd; _ = RefreshAsync(); }
 
     [RelayCommand] private Task Refresh() => RefreshAsync();
 
     private async Task RefreshAsync()
     {
-        var from = FromDate.Date;
-        var to = ToDate.Date.AddDays(1).AddSeconds(-1);
         try
         {
-            _rows = await _query.GetErrorTreeRowsAsync(from, to);
+            int totalParts, ngParts;
+            string scope;
 
-            var totalParts = await _query.GetTotalPartCountAsync(from, to);
-            var ngParts = await _query.GetNgPartCountAsync(from, to);
+            if (LiveMode)
+            {
+                // Live: aggregate over the most recent N finished parts (LIMIT N at the query level).
+                var n = LiveCount;
+                _rows = await _query.GetErrorTreeRowsLastNAsync(n);
+                (totalParts, ngParts) = await _query.GetPartStatsLastNAsync(n);
+                scope = $"last {n} parts";
+            }
+            else
+            {
+                // Range: full date+time bounds (narrow the time to cut data volume).
+                var from = FromDate.Date + FromTime;
+                var to = ToDate.Date + ToTime;
+                _rows = await _query.GetErrorTreeRowsAsync(from, to);
+                totalParts = await _query.GetTotalPartCountAsync(from, to);
+                ngParts = await _query.GetNgPartCountAsync(from, to);
+                scope = $"{from:yyyy-MM-dd HH:mm} to {to:yyyy-MM-dd HH:mm}";
+            }
+
             var yield = totalParts > 0 ? 100.0 * (totalParts - ngParts) / totalParts : 0.0;
             var ngMeas = _rows.Where(r => r.ResultStatus == 0).Sum(r => r.Count);
             Summary = $"Parts: {totalParts}   NG parts: {ngParts}   Yield: {yield:0.00}%   NG measurements: {ngMeas}";
 
             // First build uses the default expansion; later refreshes preserve the user's state.
             BuildTree(applyDefault: !_treeBuilt);
-            StatusMessage = $"Updated {DateTime.Now:HH:mm:ss} — {from:yyyy-MM-dd} to {to:yyyy-MM-dd}.";
+            StatusMessage = $"Updated {DateTime.Now:HH:mm:ss} — {scope}.";
         }
         catch (Exception ex)
         {

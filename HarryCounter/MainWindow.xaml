@@ -49,9 +49,13 @@
                           VerticalAlignment="Center" Margin="0,0,16,0" />
 
                 <TextBlock Text="From:" VerticalAlignment="Center" Margin="0,0,4,0" />
-                <DatePicker SelectedDate="{Binding FromDate}" Width="120" VerticalAlignment="Center" Margin="0,0,10,0" />
+                <DatePicker SelectedDate="{Binding FromDate}" Width="120" VerticalAlignment="Center" Margin="0,0,4,0" />
+                <TextBox Width="70" Text="{Binding FromTime, StringFormat=hh\\:mm\\:ss}" VerticalAlignment="Center"
+                         Margin="0,0,10,0" ToolTip="From time of day (HH:mm:ss)" />
                 <TextBlock Text="To:" VerticalAlignment="Center" Margin="0,0,4,0" />
-                <DatePicker SelectedDate="{Binding ToDate}" Width="120" VerticalAlignment="Center" Margin="0,0,12,0" />
+                <DatePicker SelectedDate="{Binding ToDate}" Width="120" VerticalAlignment="Center" Margin="0,0,4,0" />
+                <TextBox Width="70" Text="{Binding ToTime, StringFormat=hh\\:mm\\:ss}" VerticalAlignment="Center"
+                         Margin="0,0,12,0" ToolTip="To time of day (HH:mm:ss)" />
                 <Button Content="Today" Command="{Binding RangeTodayCommand}" Margin="0,0,4,0" />
                 <Button Content="7 days" Command="{Binding Range7DaysCommand}" Margin="0,0,4,0" />
                 <Button Content="30 days" Command="{Binding Range30DaysCommand}" Margin="0,0,12,0" />
@@ -59,7 +63,12 @@
                 <Button Content="Export CSV" Command="{Binding ExportCommand}" Margin="0,0,4,0" />
                 <Button Content="Reset Tree" Command="{Binding ResetTreeCommand}" Margin="0,0,12,0"
                         ToolTip="Collapse the tree back to the default state" />
-                <CheckBox Content="Live (5 s)" IsChecked="{Binding LiveMode}" VerticalAlignment="Center" />
+                <CheckBox Content="Live (5 s)" IsChecked="{Binding LiveMode}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                <TextBlock Text="last N:" VerticalAlignment="Center" Margin="0,0,4,0" />
+                <ComboBox Width="90" IsEditable="True" ItemsSource="{Binding LiveCountPresets}"
+                          Text="{Binding LiveCountText, UpdateSourceTrigger=PropertyChanged}"
+                          VerticalAlignment="Center"
+                          ToolTip="Live view: aggregate over the most recent N finished parts (presets or custom)" />
             </WrapPanel>
         </Border>
 
