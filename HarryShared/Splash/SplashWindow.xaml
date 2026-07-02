@@ -1,0 +1,205 @@
+<Window x:Class="HarryShared.Splash.SplashWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        WindowStartupLocation="CenterScreen"
+        Topmost="True"
+        ShowInTaskbar="False"
+        SizeToContent="WidthAndHeight"
+        ResizeMode="NoResize">
+
+    <!--
+        Shared HarrySuite splashscreen with laser-contour animation.
+        Ported 1:1 from LOET_HMI\SplashWindow.xaml so the whole suite shares one intro.
+        Deliberately WITHOUT any App-resource references (MergedDictionaries), because
+        this window runs on its own UI thread (see SplashHost). Fully self-contained:
+        the logo polygon points are inline, so no external asset is needed at runtime.
+        Colours:  Turquoise #00AEC8 (laser), Purple #782182 (logo), White (company text).
+        Polygon points come 1:1 from CUSTOMHELP_Symbol_lila.svg (viewBox 283.46).
+        Contour perimeter ~2073.24 units -> at StrokeThickness 4 = 518.31 dash units.
+
+        The product line (TxtProduct) text is set in code-behind (per application);
+        the company line stays "CUSTOMHELP".
+    -->
+
+    <Window.Resources>
+        <!-- Colour resources local, so they are thread-independent -->
+        <SolidColorBrush x:Key="TuerkisBrush" Color="#00AEC8" />
+        <SolidColorBrush x:Key="LilaBrush" Color="#782182" />
+
+        <!-- Intro storyboard: started from code-behind (SplashHost) so its animation
+             speed (SpeedRatio) and minimum display time can be set per application. -->
+        <Storyboard x:Key="IntroStoryboard">
+                    <!-- 0.3s: laser traces the contour (glow + sharp line in sync), 2.5s -->
+                    <DoubleAnimation Storyboard.TargetName="PolyStroke"
+                                     Storyboard.TargetProperty="StrokeDashOffset"
+                                     From="518.31" To="0"
+                                     BeginTime="0:0:0.3" Duration="0:0:2.5">
+                        <DoubleAnimation.EasingFunction>
+                            <SineEase EasingMode="EaseInOut" />
+                        </DoubleAnimation.EasingFunction>
+                    </DoubleAnimation>
+                    <DoubleAnimation Storyboard.TargetName="PolyGlow"
+                                     Storyboard.TargetProperty="StrokeDashOffset"
+                                     From="518.31" To="0"
+                                     BeginTime="0:0:0.3" Duration="0:0:2.5">
+                        <DoubleAnimation.EasingFunction>
+                            <SineEase EasingMode="EaseInOut" />
+                        </DoubleAnimation.EasingFunction>
+                    </DoubleAnimation>
+
+                    <!-- 2.6s: logo (purple) fades in -->
+                    <DoubleAnimation Storyboard.TargetName="PolyFill"
+                                     Storyboard.TargetProperty="Opacity"
+                                     From="0" To="1"
+                                     BeginTime="0:0:2.6" Duration="0:0:0.5" />
+                    <!-- dim the laser line once the logo is there -->
+                    <DoubleAnimation Storyboard.TargetName="PolyStroke"
+                                     Storyboard.TargetProperty="Opacity"
+                                     From="1" To="0.25"
+                                     BeginTime="0:0:2.9" Duration="0:0:0.6" />
+                    <DoubleAnimation Storyboard.TargetName="PolyGlow"
+                                     Storyboard.TargetProperty="Opacity"
+                                     From="1" To="0.35"
+                                     BeginTime="0:0:2.9" Duration="0:0:0.6" />
+
+                    <!-- 2.8s: "CUSTOMHELP" fades in + slight rise -->
+                    <DoubleAnimation Storyboard.TargetName="TxtCompany"
+                                     Storyboard.TargetProperty="Opacity"
+                                     From="0" To="1"
+                                     BeginTime="0:0:2.8" Duration="0:0:0.5" />
+                    <DoubleAnimation Storyboard.TargetName="TxtCompanyMove"
+                                     Storyboard.TargetProperty="Y"
+                                     From="12" To="0"
+                                     BeginTime="0:0:2.8" Duration="0:0:0.5">
+                        <DoubleAnimation.EasingFunction>
+                            <CubicEase EasingMode="EaseOut" />
+                        </DoubleAnimation.EasingFunction>
+                    </DoubleAnimation>
+
+                    <!-- 3.0s: product line (per app) fades in -->
+                    <DoubleAnimation Storyboard.TargetName="TxtProduct"
+                                     Storyboard.TargetProperty="Opacity"
+                                     From="0" To="1"
+                                     BeginTime="0:0:3.0" Duration="0:0:0.5" />
+
+                    <!-- 3.1s: loading bar appears and runs -->
+                    <DoubleAnimation Storyboard.TargetName="BarHost"
+                                     Storyboard.TargetProperty="Opacity"
+                                     From="0" To="1"
+                                     BeginTime="0:0:3.1" Duration="0:0:0.4" />
+                    <DoubleAnimation Storyboard.TargetName="Bar"
+                                     Storyboard.TargetProperty="Value"
+                                     From="0" To="100"
+                                     BeginTime="0:0:3.1" Duration="0:0:1.8">
+                        <DoubleAnimation.EasingFunction>
+                            <SineEase EasingMode="EaseInOut" />
+                        </DoubleAnimation.EasingFunction>
+                    </DoubleAnimation>
+        </Storyboard>
+    </Window.Resources>
+
+    <!-- Centred content on a transparent ground -->
+    <Grid Margin="60">
+        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+
+            <!-- Logo symbol: glow + laser line + filled area -->
+            <Viewbox Width="210" Height="210" HorizontalAlignment="Center">
+                <Grid Width="283.46" Height="283.46">
+
+                    <!-- Glow layer (blurred copy of the contour) -->
+                    <Polygon x:Name="PolyGlow"
+                             Points="227.28,168.69 227.28,229.38 170.29,229.38 170.29,168.69 113.68,168.69 113.68,229.38 56.84,229.38 56.84,53.92 113.68,53.92 113.68,114.77 170.29,114.77 170.29,53.92 227.28,53.92 227.28,114.77 283.46,114.77 283.46,0 0,0 0,283.46 283.46,283.46 283.46,168.69"
+                             Stroke="{StaticResource TuerkisBrush}"
+                             StrokeThickness="7"
+                             Fill="Transparent"
+                             StrokeDashArray="518.31 518.31"
+                             StrokeDashOffset="518.31"
+                             StrokeStartLineCap="Round"
+                             StrokeEndLineCap="Round"
+                             StrokeLineJoin="Round">
+                        <Polygon.Effect>
+                            <BlurEffect Radius="16" />
+                        </Polygon.Effect>
+                    </Polygon>
+
+                    <!-- Filled logo (purple), initially invisible -->
+                    <Polygon x:Name="PolyFill"
+                             Points="227.28,168.69 227.28,229.38 170.29,229.38 170.29,168.69 113.68,168.69 113.68,229.38 56.84,229.38 56.84,53.92 113.68,53.92 113.68,114.77 170.29,114.77 170.29,53.92 227.28,53.92 227.28,114.77 283.46,114.77 283.46,0 0,0 0,283.46 283.46,283.46 283.46,168.69"
+                             Fill="{StaticResource LilaBrush}"
+                             Opacity="0" />
+
+                    <!-- Sharp laser line on top -->
+                    <Polygon x:Name="PolyStroke"
+                             Points="227.28,168.69 227.28,229.38 170.29,229.38 170.29,168.69 113.68,168.69 113.68,229.38 56.84,229.38 56.84,53.92 113.68,53.92 113.68,114.77 170.29,114.77 170.29,53.92 227.28,53.92 227.28,114.77 283.46,114.77 283.46,0 0,0 0,283.46 283.46,283.46 283.46,168.69"
+                             Stroke="{StaticResource TuerkisBrush}"
+                             StrokeThickness="4"
+                             Fill="Transparent"
+                             StrokeDashArray="518.31 518.31"
+                             StrokeDashOffset="518.31"
+                             StrokeStartLineCap="Round"
+                             StrokeEndLineCap="Round"
+                             StrokeLineJoin="Round" />
+                </Grid>
+            </Viewbox>
+
+            <!-- "CUSTOMHELP" (letter-spacing emulated by spaces) -->
+            <TextBlock x:Name="TxtCompany"
+                       Text="C U S T O M H E L P"
+                       Foreground="White"
+                       FontSize="34"
+                       FontWeight="Light"
+                       HorizontalAlignment="Center"
+                       Margin="0,26,0,0"
+                       Opacity="0">
+                <TextBlock.RenderTransform>
+                    <TranslateTransform x:Name="TxtCompanyMove" Y="12" />
+                </TextBlock.RenderTransform>
+            </TextBlock>
+
+            <!-- Product line (set per application in code-behind) -->
+            <TextBlock x:Name="TxtProduct"
+                       Text=""
+                       Foreground="{StaticResource TuerkisBrush}"
+                       FontSize="13"
+                       FontWeight="SemiBold"
+                       HorizontalAlignment="Center"
+                       Margin="0,8,0,0"
+                       Opacity="0" />
+
+            <!-- Loading bar: purple -> turquoise gradient -->
+            <Border x:Name="BarHost"
+                    Width="280" Height="6"
+                    Margin="0,28,0,0"
+                    CornerRadius="3"
+                    Background="#33FFFFFF"
+                    Opacity="0">
+                <ProgressBar x:Name="Bar"
+                             Minimum="0" Maximum="100" Value="0"
+                             Background="Transparent"
+                             BorderThickness="0">
+                    <ProgressBar.Foreground>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                            <GradientStop Color="#782182" Offset="0" />
+                            <GradientStop Color="#00AEC8" Offset="1" />
+                        </LinearGradientBrush>
+                    </ProgressBar.Foreground>
+                    <ProgressBar.Template>
+                        <ControlTemplate TargetType="ProgressBar">
+                            <Grid>
+                                <Border x:Name="PART_Track" CornerRadius="3" />
+                                <Border x:Name="PART_Indicator"
+                                        HorizontalAlignment="Left"
+                                        CornerRadius="3"
+                                        Background="{TemplateBinding Foreground}" />
+                            </Grid>
+                        </ControlTemplate>
+                    </ProgressBar.Template>
+                </ProgressBar>
+            </Border>
+
+        </StackPanel>
+    </Grid>
+</Window>

@@ -4,6 +4,7 @@ using HarryDataServer.Communication;
 using HarryDataServer.Configuration;
 using HarryDataServer.Infrastructure;
 using HarryDataServer.Services;
+using HarryShared.Splash;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace HarryDataServer;
@@ -47,6 +48,9 @@ public partial class App : Application
             return;
         }
 
+        // Show the shared suite splashscreen on its own UI thread while the (heavy)
+        // service container + main window are built. Closed in the finally below.
+        var splash = SplashHost.Show("DATA SERVER");
         try
         {
             _services = BuildServiceProvider();
@@ -110,6 +114,11 @@ public partial class App : Application
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
             Shutdown(-1);
+        }
+        finally
+        {
+            // Main window is up (or startup failed) -> fade out the splash and end its thread.
+            splash.Close();
         }
     }
 

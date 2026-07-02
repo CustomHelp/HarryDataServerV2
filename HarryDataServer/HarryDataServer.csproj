@@ -20,6 +20,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Shared splashscreen (HarryShared\Splash) — one intro for the whole suite. -->
+    <ProjectReference Include="..\HarryShared\HarryShared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Phase 1 dependencies. Additional packages are added per implementation phase. -->
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.1" />

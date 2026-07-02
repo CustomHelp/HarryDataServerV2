@@ -1,5 +1,6 @@
 using System.Windows;
 using HarryShared.Config;
+using HarryShared.Splash;
 
 namespace HarryCollageCreator;
 
@@ -14,12 +15,20 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
-        HarryConfig? config = null;
-        try { config = HarryConfig.Load(); }
-        catch { /* config optional for this tool */ }
+        var splash = SplashHost.ShowFast("COLLAGE CREATOR");
+        try
+        {
+            HarryConfig? config = null;
+            try { config = HarryConfig.Load(); }
+            catch { /* config optional for this tool */ }
 
-        var vm = new MainViewModel(config);
-        var window = new MainWindow { DataContext = vm };
-        window.Show();
+            var vm = new MainViewModel(config);
+            var window = new MainWindow { DataContext = vm };
+            window.Show();
+        }
+        finally
+        {
+            splash.Close();
+        }
     }
 }

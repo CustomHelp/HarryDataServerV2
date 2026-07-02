@@ -1,6 +1,7 @@
 using System.Windows;
 using HarryShared.Config;
 using HarryShared.Data;
+using HarryShared.Splash;
 
 namespace HarryGraph;
 
@@ -14,6 +15,7 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
+        var splash = SplashHost.ShowFast("GRAPH");
         try
         {
             var config = HarryConfig.Load();
@@ -28,6 +30,10 @@ public partial class App : Application
                 $"HarryGraph failed to start:\n\n{ex.Message}",
                 "Startup Error", MessageBoxButton.OK, MessageBoxImage.Error);
             Shutdown(-1);
+        }
+        finally
+        {
+            splash.Close();
         }
     }
 }
