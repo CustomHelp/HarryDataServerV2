@@ -57,7 +57,7 @@ Implemented from the written spec (no V1 source on the machine to port literally
 4. **Part-exit parallel sequence** — `PartExitOrchestrator` replaces the decoupled queues for
    channel 2. Saves `dmcserial`, then `Task.WhenAll`: OK → CSV ‖ Collage(if `Collage_Generate`)
    ‖ Images; NG → CSV ‖ Images. Each task timed (Stopwatch). ACK
-   `serial.PadRight(32,'0') + ";" + true|false + "\r\n"` after all complete; `true` only if
+   `serial.PadRight(32,'0') + ";" + true|false + "\r"` after all complete; `true` only if
    every task succeeded. Images for OK parts wait (untimed) for the collage to read first
    (no delete/compose race). 450 ms budget — a WARNING is logged if exceeded.
    - **Image handling:** search `Collage_SingleImages` recursively for `*.bmp` matching the
@@ -150,7 +150,7 @@ SPS Ch2 ─PartExit─▶ PartExitOrchestrator:
                      1. save dmcserial
                      2. Task.WhenAll  (OK: CSV ‖ Collage[if enabled] ‖ Images)
                                       (NG: CSV ‖ Images)            [≤450ms budget]
-                     3. ACK  serial.PadRight(32,'0');true|false\r\n
+                     3. ACK  serial.PadRight(32,'0');true|false\r
 SPS Ch3-7 ─Request;BaseID─▶ MsaService.HandleMsaRequest ─▶ Wait → (eval) → OK/NG
                                                           └▶ msa_results + MSA CSV
 Daily ─▶ ImageCleanupService ─▶ delete aged NG/Diag/Golden images + DROP old partitions

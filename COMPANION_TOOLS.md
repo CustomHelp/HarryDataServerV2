@@ -219,7 +219,7 @@ need verification on the line, in order:
 2. **Part-exit channel 2 under load (450 ms budget):** send real Part Exit telegrams; watch
    the **CSV / Collage tab "Part-exit timing"** line (CSV | Collage | Images | Total) and the
    Log for any `> 450ms` WARNING. Confirm the **ACK** format
-   `serial.PadRight(32,'0') + ";" + true|false + "\r\n"` is what the PLC expects, and that
+   `serial.PadRight(32,'0') + ";" + true|false + "\r"` is what the PLC expects, and that
    `true`/`false` reflects success.
 3. **Collage rendering (no V1 source to port from):** with sample images + a real Collage.ini,
    enable `Collage_Generate=true`, send an OK Part Exit, and compare the output JPG to a V1

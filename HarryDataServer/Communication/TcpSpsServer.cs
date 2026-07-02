@@ -280,8 +280,10 @@ public sealed class TcpSpsServer : ISpsServer
     }
 
     /// <summary>
-    /// Run the registered part-exit orchestrator and format the V1 ACK:
-    /// <c>serial.PadRight(32,'0') + ";" + true|false + "\r\n"</c>.
+    /// Run the registered part-exit orchestrator and format the ACK:
+    /// <c>serial.PadRight(32,'0') + ";" + true|false + "\r"</c>.
+    /// The terminator is a single CR — consistent with every other SPS channel
+    /// (agreed with the PLC programmer 2026-07-02; V1 used CR+LF).
     /// </summary>
     private async Task<string> HandlePartExitAckAsync(Func<SpsPartExitData, Task<bool>> handler, string telegram)
     {
@@ -289,7 +291,7 @@ public sealed class TcpSpsServer : ISpsServer
         if (data is null)
         {
             _log.Warning("SPS PartExit: malformed telegram '{Telegram}'.", telegram);
-            return new string('0', 32) + ";false\r\n";
+            return new string('0', 32) + ";false\r";
         }
 
         _log.Information("Part Exit: DMC={Dmc} SZID={Szid} order={Order} mode={Mode} result={Result}.",
@@ -307,7 +309,7 @@ public sealed class TcpSpsServer : ISpsServer
         }
 
         var serial = (data.Szid ?? string.Empty).PadRight(32, '0');
-        return $"{serial};{(success ? "true" : "false")}\r\n";
+        return $"{serial};{(success ? "true" : "false")}\r";
     }
 
     /// <summary>Channels 3–7: "Request;&lt;BaseID&gt;" → Wait / OK / NG / Error;&lt;desc&gt;.</summary>

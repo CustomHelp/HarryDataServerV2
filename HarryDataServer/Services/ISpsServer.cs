@@ -50,7 +50,8 @@ public interface ISpsServer
     /// <summary>
     /// Async handler for Part Exit (channel 2). When set, the server defers the
     /// response: it runs the handler (orchestrated CSV/Collage/Images), then sends the
-    /// V1 ACK <c>serial.PadRight(32,'0') + ";" + true|false + "\r\n"</c>. When null,
+    /// ACK <c>serial.PadRight(32,'0') + ";" + true|false + "\r"</c> (single CR, uniform
+    /// across all SPS channels; V1 used CR+LF). When null,
     /// the server falls back to an immediate "OK". Set by the part-exit orchestrator.
     /// </summary>
     Func<SpsPartExitData, Task<bool>>? PartExitHandler { get; set; }
