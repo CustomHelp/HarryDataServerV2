@@ -6,9 +6,11 @@ using HarryDataServer.Services;
 namespace HarryDataServer.ViewModels;
 
 /// <summary>
-/// One launchable companion tool on the Tools tab. The executable is discovered next to the
-/// running DataServer exe (no hardcoded absolute paths); when found the button launches it,
-/// otherwise it is disabled with a "not found" hint.
+/// One launchable companion tool on the Tools tab. The executable is discovered relative to the
+/// running DataServer exe (no hardcoded absolute paths): first next to it / in a same-named
+/// sibling subfolder (deployed layout), then in the sibling project's build output
+/// (&lt;solutionRoot&gt;\&lt;Tool&gt;\bin\&lt;Config&gt;\&lt;tfm&gt;\&lt;Tool&gt;.exe, the dev layout).
+/// When found the button launches it, otherwise it is disabled with a "not found" hint.
 /// </summary>
 public sealed class CompanionToolViewModel
 {
@@ -33,7 +35,7 @@ public sealed class CompanionToolViewModel
     public bool IsAvailable => ExePath is not null;
 
     /// <summary>Hint shown next to the button: the resolved path, or why it is disabled.</summary>
-    public string Hint => ExePath ?? "not found next to exe";
+    public string Hint => ExePath ?? "not found (next to exe or in solution build output)";
 
     public IRelayCommand LaunchCommand { get; }
 
@@ -44,14 +46,32 @@ public sealed class CompanionToolViewModel
         return ToolNames.Select(n => new CompanionToolViewModel(n, FindExe(baseDir, n), log)).ToList();
     }
 
-    /// <summary>Look for &lt;name&gt;.exe next to the exe, then in a same-named sibling subfolder.</summary>
+    /// <summary>
+    /// Resolve a tool exe. Deployed layout: next to the exe, or a same-named sibling subfolder.
+    /// Dev layout: each tool builds to its own project folder
+    /// (&lt;solutionRoot&gt;\&lt;Tool&gt;\bin\&lt;Config&gt;\&lt;tfm&gt;\&lt;Tool&gt;.exe), so reuse the server's
+    /// own bin\&lt;Config&gt;\&lt;tfm&gt; tail with the tool's project name swapped in.
+    /// </summary>
     private static string? FindExe(string baseDir, string name)
     {
-        string[] candidates =
+        var candidates = new List<string>
         {
-            Path.Combine(baseDir, name + ".exe"),
-            Path.Combine(baseDir, name, name + ".exe"),
+            Path.Combine(baseDir, name + ".exe"),          // deployed: all exes in one folder
+            Path.Combine(baseDir, name, name + ".exe"),    // deployed: same-named sibling subfolder
         };
+
+        // Dev layout: baseDir is ...\HarryDataServer\bin\<Config>\<tfm>\ — walk up to the solution
+        // root and point at the sibling tool project's matching build output.
+        var tfmDir = new DirectoryInfo(baseDir);            // net8.0-windows
+        var configDir = tfmDir.Parent;                     // Debug / Release
+        var binDir = configDir?.Parent;                    // bin
+        var solutionRoot = binDir?.Parent?.Parent;         // <solutionRoot> (skip the server project dir)
+        if (configDir is not null && solutionRoot is not null)
+        {
+            candidates.Add(Path.Combine(
+                solutionRoot.FullName, name, "bin", configDir.Name, tfmDir.Name, name + ".exe"));
+        }
+
         return candidates.FirstOrDefault(File.Exists);
     }
 
