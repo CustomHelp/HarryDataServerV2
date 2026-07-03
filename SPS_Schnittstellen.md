@@ -4,7 +4,7 @@
 > sauber aufgebaut werden können.
 > Quelle: tatsächlicher Server-Code (`TcpSpsServer.cs`, `SpsChannel.cs`,
 > `SpsPartExitData.cs`, `SystemHealthService.cs`) + `Harry.ini`.
-> Stand: 2026-07-02.
+> Stand: 2026-07-03.
 
 ---
 
@@ -100,10 +100,10 @@ Der Server **spiegelt das empfangene Telegramm** und hängt an:
 **Zweck:** Meldet ein fertiges Teil am Verpackungsauslauf. Löst serverseitig CSV-Export,
 Collage-Erzeugung und ggf. MSA-Auswertung aus.
 
-### SPS → Server (Request) — **12 Felder, `;`-getrennt, in dieser Reihenfolge**
+### SPS → Server (Request) — **15 Felder, `;`-getrennt, in dieser Reihenfolge**
 
 ```
-DMC;SZID;VirtualSerial;OrderName;Mode;M1X_Module;M1X_Nest;M3X_Module;M3X_Nest;M50_Nest;Humidity;ResultStatus\r
+DMC;SZID;VirtualSerial;OrderName;Mode;M1X_Module;M1X_Nest;M2X_Module;M2X_Nest;M3X_Module;M3X_Nest;M50_Nest;Temperature;Humidity;ResultStatus\r
 ```
 
 | # | Feld | Typ | Beispiel | Bemerkung |
@@ -115,13 +115,16 @@ DMC;SZID;VirtualSerial;OrderName;Mode;M1X_Module;M1X_Nest;M3X_Module;M3X_Nest;M5
 | 4 | `Mode` | String | `Normal` | `Normal` / `MSA1` / `MSA3` / `LimitSample` |
 | 5 | `M1X_Module` | Int | `10` | welches M1x-Modul (10 oder 11) |
 | 6 | `M1X_Nest` | Int | `2` | Nestnummer in M1x |
-| 7 | `M3X_Module` | String | `M32` | welches M3x-Blade-Modul |
-| 8 | `M3X_Nest` | String | `1` | Nestnummer in M3x |
-| 9 | `M50_Nest` | String | `4` | Nestnummer in M50 |
-| 10 | `Humidity` | Float | `43.7` | Feuchtewert aus M1x (Punkt als Dezimaltrenner) |
-| 11 | `ResultStatus` | String | `OK` | **`OK`** / **`NG`** / **`DE`** (deleted) |
+| 7 | `M2X_Module` | Int | `20` | welches M2x-Modul (20 oder 21) |
+| 8 | `M2X_Nest` | Int | `2` | Nestnummer in M2x |
+| 9 | `M3X_Module` | String | `M32` | welches M3x-Blade-Modul |
+| 10 | `M3X_Nest` | String | `1` | Nestnummer in M3x |
+| 11 | `M50_Nest` | String | `4` | Nestnummer in M50 |
+| 12 | `Temperature` | Float | `26.6` | Temperaturwert aus M1x (Punkt als Dezimaltrenner) |
+| 13 | `Humidity` | Float | `43.7` | Feuchtewert aus M1x (Punkt als Dezimaltrenner) |
+| 14 | `ResultStatus` | String | `OK` | **`OK`** / **`NG`** / **`DE`** (deleted) |
 
-> Es müssen **mindestens 12 Felder** vorhanden sein. Leere Felder sind erlaubt (z. B.
+> Es müssen **mindestens 15 Felder** vorhanden sein. Leere Felder sind erlaubt (z. B.
 > `VirtualSerial` leer → einfach zwei `;;` hintereinander). Zahlenfelder, die nicht geparst
 > werden können, werden serverseitig als „leer" behandelt.
 
@@ -141,7 +144,7 @@ Beispiel:
 ```
 
 - **`true`** = Teil vollständig verarbeitet.
-- **`false`** = Verarbeitung fehlgeschlagen **oder** Telegramm ungültig (weniger als 12 Felder).
+- **`false`** = Verarbeitung fehlgeschlagen **oder** Telegramm ungültig (weniger als 15 Felder).
   Bei ungültigem Telegramm sind die ersten 32 Zeichen `0` (`0000...0000;false\r`).
 - Abschluss mit **`\r`** — wie alle anderen Kanäle (bis 2026-07-02 war es hier `\r\n` aus V1; auf einheitliches `\r` umgestellt).
 
@@ -214,7 +217,7 @@ Error;expected 'Request;<BaseID>'\r
 | Kanal 1, Fehler | `<mirror>;<cams>;ERROR;<text>\r` |
 | Kanal 2, Teil verarbeitet | `<SZID32>;true\r` |
 | Kanal 2, Verarbeitung fehlgeschlagen | `<SZID32>;false\r` |
-| Kanal 2, ungültiges Telegramm (<12 Felder) | `00000000000000000000000000000000;false\r` |
+| Kanal 2, ungültiges Telegramm (<15 Felder) | `00000000000000000000000000000000;false\r` |
 | Kanäle 3–7, läuft noch | `Wait\r` |
 | Kanäle 3–7, bestanden / durchgefallen | `OK\r` / `NG\r` |
 | Kanäle 3–7, falsches Format | `Error;expected 'Request;<BaseID>'\r` |
@@ -252,5 +255,6 @@ Error;expected 'Request;<BaseID>'\r
 3. **Failure-Warnings X-in-Folge (SOW §4.4):** Warnung, wenn X Fehler derselben Prüfgruppe
    in Folge auftreten. Übertragung geplant im KeepAlive-Response (Kanal 1). → Schwellwerte
    und genaue Signalisierung abstimmen.
-4. **Feld-Details Part Exit:** Wertebereiche/Formate von `M3X_Module`, `M3X_Nest`, `M50_Nest`
-   final bestätigen (aktuell als String verarbeitet).
+4. **Feld-Details Part Exit:** Wertebereiche/Formate von `M2X_Module`, `M2X_Nest`, `M3X_Module`,
+   `M3X_Nest`, `M50_Nest` final bestätigen (`M2X_*` werden als Int verarbeitet, `M3X_*`/`M50_Nest`
+   als String).

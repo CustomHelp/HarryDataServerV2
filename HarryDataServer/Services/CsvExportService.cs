@@ -18,7 +18,8 @@ public sealed class CsvExportService : ICsvService
     private static readonly string[] MetaHeaders =
     {
         "Timestamp", "DMC", "SerialNumber", "VirtualSerial", "OrderName", "Mode",
-        "Result", "M1xModule", "M1xNest", "M3xModule", "M3xNest", "M50Nest", "Humidity",
+        "Result", "M1xModule", "M1xNest", "M2xModule", "M2xNest", "M3xModule", "M3xNest",
+        "M50Nest", "Temperature", "Humidity",
     };
 
     private readonly IDatabaseService _database;
@@ -227,10 +228,13 @@ ORDER BY c.camera_name, md.telegram_place;";
         row[6] = part.Result.ToString();
         row[7] = part.M1xModule?.ToString(CultureInfo.InvariantCulture);
         row[8] = part.M1xNest?.ToString(CultureInfo.InvariantCulture);
-        row[9] = part.M3xModule;
-        row[10] = part.M3xNest;
-        row[11] = part.M50Nest;
-        row[12] = part.Humidity?.ToString(CultureInfo.InvariantCulture);
+        row[9] = part.M2xModule?.ToString(CultureInfo.InvariantCulture);
+        row[10] = part.M2xNest?.ToString(CultureInfo.InvariantCulture);
+        row[11] = part.M3xModule;
+        row[12] = part.M3xNest;
+        row[13] = part.M50Nest;
+        row[14] = part.Temperature?.ToString(CultureInfo.InvariantCulture);
+        row[15] = part.Humidity?.ToString(CultureInfo.InvariantCulture);
 
         await FillMeasurementsAsync(conn, "measurements_serial", "serial_number", part.Szid, row, ct).ConfigureAwait(false);
         if (!string.IsNullOrWhiteSpace(part.VirtualSerial))

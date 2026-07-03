@@ -405,6 +405,7 @@ ORDER BY cnt DESC;";
 SELECT d.feature_group,
        CONCAT(c.camera_name, ' · ', d.display_name) AS measurement,
        CAST(ds.m1x_nest AS CHAR) AS m1x_nest,
+       CAST(ds.m2x_nest AS CHAR) AS m2x_nest,
        CAST(ds.m3x_nest AS CHAR) AS m3x_nest,
        CAST(ds.m50_nest AS CHAR) AS m50_nest,
        m.result_status,
@@ -416,7 +417,7 @@ LEFT JOIN dmcserial ds ON ds.serial_number = m.serial_number
 WHERE m.run_type = 0
   AND m.result_status IN (0, 1)
   AND m.measured_at >= @from AND m.measured_at <= @to
-GROUP BY d.feature_group, measurement, m1x_nest, m3x_nest, m50_nest, m.result_status;";
+GROUP BY d.feature_group, measurement, m1x_nest, m2x_nest, m3x_nest, m50_nest, m.result_status;";
 
         var list = new List<ErrorAggRow>();
         await using var conn = await _config.OpenAsync(ct).ConfigureAwait(false);
@@ -432,8 +433,9 @@ GROUP BY d.feature_group, measurement, m1x_nest, m3x_nest, m50_nest, m.result_st
                 r.IsDBNull(2) ? null : r.GetString(2),
                 r.IsDBNull(3) ? null : r.GetString(3),
                 r.IsDBNull(4) ? null : r.GetString(4),
-                r.GetInt32(5),
-                r.GetInt32(6)));
+                r.IsDBNull(5) ? null : r.GetString(5),
+                r.GetInt32(6),
+                r.GetInt32(7)));
         }
         return list;
     }
@@ -450,6 +452,7 @@ GROUP BY d.feature_group, measurement, m1x_nest, m3x_nest, m50_nest, m.result_st
 SELECT d.feature_group,
        CONCAT(c.camera_name, ' · ', d.display_name) AS measurement,
        CAST(ds.m1x_nest AS CHAR) AS m1x_nest,
+       CAST(ds.m2x_nest AS CHAR) AS m2x_nest,
        CAST(ds.m3x_nest AS CHAR) AS m3x_nest,
        CAST(ds.m50_nest AS CHAR) AS m50_nest,
        m.result_status,
@@ -457,11 +460,11 @@ SELECT d.feature_group,
 FROM measurements_serial m
 JOIN measurement_definitions d ON d.id = m.definition_id
 JOIN cameras c ON c.id = d.camera_id
-JOIN (SELECT serial_number, m1x_nest, m3x_nest, m50_nest
+JOIN (SELECT serial_number, m1x_nest, m2x_nest, m3x_nest, m50_nest
       FROM dmcserial ORDER BY created_at DESC LIMIT @n) ds ON ds.serial_number = m.serial_number
 WHERE m.run_type = 0
   AND m.result_status IN (0, 1)
-GROUP BY d.feature_group, measurement, m1x_nest, m3x_nest, m50_nest, m.result_status;";
+GROUP BY d.feature_group, measurement, m1x_nest, m2x_nest, m3x_nest, m50_nest, m.result_status;";
 
         var list = new List<ErrorAggRow>();
         await using var conn = await _config.OpenAsync(ct).ConfigureAwait(false);
@@ -476,8 +479,9 @@ GROUP BY d.feature_group, measurement, m1x_nest, m3x_nest, m50_nest, m.result_st
                 r.IsDBNull(2) ? null : r.GetString(2),
                 r.IsDBNull(3) ? null : r.GetString(3),
                 r.IsDBNull(4) ? null : r.GetString(4),
-                r.GetInt32(5),
-                r.GetInt32(6)));
+                r.IsDBNull(5) ? null : r.GetString(5),
+                r.GetInt32(6),
+                r.GetInt32(7)));
         }
         return list;
     }

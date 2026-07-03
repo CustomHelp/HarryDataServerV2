@@ -30,9 +30,14 @@ public sealed class SpsPartExitData
 
     public int? M1xModule { get; init; }
     public int? M1xNest { get; init; }
+    public int? M2xModule { get; init; }
+    public int? M2xNest { get; init; }
     public string M3xModule { get; init; } = string.Empty;
     public string M3xNest { get; init; } = string.Empty;
     public string M50Nest { get; init; } = string.Empty;
+
+    /// <summary>Temperature from M1x → dmcserial.m1x_temperature.</summary>
+    public double? Temperature { get; init; }
     public double? Humidity { get; init; }
 
     public PartResult Result { get; init; }
@@ -49,7 +54,7 @@ public sealed class SpsPartExitData
         _ => 0,
     };
 
-    private const int FieldCount = 12;
+    private const int FieldCount = 15;
 
     /// <summary>
     /// Parse a semicolon-separated Part Exit telegram. Returns null if it does not
@@ -73,11 +78,14 @@ public sealed class SpsPartExitData
             Mode = f[4].Trim(),
             M1xModule = ParseInt(f[5]),
             M1xNest = ParseInt(f[6]),
-            M3xModule = f[7].Trim(),
-            M3xNest = f[8].Trim(),
-            M50Nest = f[9].Trim(),
-            Humidity = ParseDouble(f[10]),
-            Result = ParseResult(f[11]),
+            M2xModule = ParseInt(f[7]),
+            M2xNest = ParseInt(f[8]),
+            M3xModule = f[9].Trim(),
+            M3xNest = f[10].Trim(),
+            M50Nest = f[11].Trim(),
+            Temperature = ParseDouble(f[12]),
+            Humidity = ParseDouble(f[13]),
+            Result = ParseResult(f[14]),
             RawTelegram = telegram,
         };
     }

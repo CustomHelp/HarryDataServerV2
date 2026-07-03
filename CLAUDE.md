@@ -250,22 +250,29 @@ Confirmed live example (M50_ST140_KF1):
 - Example response: `<mirrored_telegram>;1;1;0;1;1;1;0;1;1;1;1;1;1;1`
 
 ### Channel 2 — Part Exit (St160 Packaging)
-Telegram fields (semicolon-separated):
+Telegram fields (semicolon-separated) — **15 fields, at least 15 required** (a shorter telegram
+is answered with `<32×'0'>;false`). Empty fields are allowed:
 
-| Field | Content |
-|-------|---------|
-| DMC | DataMatrix code lasered on part |
-| SZID | Frame serial number (32 chars) |
-| VirtualSerial | Trimmer serial number (32 chars) |
-| OrderName | Current production order name |
-| Mode | `Normal` / `MSA1` / `MSA3` / `LimitSample` |
-| M1X_Module | Which M1x module (10 or 11) |
-| M1X_Nest | Nest number in M1x |
-| M3X_Module | Which M3x blade module |
-| M3X_Nest | Nest number in M3x |
-| M50_Nest | Nest number in M50 |
-| Humidity | Humidity value from M1x (float) |
-| ResultStatus | `OK` / `NG` / `DE` (deleted) |
+| # | Field | Content |
+|---|-------|---------|
+| 0 | DMC | DataMatrix code lasered on part |
+| 1 | SZID | Frame serial number (32 chars) |
+| 2 | VirtualSerial | Trimmer serial number (32 chars) |
+| 3 | OrderName | Current production order name |
+| 4 | Mode | `Normal` / `MSA1` / `MSA3` / `LimitSample` |
+| 5 | M1X_Module | Which M1x module (10 or 11) |
+| 6 | M1X_Nest | Nest number in M1x |
+| 7 | M2X_Module | Which M2x module (20 or 21) |
+| 8 | M2X_Nest | Nest number in M2x |
+| 9 | M3X_Module | Which M3x blade module |
+| 10 | M3X_Nest | Nest number in M3x |
+| 11 | M50_Nest | Nest number in M50 |
+| 12 | Temperature | Temperature value from M1x (float, dot decimal) → `dmcserial.m1x_temperature` |
+| 13 | Humidity | Humidity value from M1x (float, dot decimal) → `dmcserial.m1x_humidity` |
+| 14 | ResultStatus | `OK` / `NG` / `DE` (deleted) |
+
+> `M2X_Module` / `M2X_Nest` are parsed as Int; `M3X_*` / `M50_Nest` stay String. Full protocol
+> spec for the PLC programmer: `SPS_Schnittstellen.md` §4.
 
 **Triggers after receiving:** CSV export, Collage generation, MSA evaluation (if MSA mode)
 

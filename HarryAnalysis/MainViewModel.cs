@@ -75,8 +75,10 @@ public partial class MainViewModel : ObservableObject
                 $"SZID: {p.SerialNumber}",
                 $"VirtualSerial: {p.SerialTrimmer ?? "-"}",
                 $"Order: {p.OrderName ?? "-"}",
+                $"Temperature: {p.M1xTemperature?.ToString("0.0") ?? "-"}",
                 $"Humidity: {p.M1xHumidity?.ToString("0.0") ?? "-"}",
                 $"M1X: mod {p.M1xModule?.ToString() ?? "-"} / nest {p.M1xNest?.ToString() ?? "-"}",
+                $"M2X: mod {p.M2xModule?.ToString() ?? "-"} / nest {p.M2xNest?.ToString() ?? "-"}",
                 $"M3X: {p.M3xModule ?? "-"} / nest {p.M3xNest ?? "-"}",
                 $"M50 nest: {p.M50Nest ?? "-"}",
                 $"Created: {p.CreatedAt:yyyy-MM-dd HH:mm:ss}");

@@ -127,14 +127,14 @@
 | dmc | varchar(50) | YES | MUL | — | DataMatrix code lasered on the part. |
 | m1x_module | tinyint | YES | | — | M1x module number (10 or 11). |
 | m1x_nest | int | YES | | — | Nest number in the M1x module. |
-| m2x_module | tinyint | YES | | — | M2x module number. |
-| m2x_nest | int | YES | | — | Nest number in the M2x module. |
+| m2x_module | tinyint | YES | | — | M2x module number (20 or 21); from Part-Exit telegram field 7. |
+| m2x_nest | int | YES | | — | Nest number in the M2x module; from Part-Exit telegram field 8. |
 | m3x_module | varchar(10) | YES | | — | M3x blade module. |
 | m3x_nest | varchar(10) | YES | | — | Nest number in the M3x module. |
 | m50_nest | varchar(10) | YES | | — | Nest number in M50. |
 | order_name | varchar(100) | YES | MUL | — | Production order name. |
-| m1x_temperature | double | YES | | — | Temperature from M1x. |
-| m1x_humidity | double | YES | | — | Humidity from M1x. |
+| m1x_temperature | double | YES | | — | Temperature from M1x; from Part-Exit telegram field 12. |
+| m1x_humidity | double | YES | | — | Humidity from M1x; from Part-Exit telegram field 13. |
 | result_status | tinyint | NO | MUL | 0 | 1 = OK, 0 = NG, -1 = deleted. |
 | created_at | datetime | NO | MUL | CURRENT_TIMESTAMP | Part-exit timestamp. |
 

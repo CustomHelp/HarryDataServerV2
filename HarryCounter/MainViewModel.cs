@@ -67,6 +67,7 @@ public partial class MainViewModel : ObservableObject
         new GroupDimension("Feature Group", r => r.FeatureGroup),
         new GroupDimension("Measurement", r => r.Measurement),
         new GroupDimension("M1x Nest", r => r.M1xNest ?? "(none)"),
+        new GroupDimension("M2x Nest", r => r.M2xNest ?? "(none)"),
         new GroupDimension("M3x Nest", r => r.M3xNest ?? "(none)"),
         new GroupDimension("M50 Nest", r => r.M50Nest ?? "(none)"),
     };

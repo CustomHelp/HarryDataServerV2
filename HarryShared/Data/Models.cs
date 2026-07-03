@@ -106,6 +106,7 @@ public sealed record ErrorAggRow(
     string FeatureGroup,
     string Measurement,
     string? M1xNest,
+    string? M2xNest,
     string? M3xNest,
     string? M50Nest,
     int ResultStatus,

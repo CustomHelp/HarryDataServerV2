@@ -175,22 +175,25 @@ public sealed class PartExitOrchestrator : IPartExitOrchestrator
 
         const string sql = @"
 INSERT INTO dmcserial
-  (serial_number, serial_trimmer, dmc, m1x_module, m1x_nest, m3x_module, m3x_nest, m50_nest,
-   order_name, m1x_humidity, result_status)
+  (serial_number, serial_trimmer, dmc, m1x_module, m1x_nest, m2x_module, m2x_nest,
+   m3x_module, m3x_nest, m50_nest, order_name, m1x_temperature, m1x_humidity, result_status)
 VALUES
-  (@serial, @trimmer, @dmc, @m1xmod, @m1xnest, @m3xmod, @m3xnest, @m50nest,
-   @order, @humidity, @result)
+  (@serial, @trimmer, @dmc, @m1xmod, @m1xnest, @m2xmod, @m2xnest,
+   @m3xmod, @m3xnest, @m50nest, @order, @temp, @humidity, @result)
 ON DUPLICATE KEY UPDATE
-  serial_trimmer = VALUES(serial_trimmer),
-  dmc            = VALUES(dmc),
-  m1x_module     = VALUES(m1x_module),
-  m1x_nest       = VALUES(m1x_nest),
-  m3x_module     = VALUES(m3x_module),
-  m3x_nest       = VALUES(m3x_nest),
-  m50_nest       = VALUES(m50_nest),
-  order_name     = VALUES(order_name),
-  m1x_humidity   = VALUES(m1x_humidity),
-  result_status  = VALUES(result_status);";
+  serial_trimmer  = VALUES(serial_trimmer),
+  dmc             = VALUES(dmc),
+  m1x_module      = VALUES(m1x_module),
+  m1x_nest        = VALUES(m1x_nest),
+  m2x_module      = VALUES(m2x_module),
+  m2x_nest        = VALUES(m2x_nest),
+  m3x_module      = VALUES(m3x_module),
+  m3x_nest        = VALUES(m3x_nest),
+  m50_nest        = VALUES(m50_nest),
+  order_name      = VALUES(order_name),
+  m1x_temperature = VALUES(m1x_temperature),
+  m1x_humidity    = VALUES(m1x_humidity),
+  result_status   = VALUES(result_status);";
 
         try
         {
@@ -201,10 +204,13 @@ ON DUPLICATE KEY UPDATE
             cmd.Parameters.AddWithValue("@dmc", Nullable(part.Dmc));
             cmd.Parameters.AddWithValue("@m1xmod", (object?)part.M1xModule ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@m1xnest", (object?)part.M1xNest ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@m2xmod", (object?)part.M2xModule ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@m2xnest", (object?)part.M2xNest ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@m3xmod", Nullable(part.M3xModule));
             cmd.Parameters.AddWithValue("@m3xnest", Nullable(part.M3xNest));
             cmd.Parameters.AddWithValue("@m50nest", Nullable(part.M50Nest));
             cmd.Parameters.AddWithValue("@order", Nullable(part.OrderName));
+            cmd.Parameters.AddWithValue("@temp", (object?)part.Temperature ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@humidity", (object?)part.Humidity ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@result", part.ResultStatusCode);
             await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);

@@ -126,8 +126,8 @@ Build/run: `dotnet build HarryDataServer.sln -c Release` (0 warnings / 0 errors,
 Source of truth: `HarryDataServer\Infrastructure\DatabaseSchema.cs`. Key tables:
 
 - **`dmcserial`** — one row per finished part: `serial_number` (SZID), `serial_trimmer`,
-  `dmc`, `m1x_module/nest`, `m3x_module/nest`, `m50_nest`, `order_name`, `m1x_humidity`,
-  `result_status` (1=OK, 0=NG, -1=deleted), `created_at`.
+  `dmc`, `m1x_module/nest`, `m2x_module/nest`, `m3x_module/nest`, `m50_nest`, `order_name`,
+  `m1x_temperature`, `m1x_humidity`, `result_status` (1=OK, 0=NG, -1=deleted), `created_at`.
 - **`measurements_serial`** / **`measurements_serial_trimmer`** (partitioned by day):
   `serial_number`/`serial_trimmer`, `definition_id`, `measurement_value`,
   `measurement_string`, `result_status`, `run_type` (0=Normal,1=MSA1,2=MSA3,3=LimitSample,
@@ -161,7 +161,8 @@ test program (don't rebuild).
 
 ### 4.1 HarryAnalysis — scanner / part inspector  (icon: HarryAnalysis.ico, user: GetData)
 - Operator scans a DMC barcode (or types serial). Fetch **all** data for that part:
-  - `dmcserial` row by `dmc` or `serial_number` (general info: order, humidity, result, nests).
+  - `dmcserial` row by `dmc` or `serial_number` (general info: order, temperature, humidity,
+    result, M1x/M2x/M3x/M50 nests).
   - All measurements: join `measurements_serial`(+`_trimmer`) on the serial(s) →
     `measurement_definitions` for `display_name`, `feature_group`, `var_type`.
   - Limits: latest Min/Max from `settings`+`setting_definitions` per (camera, parameter_set).
@@ -181,7 +182,7 @@ test program (don't rebuild).
 ### 4.3 HarryCounter — NG error counter  (icon: HarryCounter.ico, user: GetData)
 - Port of the old RazorErrorCount. Count NG parts/measurements by time period.
 - Group by **error category** = `measurement_definitions.feature_group`; group by **nest**
-  (`dmcserial.m50_nest` / m1x_nest / m3x_nest). Live view + historical (date range).
+  (`dmcserial.m50_nest` / m1x_nest / m2x_nest / m3x_nest). Live view + historical (date range).
 - Queries: NG parts = `dmcserial WHERE result_status=0`; failing measurements =
   `measurements_serial WHERE result_status=0` joined to definitions for `feature_group`.
 - UI: filter bar (range, grouping), a results DataGrid / bar chart, live toggle.
