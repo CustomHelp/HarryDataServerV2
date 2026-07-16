@@ -186,25 +186,33 @@ Request;10260623083000\r
 
 ### Server → SPS (Response)
 
+Die angefragte **BaseID wird immer als Feld 1 zurückgespiegelt**, damit die SPS die
+Antwort eindeutig ihrem Request zuordnen kann. Format: **`<Status>;<BaseID>[;<Beschreibung>]`**.
+
 | Antwort | Bedeutung |
 |---------|-----------|
-| `Wait` | Auswertung läuft noch / MSA-Engine noch nicht bereit → **erneut abfragen** |
-| `OK` | MSA bestanden |
-| `NG` | MSA nicht bestanden |
-| `Error;<Beschreibung>` | Fehler aufgetreten (Klartext, Englisch) |
+| `Wait;<BaseID>` | Auswertung läuft noch / MSA-Engine noch nicht bereit → **erneut abfragen** |
+| `OK;<BaseID>` | MSA bestanden |
+| `NG;<BaseID>` | MSA nicht bestanden |
+| `Error;<BaseID>;<Beschreibung>` | Fehler aufgetreten (Klartext, Englisch) |
+
+Die **BaseID steht bei jeder Antwort an fester Position (Feld 1)** — auch bei `Error`. Wenn
+das Request-Format ungültig war (keine BaseID lesbar), bleibt das BaseID-Feld leer.
 
 Alle Antworten enden mit **`\r`**. Beispiele:
 ```
-Wait\r
-OK\r
-NG\r
-Error;expected 'Request;<BaseID>'\r
+Wait;10260623083000\r
+OK;10260623083000\r
+NG;10260623083000\r
+Error;10260623083000;no MSA data for BaseID\r
+Error;;expected 'Request;<BaseID>'\r
 ```
 
 > **Empfohlener SPS-Ablauf:** `Request;<BaseID>` senden → bei `Wait` nach kurzer Pause
-> erneut fragen (Polling) → bis `OK` / `NG` / `Error` kommt.
+> erneut fragen (Polling) → bis `OK` / `NG` / `Error` kommt. Feld[0] = Status, Feld[1] = BaseID.
 >
-> **Falsches Format** (nicht `Request;<BaseID>`) → Antwort `Error;expected 'Request;<BaseID>'`.
+> **Falsches Format** (nicht `Request;<BaseID>`) → Antwort `Error;;expected 'Request;<BaseID>'`
+> (BaseID-Feld leer).
 
 ---
 
@@ -218,10 +226,10 @@ Error;expected 'Request;<BaseID>'\r
 | Kanal 2, Teil verarbeitet | `<SZID32>;true\r` |
 | Kanal 2, Verarbeitung fehlgeschlagen | `<SZID32>;false\r` |
 | Kanal 2, ungültiges Telegramm (<15 Felder) | `00000000000000000000000000000000;false\r` |
-| Kanäle 3–7, läuft noch | `Wait\r` |
-| Kanäle 3–7, bestanden / durchgefallen | `OK\r` / `NG\r` |
-| Kanäle 3–7, falsches Format | `Error;expected 'Request;<BaseID>'\r` |
-| Kanäle 3–7, interner Fehler | `Error;<Beschreibung>\r` |
+| Kanäle 3–7, läuft noch | `Wait;<BaseID>\r` |
+| Kanäle 3–7, bestanden / durchgefallen | `OK;<BaseID>\r` / `NG;<BaseID>\r` |
+| Kanäle 3–7, falsches Format | `Error;;expected 'Request;<BaseID>'\r` |
+| Kanäle 3–7, interner Fehler | `Error;<BaseID>;<Beschreibung>\r` |
 
 ---
 

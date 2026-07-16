@@ -289,11 +289,13 @@ is answered with `<32×'0'>;false`). Empty fields are allowed:
 **Request telegram:** `Request;<BaseID>` — `<BaseID>` is the bare **14-char** BaseID (no loop
 counter). The completion handler aggregates `msa_measurements` on an **exact** `base_id`
 match, scoped by `controller_name` (module) for safety.
-**Responses:**
-- `Wait` — currently processing, try again
-- `Error;<description>` — error occurred
-- `OK` — MSA passed
-- `NG` — MSA failed
+**Responses:** the requested BaseID is **mirrored back as field 1** so the PLC can correlate
+the poll response with its request — format `<Status>;<BaseID>[;<description>]`:
+- `Wait;<BaseID>` — currently processing, try again
+- `OK;<BaseID>` — MSA passed
+- `NG;<BaseID>` — MSA failed
+- `Error;<BaseID>;<description>` — error occurred (BaseID field empty when the request
+  format was invalid, e.g. `Error;;expected 'Request;<BaseID>'`)
 
 ---
 

@@ -312,19 +312,37 @@ public sealed class TcpSpsServer : ISpsServer
         return $"{serial};{(success ? "true" : "false")}\r";
     }
 
-    /// <summary>Channels 3–7: "Request;&lt;BaseID&gt;" → Wait / OK / NG / Error;&lt;desc&gt;.</summary>
+    /// <summary>
+    /// Channels 3–7: "Request;&lt;BaseID&gt;" → the requested BaseID is mirrored back as
+    /// field 1 of the response: "&lt;status&gt;;&lt;BaseID&gt;[;&lt;desc&gt;]" (Wait / OK / NG /
+    /// Error). The PLC can thus correlate each poll response with its request. The BaseID
+    /// field is empty when the request format was invalid (no parsable BaseID).
+    /// </summary>
     private string HandleMsaRequest(SpsChannel channel, string telegram)
     {
         var parts = telegram.Split(';');
         if (parts.Length < 2 || !string.Equals(parts[0].Trim(), "Request", StringComparison.OrdinalIgnoreCase))
-            return "Error;expected 'Request;<BaseID>'";
+            return WithBaseId("Error;expected 'Request;<BaseID>'", string.Empty);
 
         var baseId = parts[1].Trim();
         var handler = MsaRequestHandler;
-        if (handler is null)
-            return "Wait"; // MSA engine not active yet (Phase 10).
+        var status = handler is null
+            ? "Wait" // MSA engine not active yet (Phase 10).
+            : handler(channel.ModuleKey(), baseId) ?? "Wait";
 
-        return handler(channel.ModuleKey(), baseId) ?? "Wait";
+        return WithBaseId(status, baseId);
+    }
+
+    /// <summary>
+    /// Insert the request BaseID as field 1 of an MSA status response:
+    /// "Wait" → "Wait;&lt;BaseID&gt;"; "Error;&lt;desc&gt;" → "Error;&lt;BaseID&gt;;&lt;desc&gt;".
+    /// </summary>
+    private static string WithBaseId(string status, string baseId)
+    {
+        var split = status.IndexOf(';');
+        return split < 0
+            ? $"{status};{baseId}"
+            : $"{status[..split]};{baseId}{status[split..]}";
     }
 
     private static int IndexOfLineBreak(List<byte> buffer)
