@@ -81,6 +81,10 @@ public partial class App : Application
             var sps = _services.GetRequiredService<ISpsServer>();
             _ = Task.Run(() => sps.StartAsync(_shutdownCts.Token));
 
+            // Start the DMC scanner bridge (scanner listener + companion rebroadcast).
+            var scanner = _services.GetRequiredService<IScannerService>();
+            _ = Task.Run(() => scanner.StartAsync(_shutdownCts.Token));
+
             // Start the Phase 6 consumers (each on its own background task).
             var settings = _services.GetRequiredService<ISettingsProcessor>();
             _ = Task.Run(() => settings.StartAsync(_shutdownCts.Token));
@@ -262,6 +266,10 @@ public partial class App : Application
 
         // --- SPS server (Phase 5): 7-channel PLC TCP server ---
         services.AddSingleton<ISpsServer, TcpSpsServer>();
+
+        // --- DMC scanner bridge: ingest listener (9004) + companion rebroadcast server (9000) ---
+        services.AddSingleton<CompanionBroadcastServer>();
+        services.AddSingleton<IScannerService, ScannerService>();
 
         // --- Phase 6 consumers: settings, diagnostic ---
         services.AddSingleton<SettingDefinitionCache>();

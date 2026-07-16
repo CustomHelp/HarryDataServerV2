@@ -1,10 +1,13 @@
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Windows;
+using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using HarryShared.Communication;
 using HarryShared.Config;
 using HarryShared.Data;
+using HarryShared.Theming;
 using Microsoft.Win32;
 
 namespace HarryAnalysis;
@@ -18,15 +21,25 @@ namespace HarryAnalysis;
 public partial class MainViewModel : ObservableObject
 {
     private const int MaxHistory = 20;
+    private const string AppKey = "HarryAnalysis";
 
     private readonly QueryService _query;
     private readonly HarryConfig _config;
+    private readonly ScannerCompanionClient _scanner;
 
-    public MainViewModel(QueryService query, HarryConfig config)
+    public MainViewModel(QueryService query, HarryConfig config, ScannerCompanionClient scanner)
     {
         _query = query;
         _config = config;
+        _scanner = scanner;
         ConfigFile = config.IniPath;
+
+        // Scanner bridge: remember the operator's last Active/Inactive choice; subscribe to the
+        // rebroadcast client. Codes are received regardless of the toggle, but only forwarded to the
+        // search when Active (see OnScannerCode). The LED reflects the connection, not the toggle.
+        ScannerActive = ScannerToggleState.Load(AppKey);
+        _scanner.CodeReceived += OnScannerCode;
+        _scanner.ConnectionChanged += OnScannerConnectionChanged;
     }
 
     public string AppName => "HarryAnalysis — Part Inspector";
@@ -41,6 +54,51 @@ public partial class MainViewModel : ObservableObject
 
     [ObservableProperty] private string _scanText = string.Empty;
     [ObservableProperty] private string _statusMessage = "Scan a DMC, SZID or VirtualSerial, then press Enter.";
+
+    // --- Scanner bridge ---
+    /// <summary>When false, scans from the handheld scanner are received but ignored (persisted).</summary>
+    [ObservableProperty] private bool _scannerActive = true;
+
+    /// <summary>Connection LED to the server's companion broadcast port (independent of the toggle).</summary>
+    [ObservableProperty] private Brush _scannerLed = LedBrushes.Gray;
+
+    [ObservableProperty] private string _scannerStatus = "Scanner: connecting…";
+
+    partial void OnScannerActiveChanged(bool value) => ScannerToggleState.Save(AppKey, value);
+
+    /// <summary>A code arrived from the scanner: if Active, replay it as manual entry + Enter.</summary>
+    private void OnScannerCode(string code)
+    {
+        if (!ScannerActive)
+            return; // received-but-ignored scans are silently dropped (no logger in the companion tools)
+
+        Post(() =>
+        {
+            ScanText = code;
+            SearchCommand.ExecuteAsync(null);
+        });
+    }
+
+    private void OnScannerConnectionChanged(bool connected)
+    {
+        Post(() =>
+        {
+            ScannerLed = connected ? LedBrushes.Green : LedBrushes.Red;
+            ScannerStatus = connected
+                ? $"Scanner: connected ({_scanner.Endpoint})"
+                : $"Scanner: disconnected ({_scanner.Endpoint})";
+        });
+    }
+
+    /// <summary>Marshal onto the UI thread (scanner events fire on a background socket thread).</summary>
+    private static void Post(Action action)
+    {
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher is null || dispatcher.CheckAccess())
+            action();
+        else
+            dispatcher.BeginInvoke(action);
+    }
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(RemoveSelectedEntryCommand))]

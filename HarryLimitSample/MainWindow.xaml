@@ -19,6 +19,11 @@
                 <TextBlock Grid.Column="1" Text="{Binding AppName}" FontSize="18" FontWeight="Bold"
                            VerticalAlignment="Center" />
                 <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <Ellipse Width="11" Height="11" Fill="{Binding ScannerLed}" VerticalAlignment="Center"
+                             Margin="0,0,6,0" ToolTip="{Binding ScannerStatus}" />
+                    <ToggleButton Content="Scanner" IsChecked="{Binding ScannerActive}" Padding="8,3"
+                                  Margin="0,0,12,0"
+                                  ToolTip="Auto-search when a code arrives from the handheld scanner" />
                     <Button x:Name="ThemeToggle" Click="OnThemeToggle" Content="Theme"
                             Padding="8,3" Margin="0,0,12,0" ToolTip="Switch light / dark theme" />
                     <TextBlock Text="{Binding AppVersion}" Foreground="{DynamicResource TextDimBrush}"

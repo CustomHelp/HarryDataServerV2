@@ -34,6 +34,7 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly IMsaService _msa;
     private readonly IPdfReportService _pdf;
     private readonly ISpsServer _sps;
+    private readonly IScannerService _scanner;
     private readonly ISystemHealth _health;
     private readonly ILogBuffer _log;
     private readonly ITelegramCapture _capture;
@@ -54,13 +55,13 @@ public sealed partial class MainViewModel : ObservableObject
         IConfigService config, ICameraService cameras, IDatabaseService database,
         IMeasurementProcessor measurements, ISettingsProcessor settings, IDiagnosticProcessor diagnostics,
         IPartExitOrchestrator partExit, ICsvService csv, ICollageService collage, IMsaService msa,
-        IPdfReportService pdf, ISpsServer sps, ISystemHealth health, ILogBuffer log,
+        IPdfReportService pdf, ISpsServer sps, IScannerService scanner, ISystemHealth health, ILogBuffer log,
         ITelegramCapture capture, ILogService logService)
     {
         _config = config; _cameras = cameras; _database = database;
         _measurements = measurements; _settings = settings; _diagnostics = diagnostics;
         _partExit = partExit; _csv = csv; _collage = collage; _msa = msa;
-        _pdf = pdf; _sps = sps; _health = health; _log = log; _capture = capture;
+        _pdf = pdf; _sps = sps; _scanner = scanner; _health = health; _log = log; _capture = capture;
         _logService = logService;
 
         ConfigFile = System.IO.Path.GetFileName(_config.IniPath);
@@ -70,6 +71,7 @@ public sealed partial class MainViewModel : ObservableObject
         SpsChannels = BuildChannels();
         Msa = new MsaViewModel(_msa, _pdf);
         Log = new LogViewModel(_log, _config);
+        Scanner = new ScannerViewModel(_scanner);
         CollageView = new CollageViewModel(_collage);
         Tools = new ObservableCollection<CompanionToolViewModel>(CompanionToolViewModel.Discover(_logService));
         RequestSettingsCommand = new AsyncRelayCommand(RequestSettingsAsync);
@@ -92,6 +94,7 @@ public sealed partial class MainViewModel : ObservableObject
     public ObservableCollection<SpsChannelViewModel> SpsChannels { get; }
     public MsaViewModel Msa { get; }
     public LogViewModel Log { get; }
+    public ScannerViewModel Scanner { get; }
     public CollageViewModel CollageView { get; }
 
     /// <summary>Companion apps launchable from the Tools tab.</summary>

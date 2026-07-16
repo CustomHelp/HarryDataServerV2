@@ -97,6 +97,10 @@
                 </ScrollViewer>
             </TabItem>
 
+            <TabItem Header="Scanner">
+                <ctrl:ucScannerControl DataContext="{Binding Scanner}" />
+            </TabItem>
+
             <TabItem Header="MSA">
                 <ctrl:ucMsaControl DataContext="{Binding Msa}" />
             </TabItem>

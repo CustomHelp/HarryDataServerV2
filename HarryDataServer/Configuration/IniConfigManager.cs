@@ -45,7 +45,19 @@ public sealed class IniConfigManager
             Sps = ParseSps(data),
             SqlSettings = ParseSqlSettings(data),
             Msa = ParseMsa(data, configDir),
+            Scanner = ParseScanner(data),
             Cameras = ParseCameras(data, configDir),
+        };
+    }
+
+    private static ScannerConfig ParseScanner(IniData data)
+    {
+        var s = data["Scanner"];
+        return new ScannerConfig
+        {
+            ListenPort = Int(s, "ScannerListenPort", 9004),
+            CompanionPort = Int(s, "CompanionPort", 9000),
+            MaxScanHistoryRows = Int(s, "MaxScanHistoryRows", 100),
         };
     }
 

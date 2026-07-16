@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO;
 using IniParser;
 using IniParser.Model;
@@ -38,6 +39,13 @@ public sealed class HarryConfig
     /// <summary>Base folder for CSV exports ([CSV] CSV_BasePath) — used as the export default dir.</summary>
     public string CsvBasePath { get; }
 
+    /// <summary>Host of HarryDataServer's companion broadcast server ([Scanner] CompanionHost,
+    /// default 172.29.1.5) — where the companion scanner client connects to receive DMC scans.</summary>
+    public string ScannerHost { get; }
+
+    /// <summary>Port of HarryDataServer's companion broadcast server ([Scanner] CompanionPort, default 9000).</summary>
+    public int ScannerPort { get; }
+
     private HarryConfig(string iniPath, IniData data)
     {
         IniPath = iniPath;
@@ -53,6 +61,10 @@ public sealed class HarryConfig
         CollageIniPath = ResolvePath(Str(data["Collage"], "Collage_IniPath", string.Empty));
         CollageSingleImagesPath = Str(data["Collage"], "Collage_SingleImages", string.Empty);
         CsvBasePath = Str(data["CSV"], "CSV_BasePath", string.Empty);
+
+        var scanner = data["Scanner"];
+        ScannerHost = Str(scanner, "CompanionHost", "172.29.1.5");
+        ScannerPort = Int(scanner, "CompanionPort", 9000);
     }
 
     /// <summary>Read-only (GetData) connection string for the application database.</summary>
@@ -122,5 +134,13 @@ public sealed class HarryConfig
             return fallback;
         var value = keys[key];
         return string.IsNullOrEmpty(value) ? fallback : value.Trim();
+    }
+
+    private static int Int(KeyDataCollection? keys, string key, int fallback)
+    {
+        var raw = Str(keys, key, string.Empty);
+        return int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
+            ? value
+            : fallback;
     }
 }

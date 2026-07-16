@@ -1,0 +1,34 @@
+<UserControl x:Class="HarryDataServer.Controls.ucScannerControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <DockPanel Margin="8">
+        <!-- Status header -->
+        <Border DockPanel.Dock="Top" Style="{StaticResource Card}" Margin="0,0,0,8">
+            <StackPanel Orientation="Horizontal">
+                <Ellipse Width="12" Height="12" Fill="{Binding ScannerLed}" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding ScannerStatus}" VerticalAlignment="Center" Margin="6,0,24,0"
+                           FontWeight="SemiBold" />
+                <Ellipse Width="12" Height="12" Fill="{Binding CompanionLed}" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding CompanionStatus}" VerticalAlignment="Center" Margin="6,0,0,0" />
+            </StackPanel>
+        </Border>
+
+        <TextBlock DockPanel.Dock="Top" Text="Last scans (newest first · right-click to copy)"
+                   FontWeight="Bold" Margin="2,0,0,6" />
+
+        <DataGrid x:Name="ScansGrid" ItemsSource="{Binding Scans}" AutoGenerateColumns="False"
+                  IsReadOnly="True" CanUserSortColumns="True" HeadersVisibility="Column"
+                  SelectionMode="Single">
+            <DataGrid.ContextMenu>
+                <ContextMenu>
+                    <MenuItem Header="Copy Code" Click="OnCopyCode" />
+                    <MenuItem Header="Copy Row" Click="OnCopyRow" />
+                </ContextMenu>
+            </DataGrid.ContextMenu>
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Timestamp" Binding="{Binding Timestamp}" Width="180" />
+                <DataGridTextColumn Header="Code" Binding="{Binding Code}" Width="*" FontFamily="Consolas" />
+            </DataGrid.Columns>
+        </DataGrid>
+    </DockPanel>
+</UserControl>

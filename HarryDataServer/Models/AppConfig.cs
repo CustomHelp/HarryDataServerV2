@@ -16,6 +16,7 @@ public sealed class AppConfig
     public SpsConfig Sps { get; init; } = new();
     public SqlSettingsConfig SqlSettings { get; init; } = new();
     public MsaConfig Msa { get; init; } = new();
+    public ScannerConfig Scanner { get; init; } = new();
     public IReadOnlyList<CameraConfig> Cameras { get; init; } = Array.Empty<CameraConfig>();
 }
 
@@ -120,6 +121,24 @@ public sealed class SqlSettingsConfig
 {
     public int BatchSize { get; init; } = 100;
     public int SaveIntervalSeconds { get; init; } = 1;
+}
+
+/// <summary>
+/// DMC handheld-scanner bridge ([Scanner] section). The server listens for the scanner on
+/// <see cref="ListenPort"/> (fixed by the scanner hardware), keeps the last
+/// <see cref="MaxScanHistoryRows"/> scans for the Scanner tab, and rebroadcasts every scan to the
+/// companion apps connected on <see cref="CompanionPort"/> (CLAUDE.md §… / SOW scanner bridge).
+/// </summary>
+public sealed class ScannerConfig
+{
+    /// <summary>Port the scanner (TCP client) connects to. Fixed on the scanner side — do not change.</summary>
+    public int ListenPort { get; init; } = 9004;
+
+    /// <summary>Port the companion apps connect to for the rebroadcast of each scan.</summary>
+    public int CompanionPort { get; init; } = 9000;
+
+    /// <summary>Ring-buffer size for the Scanner tab (in-memory, cleared on restart).</summary>
+    public int MaxScanHistoryRows { get; init; } = 100;
 }
 
 public sealed class MsaConfig
