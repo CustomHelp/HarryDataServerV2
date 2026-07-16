@@ -125,6 +125,8 @@ public partial class MainViewModel : ObservableObject
     {
         get
         {
+            if (SelectedEntry is { Found: false })
+                return $"Kein Teil in der Datenbank gefunden zu '{SelectedEntry.Scan}'.";
             if (Part is null)
                 return "No part selected.";
             var p = Part;
@@ -164,6 +166,14 @@ public partial class MainViewModel : ObservableObject
             var part = await _query.FindPartForInspectionAsync(scan);
             if (part is null)
             {
+                // Keep the miss visible in the list (not just the status label): add a red
+                // "NICHT GEFUNDEN" row for the scanned value and select it.
+                var miss = new ScanHistoryEntry(DateTime.Now, scan);
+                History.Insert(0, miss);
+                while (History.Count > MaxHistory)
+                    History.RemoveAt(History.Count - 1);
+                SelectedEntry = miss;
+                ScanText = string.Empty;
                 StatusMessage = $"No part found for '{scan}'.";
                 return;
             }
@@ -221,9 +231,11 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(HasSelection))]
     private void Export()
     {
-        if (SelectedEntry is null)
+        if (SelectedEntry?.Part is not { } part)
+        {
+            StatusMessage = "Nothing to export for a not-found scan.";
             return;
-        var part = SelectedEntry.Part;
+        }
 
         var defaultDir = Directory.Exists(_config.CsvBasePath) ? _config.CsvBasePath : string.Empty;
         var dmc = string.IsNullOrWhiteSpace(part.Dmc) ? part.SerialNumber : part.Dmc!;

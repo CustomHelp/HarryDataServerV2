@@ -72,6 +72,10 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty] private string _msaVersion = "v1";
     [ObservableProperty] private string _statusMessage = "Scan a part DMC to load its measurements.";
 
+    /// <summary>True when the last search found no part — shows a red banner above the grid.</summary>
+    [ObservableProperty] private bool _notFound;
+    [ObservableProperty] private string _notFoundText = string.Empty;
+
     // --- Scanner bridge ---
     /// <summary>When false, scans from the handheld scanner are received but ignored (persisted).</summary>
     [ObservableProperty] private bool _scannerActive = true;
@@ -146,6 +150,7 @@ public partial class MainViewModel : ObservableObject
         }
 
         StatusMessage = $"Searching for '{scan}' …";
+        NotFound = false;
         _allRows.Clear();
         Rows.Clear();
         Modules.Clear();
@@ -157,6 +162,8 @@ public partial class MainViewModel : ObservableObject
             var part = await _query.FindPartForInspectionAsync(scan);
             if (part is null)
             {
+                NotFound = true;
+                NotFoundText = $"Kein Teil in der Datenbank gefunden zu: {scan}";
                 StatusMessage = $"No part found for '{scan}'.";
                 return;
             }

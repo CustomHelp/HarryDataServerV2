@@ -148,19 +148,27 @@ public sealed class CompanionBroadcastServer
         StatusChanged?.Invoke();
         _log.Information("Companion broadcast: client connected from {Remote} ({Count} total).", remote, _clients.Count);
 
+        // Run the outbox writer and a close-detector concurrently. Companions never send data, so
+        // without a read the server would only notice a closed client on the next write — meaning a
+        // closed app lingers in the list (and the "N connected" count) until the next scan. The
+        // detector's ReadAsync returns 0 on the client's FIN, so a closed app is dropped within ~1s.
+        using var clientCts = CancellationTokenSource.CreateLinkedTokenSource(token);
         try
         {
             await using var stream = client.GetStream();
-            await foreach (var code in entry.Outbox.Reader.ReadAllAsync(token).ConfigureAwait(false))
-            {
-                var bytes = Encoding.ASCII.GetBytes(code + "\r");
-                await stream.WriteAsync(bytes, token).ConfigureAwait(false);
-            }
+            var writeTask = WriteLoopAsync(stream, entry.Outbox.Reader, clientCts.Token);
+            var closeTask = DetectCloseAsync(stream, clientCts.Token);
+
+            await Task.WhenAny(writeTask, closeTask).ConfigureAwait(false);
+            clientCts.Cancel(); // whichever finished first, tear the other down
+
+            try { await Task.WhenAll(writeTask, closeTask).ConfigureAwait(false); }
+            catch { /* the loser throws OperationCanceledException on teardown — expected */ }
         }
         catch (OperationCanceledException) { /* shutting down */ }
         catch (Exception ex)
         {
-            _log.Debug("Companion broadcast: client {Remote} write ended: {Message}.", remote, ex.Message);
+            _log.Debug("Companion broadcast: client {Remote} ended: {Message}.", remote, ex.Message);
         }
         finally
         {
@@ -170,6 +178,32 @@ public sealed class CompanionBroadcastServer
             catch { /* best effort */ }
             StatusChanged?.Invoke();
             _log.Information("Companion broadcast: client {Remote} disconnected ({Count} remaining).", remote, _clients.Count);
+        }
+    }
+
+    /// <summary>Drain the client's outbox to its socket, CR-terminated.</summary>
+    private static async Task WriteLoopAsync(NetworkStream stream, ChannelReader<string> reader, CancellationToken ct)
+    {
+        await foreach (var code in reader.ReadAllAsync(ct).ConfigureAwait(false))
+        {
+            var bytes = Encoding.ASCII.GetBytes(code + "\r");
+            await stream.WriteAsync(bytes, ct).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Detect a closed client: companions are not expected to send anything, so any received bytes
+    /// are discarded — a 0-byte read (FIN) or an exception means the client is gone and this returns,
+    /// which tears down the connection and removes it from the list.
+    /// </summary>
+    private static async Task DetectCloseAsync(NetworkStream stream, CancellationToken ct)
+    {
+        var buffer = new byte[256];
+        while (!ct.IsCancellationRequested)
+        {
+            var read = await stream.ReadAsync(buffer, ct).ConfigureAwait(false);
+            if (read == 0)
+                return; // client closed the connection (FIN)
         }
     }
 }

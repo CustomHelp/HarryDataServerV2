@@ -42,6 +42,7 @@
         <Grid Margin="10">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
@@ -73,8 +74,14 @@
                 </WrapPanel>
             </Border>
 
+            <!-- Not-found banner -->
+            <Border Grid.Row="1" Background="#FFEF4444" CornerRadius="4" Padding="10,6" Margin="0,0,0,8"
+                    Visibility="{Binding NotFound, Converter={StaticResource BoolToVisible}}">
+                <TextBlock Text="{Binding NotFoundText}" Foreground="White" FontWeight="Bold" />
+            </Border>
+
             <!-- Measurement grid -->
-            <DataGrid Grid.Row="1" ItemsSource="{Binding Rows}">
+            <DataGrid Grid.Row="2" ItemsSource="{Binding Rows}">
                 <DataGrid.Columns>
                     <DataGridTextColumn Header="Measurement" Binding="{Binding DisplayName}" Width="2*" />
                     <DataGridTextColumn Header="Module" Binding="{Binding Module}" Width="80" />
