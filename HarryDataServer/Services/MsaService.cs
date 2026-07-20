@@ -328,21 +328,50 @@ ORDER BY evaluated_at, base_id, id;";
     private string HandleMsaRequest(string module, string baseId)
     {
         if (string.IsNullOrWhiteSpace(baseId))
+        {
+            _log.Warning("MSA {Module}: request with missing BaseID → Error.", module);
             return "Error;missing BaseID";
+        }
 
-        // Already evaluated (or in progress)?
+        // Already evaluated, in progress, or in a terminal error? Return the cached response.
+        // A repeated Request in the "Wait" state MUST answer "Wait" again (idempotent, CLAUDE.md
+        // §5): while the evaluation is still running the entry holds "Wait"; while the run data is
+        // not yet in the DB the entry is ABSENT (removed by EvaluateAsync), so the branch below
+        // re-triggers and again answers "Wait" — it never falls through to Error (Problem 3).
         if (_evaluations.TryGetValue(baseId, out var response))
+        {
+            _log.Information("MSA {Module} request BaseID {Base}: state={State} → {Response}.",
+                module, baseId, DescribeState(response), response);
             return response;
+        }
 
-        // First request: start the evaluation and answer Wait.
+        // No entry yet (first request, or a prior attempt found no data yet and cleared itself):
+        // start a fresh evaluation and answer Wait. TryAdd guards against two concurrent requests
+        // both starting an evaluation.
         if (_evaluations.TryAdd(baseId, "Wait"))
         {
+            _log.Information("MSA {Module} request BaseID {Base}: (absent) → Wait; evaluation started.", module, baseId);
             var token = _cts?.Token ?? CancellationToken.None;
             _ = Task.Run(() => EvaluateAsync(module, baseId, token), CancellationToken.None);
+        }
+        else
+        {
+            // Lost the race — another request just added the entry; mirror its Wait.
+            _log.Information("MSA {Module} request BaseID {Base}: concurrent start → Wait.", module, baseId);
         }
 
         return "Wait";
     }
+
+    /// <summary>Short human label for a cached response word (for logging state transitions).</summary>
+    private static string DescribeState(string response) => response switch
+    {
+        "Wait" => "evaluating",
+        "OK" => "done/OK",
+        "NG" => "done/NG",
+        _ when response.StartsWith("Error", StringComparison.Ordinal) => "error",
+        _ => "unknown",
+    };
 
     private async Task EvaluateAsync(string module, string baseId, CancellationToken ct)
     {
@@ -352,7 +381,14 @@ ORDER BY evaluated_at, base_id, id;";
             var rows = await GatherAsync(conn, module, baseId, ct).ConfigureAwait(false);
             if (rows.Count == 0)
             {
-                _evaluations[baseId] = "Error;no MSA data for BaseID";
+                // No rows YET — the run's measurements are almost certainly still in the flush queue
+                // (they are committed on the SaveInterval tick, not synchronously with the run). This
+                // is NOT an error: clear the entry so the next Request re-triggers and again answers
+                // "Wait" until the data lands (idempotent poll, CLAUDE.md §5 / Problem 3). Only a
+                // genuine exception below is cached as a terminal "Error".
+                _evaluations.TryRemove(baseId, out _);
+                _log.Information("MSA {Module} BaseID {Base}: no measurements in DB yet ({Pending} still queued); will retry on next request (Wait).",
+                    module, baseId, _queue.Count);
                 return;
             }
 
@@ -384,8 +420,10 @@ ORDER BY evaluated_at, base_id, id;";
         }
         catch (Exception ex)
         {
+            // Genuine fault (DB/reference/etc.) — surface it to the PLC as a terminal Error and log
+            // the concrete reason (never a silent Error, CLAUDE.md §5 / Problem 3).
             _evaluations[baseId] = $"Error;{ex.Message}";
-            _log.Error(ex, "MSA evaluation failed for BaseID {Base}.", baseId);
+            _log.Error(ex, "MSA {Module} evaluation failed for BaseID {Base}: {Reason} → Error.", module, baseId, ex.Message);
         }
     }
 
