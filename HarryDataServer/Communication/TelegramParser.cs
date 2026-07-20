@@ -1,5 +1,6 @@
 using System.Globalization;
 using HarryDataServer.Configuration;
+using HarryDataServer.Infrastructure;
 using HarryDataServer.Models;
 using HarryDataServer.Services;
 
@@ -85,13 +86,11 @@ public sealed class TelegramParser
         int? overallResult = null;
         if (signal is TelegramSignal.Results or TelegramSignal.Diagnostic)
         {
-            // Serial1 (tokens 3–34) is transmitted as 32 chars but only the first 22 are meaningful
-            // (SPS agreement); the trailing chars are padding. Truncating here, at the single
-            // parse chokepoint, makes the stored value match the 22-char Field 1 of the Keyence
-            // image filenames (CLAUDE.md §4/§11). Serial2 (tokens 35–66) keeps its full 32 chars.
-            serial1 = ConcatRange(fields, ParsedTelegram.Serial1Start, ParsedTelegram.Serial1End);
-            if (serial1.Length > ParsedTelegram.Serial1MaxLength)
-                serial1 = serial1[..ParsedTelegram.Serial1MaxLength];
+            // Serial1 (tokens 3–34) is transmitted as 32 chars, right-padded with '0'. Normalise
+            // here at the single parse chokepoint so the stored value drops the controller padding
+            // and matches the unpadded serial the SPS delivers at part-exit (Problem 1). The result
+            // is also capped to the VARCHAR(22) width. Serial2 (tokens 35–66) keeps its full 32 chars.
+            serial1 = SerialNumberHelper.Normalize(ConcatRange(fields, ParsedTelegram.Serial1Start, ParsedTelegram.Serial1End));
             serial2 = ConcatRange(fields, ParsedTelegram.Serial2Start, ParsedTelegram.Serial2End);
 
             // Four independent boolean flags at tokens 67–70 (CLAUDE.md §4): Mode_Diagnostic is
@@ -214,9 +213,7 @@ public sealed class TelegramParser
     /// </summary>
     private ParsedTelegram BuildDiagnostic(string[] fields, string line, int diagIndex)
     {
-        var serial1 = ConcatRange(fields, ParsedTelegram.DiagSerial1Start, ParsedTelegram.DiagSerial1End);
-        if (serial1.Length > ParsedTelegram.Serial1MaxLength)
-            serial1 = serial1[..ParsedTelegram.Serial1MaxLength];
+        var serial1 = SerialNumberHelper.Normalize(ConcatRange(fields, ParsedTelegram.DiagSerial1Start, ParsedTelegram.DiagSerial1End));
         var serial2 = ConcatRange(fields, ParsedTelegram.DiagSerial2Start, ParsedTelegram.DiagSerial2End);
 
         _log.Debug("{Camera}: Diagnostic telegram ({Tokens} tokens, payload from index {Index}).",

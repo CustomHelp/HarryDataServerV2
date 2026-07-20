@@ -246,15 +246,45 @@ ORDER BY c.camera_name, md.telegram_place;";
     private async Task FillMeasurementsAsync(
         MySqlConnection conn, string table, string serialColumn, string serial, string?[] row, CancellationToken ct)
     {
+        // Exact match first (the normalised serial should match what the camera pipeline stored).
+        var filled = await FillFromQueryAsync(conn, table, serialColumn, serial, exact: true, row, ct).ConfigureAwait(false);
+        if (filled > 0)
+            return;
+
+        // No measurement rows for this part. Warn (with the searched serial + table) so a future
+        // serial mismatch is spotted immediately, then try a prefix fallback as a safety net — the
+        // clean fix is the shared serial normalisation (SerialNumberHelper), this is belt-and-suspenders.
+        _log.Warning("Part-exit CSV: no rows in {Table} for {Column}='{Serial}' (len {Len}); trying prefix fallback.",
+            table, serialColumn, serial, serial.Length);
+
+        if (string.IsNullOrEmpty(serial))
+            return;
+
+        var viaPrefix = await FillFromQueryAsync(conn, table, serialColumn, serial, exact: false, row, ct).ConfigureAwait(false);
+        if (viaPrefix > 0)
+            _log.Warning("Part-exit CSV: matched {Count} row(s) in {Table} for {Column} via prefix '{Serial}%' — verify serial normalisation.",
+                viaPrefix, table, serialColumn, serial);
+    }
+
+    /// <summary>
+    /// Fill measurement cells from <paramref name="table"/> for one serial. When <paramref name="exact"/>
+    /// is false a prefix match (<c>LIKE serial%</c>) is used. Returns the number of rows read.
+    /// </summary>
+    private async Task<int> FillFromQueryAsync(
+        MySqlConnection conn, string table, string serialColumn, string serial, bool exact, string?[] row, CancellationToken ct)
+    {
+        var predicate = exact ? "= @serial" : "LIKE @serial";
         var sql =
             $"SELECT definition_id, measurement_value, measurement_string, result_status " +
-            $"FROM `{table}` WHERE `{serialColumn}` = @serial ORDER BY id;";
+            $"FROM `{table}` WHERE `{serialColumn}` {predicate} ORDER BY id;";
 
         await using var cmd = new MySqlCommand(sql, conn);
-        cmd.Parameters.AddWithValue("@serial", serial);
+        cmd.Parameters.AddWithValue("@serial", exact ? serial : serial + "%");
         await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        var count = 0;
         while (await reader.ReadAsync(ct).ConfigureAwait(false))
         {
+            count++;
             var definitionId = reader.GetInt32(0);
             if (!_columnByDefinitionId.TryGetValue(definitionId, out var column))
                 continue;
@@ -282,5 +312,7 @@ ORDER BY c.camera_name, md.telegram_place;";
                       ?? result?.ToString(CultureInfo.InvariantCulture);
             }
         }
+
+        return count;
     }
 }

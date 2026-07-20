@@ -108,9 +108,10 @@ public sealed class MeasurementProcessor : IMeasurementProcessor
         if (telegram.Mode != CameraOperatingMode.Normal)
             return;
 
-        // Serial1 is already capped to 22 chars by the parser; cap again defensively so a value
-        // can never exceed the VARCHAR(22) serial column (CLAUDE.md §4).
-        var serial = SerialField.Cap(telegram.Serial1);
+        // Serial1 is already normalised by the parser; run it through the single helper again so
+        // every write path canonicalises identically (drops controller padding, caps to 22) and the
+        // stored serial matches the SPS part-exit serial for the measurement lookup (Problem 1).
+        var serial = SerialNumberHelper.Normalize(telegram.Serial1);
         if (string.IsNullOrWhiteSpace(serial))
         {
             _log.Debug("{Camera}: results telegram without serial; skipped.", telegram.ControllerName);

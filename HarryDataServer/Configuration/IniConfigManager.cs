@@ -88,6 +88,7 @@ public sealed class IniConfigManager
             LogFilePath = Str(s, "LogFilePath", @"D:\HarryDataServer\Logs\"),
             LoggingActive = Bool(s, "LoggingActive", true),
             Language = Str(s, "Language", "English"),
+            SerialNumberLength = Int(s, "SerialNumberLength", Infrastructure.SerialNumberHelper.DefaultMeaningfulLength),
         };
     }
 

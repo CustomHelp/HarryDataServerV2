@@ -1,4 +1,5 @@
 using System.Globalization;
+using HarryDataServer.Infrastructure;
 
 namespace HarryDataServer.Models;
 
@@ -72,8 +73,11 @@ public sealed class SpsPartExitData
         return new SpsPartExitData
         {
             Dmc = f[0].Trim(),
-            Szid = f[1].Trim(),
-            VirtualSerial = f[2].Trim(),
+            // Normalise the frame + trimmer serials to the canonical (unpadded) form so they match
+            // the serials the camera pipeline stored in measurements_serial(_trimmer) (Problem 1).
+            // The DMC is a separate, wider field and is left as-is.
+            Szid = SerialNumberHelper.Normalize(f[1]),
+            VirtualSerial = SerialNumberHelper.Normalize(f[2]),
             OrderName = f[3].Trim(),
             Mode = f[4].Trim(),
             M1xModule = ParseInt(f[5]),

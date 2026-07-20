@@ -60,6 +60,11 @@ public partial class App : Application
             _log.Information("HarryDataServer starting. Config={IniPath} Cameras={Count}",
                 config.IniPath, config.Config.Cameras.Count);
 
+            // Configure the single serial-number normalisation length BEFORE any camera/SPS parsing
+            // starts, so camera and part-exit serials are canonicalised identically (Problem 1).
+            SerialNumberHelper.Configure(config.Config.General.SerialNumberLength);
+            _log.Information("Serial-number normalisation length = {Length}.", SerialNumberHelper.MeaningfulLength);
+
             var window = _services.GetRequiredService<MainWindow>();
             _mainWindow = window;
             window.Show();

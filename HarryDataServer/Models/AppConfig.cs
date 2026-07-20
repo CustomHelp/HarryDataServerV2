@@ -25,6 +25,14 @@ public sealed class GeneralConfig
     public string LogFilePath { get; init; } = @"D:\HarryDataServer\Logs\";
     public bool LoggingActive { get; init; } = true;
     public string Language { get; init; } = "English";
+
+    /// <summary>
+    /// Meaningful (unpadded) length of a Serial1 frame/trimmer serial. The camera pads Serial1 with
+    /// trailing '0' to its field width; the SPS delivers it unpadded. Both are normalised to this
+    /// length so the DB serials match at part-exit lookup (see
+    /// <see cref="HarryDataServer.Infrastructure.SerialNumberHelper"/>). Default 19 (live line).
+    /// </summary>
+    public int SerialNumberLength { get; init; } = HarryDataServer.Infrastructure.SerialNumberHelper.DefaultMeaningfulLength;
 }
 
 public sealed class MySqlConfig
