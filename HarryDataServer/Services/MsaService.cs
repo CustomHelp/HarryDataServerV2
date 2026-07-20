@@ -116,6 +116,14 @@ public sealed class MsaService : IMsaService
         var msaType = MsaTypeExtensions.FromMode(telegram.Mode);
         var measuredAt = DateTime.Now;
 
+        // Problem 2 diagnostics: the msa_measurements insert mapping is identical to the (working)
+        // production path (measurement_value ← V_ value, result_status ← R_ status). When the stored
+        // rows show a value of only 0/1 and a NULL result_status, the pass/fail is arriving in the
+        // V_ field while the R_ field is empty — i.e. an upstream (camera/SPS) telegram-content issue,
+        // not a storage bug. Log the raw telegram and the R_/V_ population so a live run pinpoints
+        // exactly which field carries what (do not silently accept a mismatch).
+        LogMsaExtractionDiagnostics(telegram, e.Measurements);
+
         // Combine R_/V_ pairs the same way as production measurements.
         var combined = MeasurementRowBuilder.Build(telegram.ControllerName, dmc, false, 0, measuredAt, e.Measurements);
         foreach (var row in combined)
@@ -135,6 +143,36 @@ public sealed class MsaService : IMsaService
                 MeasuredAt = measuredAt,
             });
         }
+    }
+
+    /// <summary>
+    /// Summarise an MSA "Results" telegram for troubleshooting Problem 2: how many R_ (result) and
+    /// V_ (value) samples were extracted, and how many of each actually carried a parsed
+    /// status/value. If R_ statuses are absent but V_ values are 0/1, the camera is placing the
+    /// pass/fail in the value field — surfaced here rather than silently stored as value=0/1,
+    /// result_status=NULL. Also dumps the raw telegram + first few samples at Debug.
+    /// </summary>
+    private void LogMsaExtractionDiagnostics(ParsedTelegram telegram, IReadOnlyList<MeasurementSample> samples)
+    {
+        var results = 0; var resultsWithStatus = 0;
+        var values = 0; var valuesWithValue = 0;
+        foreach (var s in samples)
+        {
+            if (s.IsResult) { results++; if (s.ResultStatus.HasValue) resultsWithStatus++; }
+            else { values++; if (s.Value.HasValue) valuesWithValue++; }
+        }
+
+        if (results > 0 && resultsWithStatus == 0)
+            _log.Warning(
+                "{Camera}: MSA {Mode} telegram has {Results} R_ result fields but NONE carry a status (result_status will be NULL); " +
+                "V_ values present: {ValuesWithValue}/{Values}. Pass/fail is likely in the V_ field — verify camera output (Problem 2).",
+                telegram.ControllerName, telegram.Mode, results, valuesWithValue, values);
+        else
+            _log.Debug(
+                "{Camera}: MSA {Mode} extraction — R_ {ResultsWithStatus}/{Results} with status, V_ {ValuesWithValue}/{Values} with value.",
+                telegram.ControllerName, telegram.Mode, resultsWithStatus, results, valuesWithValue, values);
+
+        _log.Debug("{Camera}: MSA raw telegram: {Raw}", telegram.ControllerName, telegram.Raw);
     }
 
     // --- Storage: flush side (dedicated background task) ---
