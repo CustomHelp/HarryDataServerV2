@@ -126,7 +126,7 @@ position — this check runs *before* the signal-word dispatch (`TelegramParser.
 | 0 | Controller name | e.g. `M11_ST030_KF1` |
 | 1 | Camera program version | e.g. `4.0` |
 | 2 | Signal word | always `Results` |
-| 3 … 34 | **Serial1** (32 tokens) | concatenated → **truncated to 22 chars** |
+| 3 … 34 | **Serial1** (32 tokens) | concatenated → **padding stripped to meaningful length (≤22)** |
 | 35 … 66 | **Serial2** (32 tokens) | concatenated → kept full **32 chars** |
 | 67 | `Mode_Diagnostic` (bool 0/1) | **independent** of operating mode — INFO only |
 | 68 | `Mode_GoldenSample` (bool 0/1) | → operating mode `LimitSample` |
@@ -135,12 +135,19 @@ position — this check runs *before* the signal-word dispatch (`TelegramParser.
 | 71 | `Total_Result` (SINT −2/−1/0/1/2) | camera's overall part result — **display only** |
 | 72 … | measurements | alternating `R_` (SINT) / `V_` (Float) pairs |
 
-> **Serial1 (tokens 3–34):** transmitted as 32 chars but only the **first 22 are meaningful**
-> (SPS agreement); the rest is padding. `TelegramParser` concatenates the 32 tokens and truncates
-> to **22 chars** at parse time; the DB serial columns are `VARCHAR(22)`, so the stored value
-> matches the 22-char Field 1 of the image filename (§11). Single width definition:
-> `Infrastructure/SerialField.cs` (`SerialField.MaxLength = 22`). **Serial2 (tokens 35–66)** keeps
-> its full 32 chars (needed for DMC uniqueness in MSA).
+> **Serial1 (tokens 3–34):** the camera emits Serial1 as 32 single-char tokens, **right-padded with
+> `0`** to the field width; the DB serial columns are `VARCHAR(22)` (`Infrastructure/SerialField.cs`,
+> `SerialField.MaxLength = 22`). The **SPS part-exit telegram delivers the SAME serial UNPADDED**
+> (its true length, **19 chars** on the live line). To make the two compare equal (the part-exit
+> measurement lookup joins `measurements_serial(_trimmer)` ↔ `dmcserial` on the serial), **every
+> receive path normalises Serial1 through the single `Infrastructure/SerialNumberHelper.Normalize`**
+> — it drops the controller's trailing `0` padding down to the meaningful length
+> (`[General] SerialNumberLength`, **default 19**) *only when the tail past that length is all `0`*
+> (never a blind `TrimEnd('0')`, so a real serial that legitimately ends in `0` is preserved) and
+> caps to 22. Applied at `TelegramParser` (camera), `SpsPartExitData.TryParse` (frame + trimmer
+> serials) and `MeasurementProcessor`. The **DMC / Serial2 is a separate, wider field and is NOT
+> length-normalised**. **Serial2 (tokens 35–66)** keeps its full 32 chars (needed for DMC uniqueness
+> in MSA). Image-filename search still uses the 12/14-char prefix, unaffected by the change.
 >
 > **Operating mode** is derived from the three flags at tokens 68–70: all 0 → `Normal`;
 > exactly one set → `MSA1` / `MSA3` / `LimitSample` (GoldenSample → `LimitSample`). Only one is
@@ -310,8 +317,13 @@ the poll response with its request — format `<Status>;<BaseID>[;<description>]
 - **Part Exit (Ch2):** All three known: DMC + SZID + VirtualSerial.
 
 ### MSA Modes (MSA1, MSA3, LimitSample)
-- Serial1 (tokens 3–34): BaseID (14 chars) + 3-digit loop counter
-- Serial2 (tokens 35–66): DMC of test part
+- Serial1 (tokens 3–34): **BaseID (14 chars) + 3-digit loop counter = a fixed 17-char run serial**
+  (2 module + 6 date `YYMMDD` + 6 time `HHmmSS` + 3 loop), **right-padded with `0` to the 32-token
+  field**. `SerialNumberHelper.Normalize` trims Serial1 to the meaningful length (default 19), which
+  still contains the whole 17-char run serial; `BaseId.TrySplitRun` then reads the first 14 chars
+  → `base_id` and the next 3 → `loop_number`. The trailing padding is ignored.
+- Serial2 (tokens 35–66): **DMC read from the test part — real, up to 32 chars, NEVER trimmed**
+  (kept full for DMC uniqueness). Stored verbatim in `msa_measurements.dmc`.
 
 ### BaseID Format (14 characters: `10260623083000` = M10, 2026-06-23, 08:30:00)
 
@@ -582,6 +594,49 @@ CREATE TABLE IF NOT EXISTS msa_measurements (
   INDEX idx_measured (measured_at)
 );
 ```
+
+> **MSA vs production storage parity (verified 2026-07-20).** `msa_measurements` stores the *same*
+> measurement data as `measurements_serial`, only into a different table with extra key columns.
+> Verified end-to-end:
+>
+> - **Extraction is genuinely shared, not a copy.** `TcpCameraClient.ProcessFrame` calls
+>   `TelegramParser.ExtractMeasurements` **once** and raises `ResultsReceived` with that single
+>   `IReadOnlyList<MeasurementSample>` instance. `MeasurementProcessor` (Normal) and `MsaService`
+>   (MSA) are both subscribers to the *same event* and receive the *same instance*. Both then call
+>   the same static `MeasurementRowBuilder.Build` for the R_/V_ pairing. So there is no second
+>   extraction that could drift.
+> - **Common columns — identical source & type:**
+>
+>   | Column | Type (both tables) | Production source | MSA source |
+>   |--------|--------------------|-------------------|------------|
+>   | `definition_id` | `INT NOT NULL` | cache lookup on (camera, R_ variable) | **same** cache lookup on (controller, R_ variable) |
+>   | `measurement_value` | `DOUBLE NULL` | V_ partner float (`row.Value`) | **same** (`row.Value`) |
+>   | `measurement_string` | `VARCHAR(20) NULL` | V_ `RawField` when unparseable | **same** |
+>   | `result_status` | `TINYINT NULL` | R_ status (`row.ResultStatus`) | **same** |
+>   | `measured_at` | `DATETIME NOT NULL`¹ | `DateTime.Now` in the receive handler | **same** |
+>
+>   ¹ `msa_measurements.measured_at` additionally has `DEFAULT CURRENT_TIMESTAMP`, but the code
+>   always supplies the value, so the stored value is identical. No type/rounding/NULL difference on
+>   any common column.
+> - **MSA-only columns:** `dmc` ← Serial2 (verbatim, ≤32); `base_id` ← first 14 chars of Serial1
+>   (`BaseId.TrySplitRun`); `loop_number` ← next 3 chars of Serial1 (int); `controller_name` ←
+>   telegram token 0; `msa_type` ← operating-mode flags (tokens 68–70); `msa_version` ← telegram
+>   token 1 (null if empty).
+> - **Separate queue/flush, same interval.** Each processor has its **own** `ConcurrentQueue` +
+>   flush loop; both use `[SQLSettings] SaveIntervalSeconds`. They are therefore **not synchronised**
+>   — MSA rows are committed on MsaService's own tick (up to `SaveIntervalSeconds` after receipt), so
+>   a completion `Request` arriving immediately after a run can see 0 rows (handled by the idempotent
+>   `Wait`, §5). Production batches multi-row `INSERT`s of `[SQLSettings] BatchSize`; MSA inserts
+>   row-by-row inside one transaction — a performance difference only, not a data difference.
+> - **Minor, non-data differences:** an unresolved `definition_id` is dropped in both paths, but the
+>   production path logs it once (`WarnUnknown`) while the MSA path drops it silently. The INSERT SQL
+>   is duplicated across `MeasurementProcessor.InsertChunkAsync` and `MsaService.InsertOneAsync`
+>   (they agree today but are separate code that could drift). `MsaService` also passes the DMC into
+>   `MeasurementRowBuilder.Build`'s unused `serial` slot — harmless (MSA never reads `row.Serial`).
+>
+> **Conclusion: no mapping deviation → no code change.** The Problem-2 symptom (value 0/1,
+> `result_status` NULL) is upstream telegram content (pass/fail arriving in the V_ field with an
+> empty R_ field), surfaced by `MsaService.LogMsaExtractionDiagnostics`, not a storage defect.
 
 ### Table: `msa_results` (computed MSA evaluation results)
 ```sql
