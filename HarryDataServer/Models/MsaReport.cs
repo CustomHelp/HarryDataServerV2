@@ -40,6 +40,9 @@ public sealed class MsaReportRow
     /// <summary>Whether this row was actually assessed against its criterion.</summary>
     public bool Evaluated { get; init; }
 
+    /// <summary>MSA1: best-matched reference part (label + file), blank otherwise (task C transparency).</summary>
+    public string MatchedReference { get; init; } = string.Empty;
+
     public bool Passed { get; init; }
 }
 
@@ -54,6 +57,11 @@ public sealed class MsaReportData
     public string TestType { get; init; } = string.Empty; // MSA1 / MSA3 / LimitSample
     public string Controller { get; init; } = string.Empty;
     public string BaseId { get; init; } = string.Empty;
+
+    /// <summary>Per-part report (LimitSample/MSA1): the part DMC — included in the PDF file name and head.
+    /// Empty for a run-level report (MSA3).</summary>
+    public string Dmc { get; init; } = string.Empty;
+
     public DateTime RunAt { get; init; }
 
     /// <summary>Back-compat convenience: true only when <see cref="Verdict"/> is Pass.</summary>
@@ -96,52 +104,77 @@ public sealed class MsaReportData
     /// the overall verdict from the stored per-row Evaluated/Passed flags so the UI never shows a
     /// vacuous PASS either. RunAt is taken from the BaseID timestamp so the file name/folder match
     /// the auto-generated report (the UI then opens the original, fully-headed PDF).</summary>
-    public static MsaReportData FromRun(MsaRunDto run)
+    public static MsaReportData FromRun(MsaRunDto run) => Build(run, run.Rows, string.Empty);
+
+    /// <summary>Build a per-part report (LimitSample/MSA1) from a stored run — rows filtered to the DMC,
+    /// verdict = that part's verdict. Used by the UI to open the part's PDFs (task B).</summary>
+    public static MsaReportData ForPart(MsaRunDto run, string dmc) =>
+        Build(run, run.Rows.Where(r => string.Equals(r.Dmc, dmc, StringComparison.OrdinalIgnoreCase)).ToList(), dmc);
+
+    private static MsaReportData Build(MsaRunDto run, IReadOnlyList<MsaResultRow> src, string dmc)
     {
-        var rows = run.Rows.Select(r => new MsaReportRow
-        {
-            Controller = r.Controller,
-            Dmc = run.MsaType == MsaType.LimitSample ? r.Dmc : string.Empty,
-            Measurement = r.DisplayName,
-            N = r.N,
-            Mean = r.Mean,
-            StdDev = r.StdDev,
-            Reference = r.ReferenceValue,
-            Tolerance = r.Tolerance,
-            Expected = r.Expected ?? string.Empty,
-            Actual = r.Actual ?? FormatActual(r),
-            Metric = MetricFor(run.MsaType, r),
-            Criterion = r.Criterion,
-            Reason = r.Reason,
-            Evaluated = r.Evaluated,
-            Passed = r.Passed,
-        }).ToList();
-
-        // Recompute the verdict from the stored rows (same rule as the live evaluation).
-        var proxies = run.Rows.Select(r => new MsaMeasurementResult
-        {
-            Evaluated = r.Evaluated,
-            ExpectedReject = string.Equals(r.Expected, "reject", StringComparison.OrdinalIgnoreCase),
-            Passed = r.Passed,
-        }).ToList();
-        var (verdict, reason) = MsaEvaluationText.OverallVerdict(run.MsaType, referenceLoaded: true, proxies);
-
+        var rows = src.Select(r => MapRow(run.MsaType, r)).ToList();
         var runAt = global::HarryDataServer.Models.BaseId.TryGetTimestamp(run.BaseId, out var dt) ? dt : run.EvaluatedAt;
+        var (verdict, reason) = ComputeVerdict(run.MsaType, src, wholeRun: string.IsNullOrEmpty(dmc));
 
         return new MsaReportData
         {
             Module = run.Module,
             TestType = run.MsaType.ToDbString(),
-            Controller = run.Controller,
+            Controller = string.Join(", ", src.Select(r => r.Controller).Where(s => !string.IsNullOrEmpty(s)).Distinct()),
             BaseId = run.BaseId,
+            Dmc = dmc,
             RunAt = runAt,
             OverallPass = verdict == MsaVerdict.Pass,
             Verdict = verdict,
             VerdictReason = reason,
-            Criterion = run.Rows.Select(r => r.Criterion).FirstOrDefault(s => !string.IsNullOrEmpty(s)) ?? string.Empty,
+            Criterion = src.Select(r => r.Criterion).FirstOrDefault(s => !string.IsNullOrEmpty(s)) ?? string.Empty,
             Rows = rows,
         };
     }
+
+    /// <summary>Verdict from stored rows: per-part aggregation for LimitSample/MSA1, study rule for MSA3.</summary>
+    public static (MsaVerdict Verdict, string Reason) ComputeVerdict(MsaType type, IReadOnlyList<MsaResultRow> src, bool wholeRun)
+    {
+        var proxies = src.Select(ProxyOf).ToList();
+        if (type == MsaType.Msa3)
+            return MsaEvaluationText.OverallVerdict(type, referenceLoaded: true, proxies);
+
+        if (!wholeRun) // one part
+            return (MsaEvaluationText.PartVerdict(type, proxies), string.Empty);
+
+        var parts = src.GroupBy(r => r.Dmc, StringComparer.OrdinalIgnoreCase)
+            .Select(g => (g.Key, MsaEvaluationText.PartVerdict(type, g.Select(ProxyOf).ToList())))
+            .ToList();
+        return MsaEvaluationText.OverallFromParts(parts);
+    }
+
+    private static MsaMeasurementResult ProxyOf(MsaResultRow r) => new()
+    {
+        Evaluated = r.Evaluated,
+        Passed = r.Passed,
+        ExpectedReject = string.Equals(r.Expected, "reject", StringComparison.OrdinalIgnoreCase),
+    };
+
+    private static MsaReportRow MapRow(MsaType type, MsaResultRow r) => new()
+    {
+        Controller = r.Controller,
+        Dmc = type == MsaType.Msa3 ? string.Empty : r.Dmc,
+        Measurement = r.DisplayName,
+        N = r.N,
+        Mean = r.Mean,
+        StdDev = r.StdDev,
+        Reference = r.ReferenceValue,
+        Tolerance = r.Tolerance,
+        Expected = r.Expected ?? string.Empty,
+        Actual = r.Actual ?? FormatActual(r),
+        Metric = MetricFor(type, r),
+        Criterion = r.Criterion,
+        Reason = r.Reason,
+        Evaluated = r.Evaluated,
+        MatchedReference = r.MatchedReference,
+        Passed = r.Passed,
+    };
 
     private static string FormatActual(MsaResultRow r) =>
         r.Cg?.ToString("0.###", CultureInfo.InvariantCulture)

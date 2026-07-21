@@ -24,7 +24,14 @@ public sealed class MsaResultRow
     /// <summary>Whether the measurement was actually assessed against its criterion (task 2).</summary>
     public bool Evaluated { get; init; }
 
+    /// <summary>MSA1: the best-matched reference part (label + file) and its score (task C).</summary>
+    public string MatchedReference { get; init; } = string.Empty;
+    public double? MatchScore { get; init; }
+
     public bool Passed { get; init; }
+
+    /// <summary>Tri-state result text for the features grid: "ok" / "nicht ok" / "n.a." (task B2).</summary>
+    public string ResultText => !Evaluated ? "n.a." : Passed ? "ok" : "nicht ok";
 }
 
 /// <summary>

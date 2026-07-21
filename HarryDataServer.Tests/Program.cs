@@ -44,6 +44,10 @@ internal static class Program
         LimitSampleOverall_PerPartVerdict();
         LimitSampleReference_RoundTrips();
         ReportRunRoot_Layout();
+        Msa1Matcher_BestMatch();
+        Msa1Reference_TemplatesAndCandidates();
+        PerPartPdfName_ContainsBaseIdAndDmc();
+        PartAggregation_WorstOfParts();
 
         Console.WriteLine();
         if (_failures == 0)
@@ -259,6 +263,88 @@ internal static class Program
         var root = MsaResultLayout.ReportRunRoot(@"X:\R", "M50", "50260721170000", new DateTime(2026, 7, 21, 17, 0, 0));
         var norm = root.Replace('\\', '/');
         AssertTrue("layout ends with /2026-07-21/M50/50260721170000", norm.EndsWith("/2026-07-21/M50/50260721170000"));
+    }
+
+    private static void Msa1Matcher_BestMatch()
+    {
+        Console.WriteLine("[Case N] MSA1 best-match (unique / ambiguous / no-match)");
+        var tol = new Dictionary<string, double> { ["A"] = 1.0, ["B"] = 1.0 };
+        var means = new Dictionary<string, double> { ["A"] = 10.0, ["B"] = 20.0 };
+        var good = new Msa1Matcher.Candidate("Ref A", "a.json", new Dictionary<string, double> { ["A"] = 10.02, ["B"] = 20.03 });
+        var far = new Msa1Matcher.Candidate("Ref far", "f.json", new Dictionary<string, double> { ["A"] = 13.0, ["B"] = 25.0 });
+        var good2 = new Msa1Matcher.Candidate("Ref A2", "a2.json", new Dictionary<string, double> { ["A"] = 10.02, ["B"] = 20.03 });
+
+        var unique = Msa1Matcher.Match(means, tol, new[] { good, far });
+        AssertTrue("unique best is Ref A", unique.Best?.File == "a.json" && unique.Plausible && !unique.Ambiguous);
+
+        var ambiguous = Msa1Matcher.Match(means, tol, new[] { good, good2 });
+        AssertTrue("two equal candidates → ambiguous", ambiguous.Ambiguous);
+
+        var none = Msa1Matcher.Match(means, tol, new[] { far });
+        AssertTrue("far-off candidate → not plausible", !none.Plausible);
+    }
+
+    private static void Msa1Reference_TemplatesAndCandidates()
+    {
+        Console.WriteLine("[Case O] MSA1 reference: DEMO templates ignored, real ones are candidates");
+        var tmp = Path.Combine(Path.GetTempPath(), "hds_msa1_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var real = new Msa1Reference { Module = "M50", Label = "Ref A", CreatedAt = DateTime.UnixEpoch };
+            real.Values["A"] = 1.0;
+            real.Save(tmp, "RefA");
+
+            var demoByFlag = new Msa1Reference { Module = "M50", Template = true };
+            demoByFlag.Save(tmp, "DEMO_M50");
+
+            var demoByName = new Msa1Reference { Module = "M50", Template = false }; // template only by DEMO_ file name
+            demoByName.Save(tmp, "DEMO_extra");
+
+            AssertEqual("loads all 3 files", 3, Msa1Reference.LoadAll(tmp, "M50").Count);
+            var candidates = Msa1Reference.LoadCandidates(tmp, "M50");
+            AssertEqual("only the real one is a candidate", 1, candidates.Count);
+            AssertEqual("candidate label", "Ref A", candidates[0].Label);
+        }
+        finally
+        {
+            try { Directory.Delete(tmp, recursive: true); } catch { /* best effort */ }
+        }
+    }
+
+    private static void PerPartPdfName_ContainsBaseIdAndDmc()
+    {
+        Console.WriteLine("[Case P] Per-part PDF file name contains BaseID + DMC (task B4)");
+        var tmp = Path.Combine(Path.GetTempPath(), "hds_pdf_" + Guid.NewGuid().ToString("N"));
+        var pdf = new PdfReportService(new StubConfig(), new NullLog());
+        var report = new MsaReportData
+        {
+            Module = "M50", TestType = "LimitSample", BaseId = "50260721170000", Dmc = "AB/CD",
+            RunAt = new DateTime(2026, 7, 21, 17, 0, 0), OutputDirectory = tmp,
+        };
+        var paths = pdf.ResolvePaths(report);
+        var name = Path.GetFileName(paths.AllResults);
+        AssertTrue("name has BaseID", name.Contains("50260721170000"));
+        AssertTrue("name has sanitized DMC", name.Contains("AB_CD"));
+        AssertTrue("name ends _AllResults.pdf", name.EndsWith("_AllResults.pdf"));
+    }
+
+    private static void PartAggregation_WorstOfParts()
+    {
+        Console.WriteLine("[Case Q] Overall = worst of per-part verdicts (task A)");
+        AssertEqual("any INVALID → INVALID", MsaVerdict.Invalid,
+            MsaEvaluationText.OverallFromParts(new[] { ("p1", MsaVerdict.Pass), ("p2", MsaVerdict.Invalid), ("p3", MsaVerdict.Fail) }).Verdict);
+        AssertEqual("any FAIL (no invalid) → FAIL", MsaVerdict.Fail,
+            MsaEvaluationText.OverallFromParts(new[] { ("p1", MsaVerdict.Pass), ("p2", MsaVerdict.Fail) }).Verdict);
+        AssertEqual("all PASS → PASS", MsaVerdict.Pass,
+            MsaEvaluationText.OverallFromParts(new[] { ("p1", MsaVerdict.Pass), ("p2", MsaVerdict.Pass) }).Verdict);
+    }
+
+    /// <summary>Minimal IConfigService stub for the PDF-name test (never reads config when OutputDirectory is set).</summary>
+    private sealed class StubConfig : IConfigService
+    {
+        public AppConfig Config { get; } = new();
+        public string IniPath => string.Empty;
+        public AppConfig Reload() => Config;
     }
 
     // ---- helpers -----------------------------------------------------------

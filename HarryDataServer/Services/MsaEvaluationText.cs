@@ -149,6 +149,46 @@ public static class MsaEvaluationText
             : (MsaVerdict.Pass, string.Empty);
     }
 
+    /// <summary>
+    /// Verdict of ONE part (task A/B): INVALID if a row invalidates the part, if nothing was
+    /// evaluated, or — LimitSample — if no prepared error was checked; FAIL if any evaluated row
+    /// failed; else PASS.
+    /// </summary>
+    public static MsaVerdict PartVerdict(MsaType type, IReadOnlyList<MsaMeasurementResult> partResults)
+    {
+        if (partResults.Any(r => r.InvalidatesPart))
+            return MsaVerdict.Invalid;
+
+        var evaluated = partResults.Where(r => r.Evaluated).ToList();
+        if (evaluated.Count == 0)
+            return MsaVerdict.Invalid;
+        if (type == MsaType.LimitSample && !evaluated.Any(r => r.ExpectedReject))
+            return MsaVerdict.Invalid;
+
+        return evaluated.Any(r => !r.Passed) ? MsaVerdict.Fail : MsaVerdict.Pass;
+    }
+
+    /// <summary>
+    /// Aggregate the per-part verdicts into the run result reported to the PLC (task A):
+    /// any part INVALID → Invalid (→ Error); else any part FAIL → Fail (→ NG); else Pass (→ OK).
+    /// </summary>
+    public static (MsaVerdict Verdict, string Reason) OverallFromParts(
+        IReadOnlyCollection<(string Dmc, MsaVerdict Verdict)> parts)
+    {
+        if (parts.Count == 0)
+            return (MsaVerdict.Invalid, "no parts in the run");
+
+        var invalid = parts.Where(p => p.Verdict == MsaVerdict.Invalid).Select(p => p.Dmc).ToList();
+        if (invalid.Count > 0)
+            return (MsaVerdict.Invalid, $"{invalid.Count} part(s) INVALID: {string.Join(", ", invalid.Take(5))}");
+
+        var failed = parts.Count(p => p.Verdict == MsaVerdict.Fail);
+        if (failed > 0)
+            return (MsaVerdict.Fail, $"{failed} of {parts.Count} part(s) failed");
+
+        return (MsaVerdict.Pass, string.Empty);
+    }
+
     private static string Join(IEnumerable<string> parts)
     {
         var list = parts.Where(p => !string.IsNullOrWhiteSpace(p)).ToList();

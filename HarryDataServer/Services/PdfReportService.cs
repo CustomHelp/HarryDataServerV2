@@ -46,7 +46,9 @@ public sealed class PdfReportService : IPdfReportService
         }
         // PDFs live in the run root's PDF\ subfolder (RAW\ and IMG\ sit beside it).
         var pdfDir = Path.Combine(runRoot, MsaResultLayout.PdfSubfolder);
-        var baseName = $"{Sanitize(report.Module)}_{Sanitize(report.TestType)}_{Sanitize(report.BaseId)}_{FileNaming.Stamp(report.RunAt)}";
+        // Per-part reports (LimitSample/MSA1) carry the DMC in the file name (task B4).
+        var dmcPart = string.IsNullOrWhiteSpace(report.Dmc) ? string.Empty : "_" + Sanitize(report.Dmc);
+        var baseName = $"{Sanitize(report.Module)}_{Sanitize(report.TestType)}_{Sanitize(report.BaseId)}{dmcPart}_{FileNaming.Stamp(report.RunAt)}";
         return new MsaReportPaths(
             Path.Combine(pdfDir, baseName + "_AllResults.pdf"),
             Path.Combine(pdfDir, baseName + "_FailuresOnly.pdf"));

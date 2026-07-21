@@ -1,8 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
-using System.Globalization;
 using System.IO;
-using System.Text;
 using System.Windows;
 using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -12,10 +10,35 @@ using HarryDataServer.Services;
 
 namespace HarryDataServer.ViewModels;
 
+/// <summary>One part (DMC) of a run in the MSA UI — its per-part verdict + ok/total counter (task B).</summary>
+public sealed class MsaPartRow
+{
+    public required string Dmc { get; init; }
+    public required MsaVerdict Verdict { get; init; }
+    public required int OkCount { get; init; }
+    public required int TotalCount { get; init; }
+    public string MatchedReference { get; init; } = string.Empty;
+
+    public string DmcText => string.IsNullOrEmpty(Dmc) ? "(Study — all parts)" : Dmc;
+    public string VerdictText => Verdict switch
+    {
+        MsaVerdict.Pass => "PASS",
+        MsaVerdict.Fail => "FAIL",
+        _ => "INVALID",
+    };
+    public Brush VerdictBrush => Verdict switch
+    {
+        MsaVerdict.Pass => Brushes.SeaGreen,
+        MsaVerdict.Fail => Brushes.IndianRed,
+        _ => Brushes.DarkOrange,
+    };
+    public string CountText => $"{OkCount}/{TotalCount} ok";
+}
+
 /// <summary>
-/// Paginated view over the stored MSA runs of one module and one MSA type. Loads from
-/// <c>msa_results</c> on demand, shows one run at a time, and supports Previous/Next
-/// navigation plus a CSV export of the current run.
+/// Paginated view over the stored MSA runs of one module and one MSA type. Shows one run at a time;
+/// within a run a list of parts (DMCs) with per-part verdict, and for the selected part its measurements
+/// (task B). Buttons act on the SELECTED PART: open its two PDFs and its report folder.
 /// </summary>
 public sealed partial class MsaRunsViewModel : ObservableObject
 {
@@ -36,29 +59,45 @@ public sealed partial class MsaRunsViewModel : ObservableObject
 
         PreviousCommand = new RelayCommand(() => Move(-1), () => _index > 0);
         NextCommand = new RelayCommand(() => Move(+1), () => _index >= 0 && _index < _runs.Count - 1);
-        ExportCsvCommand = new RelayCommand(ExportCsv, () => Current is not null);
         RefreshCommand = new AsyncRelayCommand(LoadAsync);
-        OpenAllResultsCommand = new RelayCommand(() => OpenReport(failuresOnly: false), () => Current is not null);
-        OpenFailuresOnlyCommand = new RelayCommand(() => OpenReport(failuresOnly: true), () => Current is not null);
+        OpenAllResultsCommand = new RelayCommand(() => OpenReport(failuresOnly: false), () => SelectedPart is not null);
+        OpenFailuresOnlyCommand = new RelayCommand(() => OpenReport(failuresOnly: true), () => SelectedPart is not null);
+        OpenFolderCommand = new RelayCommand(OpenFolder, () => SelectedPart is not null);
     }
 
-    public ObservableCollection<MsaResultRow> Rows { get; } = new();
+    public ObservableCollection<MsaPartRow> Parts { get; } = new();
+    public ObservableCollection<MsaResultRow> Features { get; } = new();
 
     public IRelayCommand PreviousCommand { get; }
     public IRelayCommand NextCommand { get; }
-    public IRelayCommand ExportCsvCommand { get; }
     public IAsyncRelayCommand RefreshCommand { get; }
     public IRelayCommand OpenAllResultsCommand { get; }
     public IRelayCommand OpenFailuresOnlyCommand { get; }
+    public IRelayCommand OpenFolderCommand { get; }
 
     [ObservableProperty] private string _runInfo = "No runs loaded.";
     [ObservableProperty] private string _overallText = "—";
     [ObservableProperty] private Brush _overallBrush = Brushes.Gray;
     [ObservableProperty] private bool _hasRuns;
 
+    private MsaPartRow? _selectedPart;
+    public MsaPartRow? SelectedPart
+    {
+        get => _selectedPart;
+        set
+        {
+            if (SetProperty(ref _selectedPart, value))
+            {
+                UpdateFeatures();
+                OpenAllResultsCommand.NotifyCanExecuteChanged();
+                OpenFailuresOnlyCommand.NotifyCanExecuteChanged();
+                OpenFolderCommand.NotifyCanExecuteChanged();
+            }
+        }
+    }
+
     private MsaRunDto? Current => _index >= 0 && _index < _runs.Count ? _runs[_index] : null;
 
-    /// <summary>Load all runs for this module/type and show the newest.</summary>
     public async Task LoadAsync()
     {
         var runs = await _msa.GetRunsAsync(_module, _type).ConfigureAwait(true);
@@ -75,7 +114,8 @@ public sealed partial class MsaRunsViewModel : ObservableObject
 
     private void UpdateCurrent()
     {
-        Rows.Clear();
+        Parts.Clear();
+        Features.Clear();
         var run = Current;
         HasRuns = run is not null;
 
@@ -83,39 +123,90 @@ public sealed partial class MsaRunsViewModel : ObservableObject
         {
             RunInfo = "No runs available.";
             OverallText = "—";
-            OverallBrush = Led.Gray;
+            OverallBrush = Brushes.Gray;
         }
         else
         {
-            foreach (var row in run.Rows)
-                Rows.Add(row);
-
-            RunInfo = $"Run {_index + 1} of {_runs.Count}  ·  {run.EvaluatedAt:yyyy-MM-dd HH:mm:ss}  ·  {run.Controller}  ·  BaseID {run.BaseId}";
-            OverallText = run.OverallPass ? "PASS" : "FAIL";
-            OverallBrush = run.OverallPass ? Led.Green : Led.Red;
+            BuildParts(run);
+            var (verdict, _) = MsaReportData.ComputeVerdict(_type, run.Rows, wholeRun: true);
+            RunInfo = $"Run {_index + 1} of {_runs.Count}  ·  {run.EvaluatedAt:yyyy-MM-dd HH:mm:ss}  ·  BaseID {run.BaseId}";
+            OverallText = verdict switch { MsaVerdict.Pass => "PASS", MsaVerdict.Fail => "FAIL", _ => "INVALID" };
+            OverallBrush = verdict switch
+            {
+                MsaVerdict.Pass => Brushes.SeaGreen,
+                MsaVerdict.Fail => Brushes.IndianRed,
+                _ => Brushes.DarkOrange,
+            };
         }
+
+        SelectedPart = Parts.Count > 0 ? Parts[0] : null;
 
         PreviousCommand.NotifyCanExecuteChanged();
         NextCommand.NotifyCanExecuteChanged();
-        ExportCsvCommand.NotifyCanExecuteChanged();
         OpenAllResultsCommand.NotifyCanExecuteChanged();
         OpenFailuresOnlyCommand.NotifyCanExecuteChanged();
+        OpenFolderCommand.NotifyCanExecuteChanged();
     }
 
-    /// <summary>
-    /// Open the AllResults / FailuresOnly PDF for the current run in the default viewer.
-    /// If the PDF does not yet exist it is generated on demand from the loaded run data
-    /// (SOW §3.2.1), then opened.
-    /// </summary>
+    private void BuildParts(MsaRunDto run)
+    {
+        if (_type == MsaType.Msa3)
+        {
+            // MSA3 is one study over all parts — a single synthetic "part".
+            var (verdict, _) = MsaReportData.ComputeVerdict(_type, run.Rows, wholeRun: true);
+            var ev = run.Rows.Where(r => r.Evaluated).ToList();
+            Parts.Add(new MsaPartRow
+            {
+                Dmc = string.Empty, Verdict = verdict,
+                OkCount = ev.Count(r => r.Passed), TotalCount = ev.Count,
+            });
+            return;
+        }
+
+        foreach (var g in run.Rows.GroupBy(r => r.Dmc, StringComparer.OrdinalIgnoreCase))
+        {
+            var partRows = g.ToList();
+            var verdict = MsaReportData.ComputeVerdict(_type, partRows, wholeRun: false).Verdict;
+            var ev = partRows.Where(r => r.Evaluated).ToList();
+            Parts.Add(new MsaPartRow
+            {
+                Dmc = g.Key,
+                Verdict = verdict,
+                OkCount = ev.Count(r => r.Passed),
+                TotalCount = ev.Count,
+                MatchedReference = partRows.Select(r => r.MatchedReference).FirstOrDefault(s => !string.IsNullOrEmpty(s)) ?? string.Empty,
+            });
+        }
+    }
+
+    private void UpdateFeatures()
+    {
+        Features.Clear();
+        var run = Current;
+        var part = SelectedPart;
+        if (run is null || part is null)
+            return;
+
+        var rows = _type == MsaType.Msa3 || string.IsNullOrEmpty(part.Dmc)
+            ? run.Rows
+            : run.Rows.Where(r => string.Equals(r.Dmc, part.Dmc, StringComparison.OrdinalIgnoreCase));
+        foreach (var r in rows)
+            Features.Add(r);
+    }
+
+    /// <summary>Open the selected part's AllResults / FailuresOnly PDF (generate on demand if missing).</summary>
     private void OpenReport(bool failuresOnly)
     {
         var run = Current;
-        if (run is null)
+        var part = SelectedPart;
+        if (run is null || part is null)
             return;
 
         try
         {
-            var report = MsaReportData.FromRun(run);
+            var report = _type == MsaType.Msa3 || string.IsNullOrEmpty(part.Dmc)
+                ? MsaReportData.FromRun(run)
+                : MsaReportData.ForPart(run, part.Dmc);
             var paths = _pdf.ResolvePaths(report);
             var path = failuresOnly ? paths.FailuresOnly : paths.AllResults;
 
@@ -134,36 +225,30 @@ public sealed partial class MsaRunsViewModel : ObservableObject
         }
     }
 
-    private void ExportCsv()
+    /// <summary>Open the run's report folder (&lt;ReportPath&gt;\&lt;Date&gt;\&lt;Module&gt;\&lt;BaseID&gt;) in Explorer.</summary>
+    private void OpenFolder()
     {
         var run = Current;
-        if (run is null)
+        var part = SelectedPart;
+        if (run is null || part is null)
             return;
 
-        var dialog = new Microsoft.Win32.SaveFileDialog
+        try
         {
-            Filter = "CSV file (*.csv)|*.csv",
-            FileName = $"MSA_{_type}_{_module}_{run.EvaluatedAt:ddMMyy_HHmmss}.csv",
-        };
-        if (dialog.ShowDialog() != true)
-            return;
-
-        var sb = new StringBuilder();
-        sb.AppendLine("MeasurementName;Cg;Cgk;PctTolerance;Expected;Actual;Passed");
-        foreach (var r in run.Rows)
-        {
-            sb.Append(r.DisplayName).Append(';')
-              .Append(Fmt(r.Cg)).Append(';')
-              .Append(Fmt(r.Cgk)).Append(';')
-              .Append(Fmt(r.PctTolerance)).Append(';')
-              .Append(r.Expected ?? string.Empty).Append(';')
-              .Append(r.Actual ?? string.Empty).Append(';')
-              .Append(r.Passed ? "PASS" : "FAIL")
-              .AppendLine();
+            var report = _type == MsaType.Msa3 || string.IsNullOrEmpty(part.Dmc)
+                ? MsaReportData.FromRun(run)
+                : MsaReportData.ForPart(run, part.Dmc);
+            var pdfPath = _pdf.ResolvePaths(report).AllResults;         // …\<BaseID>\PDF\<file>.pdf
+            var runRoot = Path.GetDirectoryName(Path.GetDirectoryName(pdfPath)); // …\<BaseID>
+            if (string.IsNullOrEmpty(runRoot))
+                return;
+            Directory.CreateDirectory(runRoot);
+            Process.Start(new ProcessStartInfo(runRoot) { UseShellExecute = true });
         }
-        File.WriteAllText(dialog.FileName, sb.ToString(), new UTF8Encoding(false));
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Could not open the report folder:\n\n{ex.Message}",
+                "MSA Report", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
     }
-
-    private static string Fmt(double? v) =>
-        v?.ToString("0.###", CultureInfo.InvariantCulture) ?? string.Empty;
 }

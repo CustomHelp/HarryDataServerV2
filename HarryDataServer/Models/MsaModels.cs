@@ -116,5 +116,15 @@ public sealed class MsaMeasurementResult
     /// rejected. An overall PASS requires at least one such expected error to have been checked (task 2).</summary>
     public bool ExpectedReject { get; init; }
 
+    /// <summary>Marks a synthetic row that makes its PART invalid (e.g. a part with no reference at all).
+    /// Forces the part verdict to INVALID regardless of the other rows (task A/B).</summary>
+    public bool InvalidatesPart { get; init; }
+
+    /// <summary>MSA1 only: label + file of the best-matched reference part (blank when none). Transparency.</summary>
+    public string MatchedReference { get; init; } = string.Empty;
+
+    /// <summary>MSA1 only: the best-match score 0..1 (hit ratio), or null when no reference was matched.</summary>
+    public double? MatchScore { get; init; }
+
     public bool Passed { get; init; }
 }

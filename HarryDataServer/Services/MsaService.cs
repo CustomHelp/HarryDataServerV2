@@ -6,9 +6,10 @@ using HarryDataServer.Configuration;
 using HarryDataServer.Infrastructure;
 using HarryDataServer.Models;
 using MySqlConnector;
-// Import only the per-part reference type — HarryShared.Data also has an MsaReferenceFile that would
+// Import only the per-part reference types — HarryShared.Data also has an MsaReferenceFile that would
 // clash with the server's HarryDataServer.Configuration.MsaReferenceFile.
 using LimitSampleReference = HarryShared.Data.LimitSampleReference;
+using Msa1Reference = HarryShared.Data.Msa1Reference;
 
 namespace HarryDataServer.Services;
 
@@ -206,6 +207,9 @@ public sealed class MsaService : IMsaService
             catch (Exception ex) { _log.Error(ex, "MSA: failed to load definition cache."); }
         }
 
+        // Ensure a DEMO_<module>.json MSA1 template exists for each module (task C2). Best-effort.
+        await EnsureDemoTemplatesAsync(ct).ConfigureAwait(false);
+
         while (!ct.IsCancellationRequested)
         {
             try { await Task.Delay(_flushInterval, ct).ConfigureAwait(false); }
@@ -311,7 +315,7 @@ VALUES
         const string sql = @"
 SELECT base_id, controller_name, evaluated_at, display_name, cg_value, cgk_value, pct_tolerance,
        expected_value, actual_value, passed, n_values, mean_value, std_dev, reference_value,
-       tolerance, criterion, reason, evaluated, dmc
+       tolerance, criterion, reason, evaluated, dmc, matched_reference, match_score
 FROM msa_results
 WHERE msa_type = @type AND controller_name LIKE @mod
 ORDER BY evaluated_at, base_id, id;";
@@ -356,6 +360,8 @@ ORDER BY evaluated_at, base_id, id;";
                     Reason = reader.IsDBNull(16) ? string.Empty : reader.GetString(16),
                     Evaluated = !reader.IsDBNull(17) && reader.GetInt32(17) != 0,
                     Dmc = reader.IsDBNull(18) ? string.Empty : reader.GetString(18),
+                    MatchedReference = reader.IsDBNull(19) ? string.Empty : reader.GetString(19),
+                    MatchScore = reader.IsDBNull(20) ? null : reader.GetDouble(20),
                 });
             }
 
@@ -488,8 +494,15 @@ ORDER BY evaluated_at, base_id, id;";
                 (results, verdict, verdictReason, notes) =
                     EvaluateLimitSample(rows, module, msaCfg.ReferencePath, judged, reference);
             }
+            else if (msaType == MsaType.Msa1)
+            {
+                // Per-part evaluation with best-match reference assignment (task C).
+                (results, verdict, verdictReason, notes) =
+                    await EvaluateMsa1Async(conn, rows, module, msaCfg.ReferencePath, reference, ct).ConfigureAwait(false);
+            }
             else
             {
+                // MSA3 is ONE study over all parts (per measurement); keep the per-definition path.
                 var toleranceCache = new Dictionary<(int, int), double>();
                 results = new List<MsaMeasurementResult>();
                 foreach (var group in rows.GroupBy(r => r.DefinitionId))
@@ -534,7 +547,11 @@ ORDER BY evaluated_at, base_id, id;";
             // Existing per-run measurement summary CSV stays under ResultPath (unchanged).
             ExportCsv(baseId, module, msaType, results);
             // Report PDFs + RAW export + run images into the run folder's subfolders (task B/C).
-            GeneratePdf(report);
+            // MSA3 is one study report; LimitSample/MSA1 get one PDF pair PER PART (task B4).
+            if (msaType == MsaType.Msa3)
+                GeneratePdf(report);
+            else
+                GeneratePerPartPdfs(report, results, msaType);
             await ExportRawDataAsync(conn, baseId, module, msaType,
                 reportDir is null ? null : Path.Combine(reportDir, MsaResultLayout.RawSubfolder), ct).ConfigureAwait(false);
             CopyRunImages(baseId, reportDir is null ? null : Path.Combine(reportDir, MsaResultLayout.ImgSubfolder));
@@ -693,7 +710,6 @@ ORDER BY evaluated_at, base_id, id;";
                 module, LimitSampleReference.FolderFor(referenceFolder, module));
 
         var runDmcs = new HashSet<string>(rows.Select(r => r.Dmc), StringComparer.OrdinalIgnoreCase);
-        var missingRef = false;
 
         foreach (var dmcGroup in rows.GroupBy(r => r.Dmc, StringComparer.OrdinalIgnoreCase))
         {
@@ -711,11 +727,10 @@ ORDER BY evaluated_at, base_id, id;";
 
             if (expected is null || expected.Count == 0)
             {
-                missingRef = true;
                 results.Add(new MsaMeasurementResult
                 {
                     DisplayName = "(part not referenced)", Controller = defaultCtrl, Dmc = dmc,
-                    Evaluated = false, Passed = false, Criterion = criterion,
+                    Evaluated = false, Passed = false, Criterion = criterion, InvalidatesPart = true,
                     Reason = $"no LimitSample reference for DMC {dmc}",
                 });
                 continue;
@@ -774,14 +789,215 @@ ORDER BY evaluated_at, base_id, id;";
             if (!runDmcs.Contains(t.Dmc))
                 notes.Add($"taught part {t.Dmc} was not in this run");
 
-        // Overall verdict — never a vacuous PASS (task 2/A3).
-        var (verdict, reason) = MsaEvaluationText.LimitSampleOverall(
-            referencesExist: taught.Count > 0 || useLegacy,
-            anyPartUnreferenced: missingRef,
-            results,
-            LimitSampleReference.FolderFor(referenceFolder, module));
+        // Overall verdict from the per-part verdicts (task A): any INVALID → Error, any FAIL → NG,
+        // else OK. Never a vacuous PASS.
+        MsaVerdict verdict;
+        string reason;
+        if (taught.Count == 0 && !useLegacy)
+        {
+            verdict = MsaVerdict.Invalid;
+            reason = $"no LimitSample references found in {LimitSampleReference.FolderFor(referenceFolder, module)}";
+        }
+        else
+        {
+            var parts = results.GroupBy(r => r.Dmc, StringComparer.OrdinalIgnoreCase)
+                .Select(g => (g.Key, MsaEvaluationText.PartVerdict(MsaType.LimitSample, g.ToList())))
+                .ToList();
+            (verdict, reason) = MsaEvaluationText.OverallFromParts(parts);
+        }
 
         return (results, verdict, reason, notes);
+    }
+
+    /// <summary>
+    /// Ensure a blank <c>DEMO_&lt;module&gt;.json</c> MSA1 template exists for M10/M11/M20/M21/M50 (task C2):
+    /// created from all Result measurement names of the module with empty (0) values and
+    /// <c>template:true</c>, so Philipp can copy → rename → fill in. DEMO files are ignored during
+    /// evaluation. Best-effort — never throws into the flush loop.
+    /// </summary>
+    private async Task EnsureDemoTemplatesAsync(CancellationToken ct)
+    {
+        var refFolder = _config.Config.Msa.ReferencePath;
+        if (string.IsNullOrWhiteSpace(refFolder))
+            return;
+
+        string[] modules = { "M10", "M11", "M20", "M21", "M50" };
+        try
+        {
+            await using var conn = await _database.OpenConnectionAsync(ct).ConfigureAwait(false);
+            foreach (var module in modules)
+            {
+                if (File.Exists(Msa1Reference.TemplatePathFor(refFolder, module)))
+                    continue;
+
+                const string sql = @"
+SELECT DISTINCT md.display_name
+FROM measurement_definitions md JOIN cameras c ON c.id = md.camera_id
+WHERE c.camera_name LIKE @m AND md.effective_end IS NULL AND md.var_type = 'Result'
+ORDER BY md.display_name;";
+                var names = new List<string>();
+                await using (var cmd = new MySqlCommand(sql, conn))
+                {
+                    cmd.Parameters.AddWithValue("@m", module + "%");
+                    await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+                    while (await reader.ReadAsync(ct).ConfigureAwait(false))
+                        names.Add(reader.GetString(0));
+                }
+                if (names.Count == 0)
+                    continue; // definitions not synced for this module yet
+
+                var demo = new Msa1Reference
+                {
+                    Module = module,
+                    Label = $"DEMO template for {module} — copy, rename and fill in the xm values (not evaluated)",
+                    CreatedAt = DateTime.Now,
+                    Template = true,
+                };
+                foreach (var n in names)
+                    demo.Values[n] = 0.0;
+
+                var written = demo.Save(refFolder, $"{Msa1Reference.TemplatePrefix}{module}.json");
+                _log.Information("MSA1 {Module}: created DEMO template {Path} ({Count} measurements).", module, written, names.Count);
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.Error(ex, "MSA1: failed to ensure DEMO templates.");
+        }
+    }
+
+    /// <summary>
+    /// MSA1 evaluation, PER PART with BEST-MATCH reference assignment (task C). The milled reference
+    /// parts have no readable DMC (camera emits fake DMCs), so each part group is matched to the best
+    /// <c>&lt;Module&gt;\MSA1\*.json</c> reference by its measured means (<see cref="Msa1Matcher"/>).
+    /// With a plausible match: Cg + Cgk (xm from the reference); a feature missing from the matched
+    /// reference → n/a (task C3). No plausible match → Cg-only + note (task C5). DEMO_ templates are
+    /// ignored. Falls back to the legacy module-wide <c>references</c> block when no MSA1 files exist.
+    /// </summary>
+    private async Task<(List<MsaMeasurementResult> Results, MsaVerdict Verdict, string Reason, List<string> Notes)>
+        EvaluateMsa1Async(MySqlConnection conn, List<MsaRow> rows, string module, string referenceFolder,
+            MsaReferenceFile? legacy, CancellationToken ct)
+    {
+        var results = new List<MsaMeasurementResult>();
+        var notes = new List<string>();
+        var criterion = MsaEvaluationText.Criterion(MsaType.Msa1);
+
+        // Tolerance + display name per definition (tolerance is per camera+parameter set, constant across parts).
+        var toleranceCache = new Dictionary<(int, int), double>();
+        var tolByMeasurement = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+        foreach (var defGroup in rows.GroupBy(r => r.DefinitionId))
+        {
+            var f = defGroup.First();
+            var tol = await GetToleranceAsync(conn, f.CameraId, f.ParameterSet, toleranceCache, ct).ConfigureAwait(false);
+            tolByMeasurement.TryAdd(f.DisplayName, tol);
+        }
+
+        // Candidate reference parts (non-DEMO); legacy references block as a fallback.
+        var candidates = Msa1Reference.LoadCandidates(referenceFolder, module)
+            .Select(r => new Msa1Matcher.Candidate(
+                string.IsNullOrWhiteSpace(r.Label) ? Path.GetFileNameWithoutExtension(r.SourceFile) : r.Label,
+                Path.GetFileName(r.SourceFile),
+                r.Values))
+            .ToList();
+        if (candidates.Count == 0 && legacy is { References.Count: > 0 })
+        {
+            candidates.Add(new Msa1Matcher.Candidate($"MSA_{module}.json (legacy)", $"MSA_{module}.json", legacy.References));
+            _log.Warning("MSA1 {Module}: no MSA1 reference files — using legacy references block (old format).", module);
+        }
+
+        foreach (var partGroup in rows.GroupBy(r => r.Dmc, StringComparer.OrdinalIgnoreCase))
+        {
+            var dmc = partGroup.Key;
+            var measGroups = partGroup.GroupBy(r => r.DisplayName, StringComparer.OrdinalIgnoreCase).ToList();
+
+            var partMeans = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+            foreach (var mg in measGroups)
+            {
+                var vals = mg.Where(r => r.Value.HasValue).Select(r => r.Value!.Value).ToList();
+                if (vals.Count > 0)
+                    partMeans[mg.Key] = MsaCalculator.Mean(vals);
+            }
+
+            var match = Msa1Matcher.Match(partMeans, tolByMeasurement, candidates);
+            var refValues = match.Plausible ? match.Best?.Values : null;
+            var matchedText = match.Plausible && match.Best is not null ? $"{match.Best.Label} [{match.Best.File}]" : string.Empty;
+            double? matchScore = match.Best is not null ? match.Score : null;
+
+            if (candidates.Count > 0 && !match.Plausible)
+                notes.Add($"part {dmc}: no reference part assigned (Cg only)");
+            if (match.Ambiguous && match.Best is not null)
+                notes.Add($"part {dmc}: ambiguous reference match — verify (using {match.Best.Label})");
+
+            foreach (var mg in measGroups)
+            {
+                var name = mg.Key;
+                var ctrl = mg.First().CameraName;
+                var defId = mg.First().DefinitionId;
+                var vals = mg.Where(r => r.Value.HasValue).Select(r => r.Value!.Value).ToList();
+                var n = vals.Count;
+                double? mean = n > 0 ? MsaCalculator.Mean(vals) : null;
+                double? sd = n >= 2 ? MsaCalculator.SampleStdDev(vals) : null;
+                tolByMeasurement.TryGetValue(name, out var tol);
+                double? tolN = tol > 0 ? tol : null;
+
+                double? cg = null, cgk = null, xmOut = null;
+                bool evaluated, passed;
+                string reason;
+
+                if (tol <= 0 || n < 2 || (sd ?? 0) <= 0)
+                {
+                    evaluated = false; passed = false;
+                    reason = tol <= 0 ? MsaEvaluationText.NoTolerance
+                        : n < 2 ? $"only n={n} value(s) (need ≥ 2)"
+                        : "all values identical (σ = 0)";
+                }
+                else
+                {
+                    var sigma = sd!.Value;
+                    cg = 0.20 * tol / (6.0 * sigma);
+                    if (refValues is not null && refValues.TryGetValue(name, out var xm))
+                    {
+                        xmOut = xm;
+                        cgk = (0.20 * tol - Math.Abs(mean!.Value - xm)) / (6.0 * sigma);
+                        evaluated = true;
+                        var fails = new List<string>();
+                        if (cg < MsaCalculator.CapabilityThreshold) fails.Add($"Cg {cg:0.00} < {MsaCalculator.CapabilityThreshold:0.00}");
+                        if (cgk < MsaCalculator.CapabilityThreshold) fails.Add($"Cgk {cgk:0.00} < {MsaCalculator.CapabilityThreshold:0.00}");
+                        passed = fails.Count == 0;
+                        reason = passed ? string.Empty : string.Join("; ", fails);
+                    }
+                    else if (refValues is not null)
+                    {
+                        // Matched a reference, but this feature is not in it (deleted entry) → n/a (task C3).
+                        evaluated = false; passed = false;
+                        reason = "not in reference part (n/a)";
+                    }
+                    else
+                    {
+                        // No plausible reference → Cg only (task C5).
+                        evaluated = true;
+                        passed = cg >= MsaCalculator.CapabilityThreshold;
+                        reason = passed ? "no reference part assigned (Cg only)"
+                            : $"Cg {cg:0.00} < {MsaCalculator.CapabilityThreshold:0.00} (Cg only, no reference part)";
+                    }
+                }
+
+                results.Add(new MsaMeasurementResult
+                {
+                    DefinitionId = defId, DisplayName = name, Controller = ctrl, Dmc = dmc,
+                    Cg = cg, Cgk = cgk, N = n, Mean = mean, StdDev = sd,
+                    ReferenceValue = xmOut, Tolerance = tolN,
+                    Criterion = criterion, Reason = reason, Evaluated = evaluated, Passed = passed,
+                    MatchedReference = matchedText, MatchScore = matchScore,
+                });
+            }
+        }
+
+        var parts = results.GroupBy(r => r.Dmc, StringComparer.OrdinalIgnoreCase)
+            .Select(g => (g.Key, MsaEvaluationText.PartVerdict(MsaType.Msa1, g.ToList())))
+            .ToList();
+        var (verdict, reason2) = MsaEvaluationText.OverallFromParts(parts);
+        return (results, verdict, reason2, notes);
     }
 
     private sealed record MsaRow(
@@ -872,11 +1088,13 @@ ORDER BY s.recorded_at DESC;";
 INSERT INTO msa_results
   (controller_name, dmc, base_id, msa_type, msa_version, definition_id, display_name,
    cg_value, cgk_value, pct_tolerance, expected_value, actual_value,
-   n_values, mean_value, std_dev, reference_value, tolerance, criterion, reason, evaluated, passed)
+   n_values, mean_value, std_dev, reference_value, tolerance, criterion, reason, evaluated,
+   matched_reference, match_score, passed)
 VALUES
   (@ctrl, @dmc, @base, @type, @ver, @def, @name,
    @cg, @cgk, @pct, @expected, @actual,
-   @n, @mean, @sd, @ref, @tol, @crit, @reason, @eval, @passed);";
+   @n, @mean, @sd, @ref, @tol, @crit, @reason, @eval,
+   @mref, @mscore, @passed);";
 
         foreach (var r in results)
         {
@@ -902,6 +1120,8 @@ VALUES
             cmd.Parameters.AddWithValue("@crit", (object?)(string.IsNullOrEmpty(r.Criterion) ? null : r.Criterion) ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@reason", (object?)(string.IsNullOrEmpty(r.Reason) ? null : r.Reason) ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@eval", r.Evaluated ? 1 : 0);
+            cmd.Parameters.AddWithValue("@mref", (object?)(string.IsNullOrEmpty(r.MatchedReference) ? null : r.MatchedReference) ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@mscore", (object?)r.MatchScore ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@passed", r.Passed ? 1 : 0);
             await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
         }
@@ -1120,29 +1340,78 @@ ORDER BY m.controller_name, m.dmc, m.loop_number, md.display_name;";
             Criterion = MsaEvaluationText.Criterion(msaType),
             ReferenceFile = referenceFile,
             ReferenceFileModified = referenceModified,
-            Rows = results.Select(r => new MsaReportRow
-            {
-                Controller = r.Controller,
-                Dmc = msaType == MsaType.LimitSample ? r.Dmc : string.Empty,
-                Measurement = r.DisplayName,
-                N = r.N,
-                Mean = r.Mean,
-                StdDev = r.StdDev,
-                Reference = r.ReferenceValue,
-                Tolerance = r.Tolerance,
-                Expected = r.Expected ?? string.Empty,
-                Actual = r.Actual ?? FormatActual(r),
-                Metric = msaType switch
-                {
-                    MsaType.Msa1 => $"Cg {FmtMetric(r.Cg)} / Cgk {FmtMetric(r.Cgk)}",
-                    MsaType.Msa3 => $"%P/T {FmtMetric(r.PctTolerance)}",
-                    _ => string.Empty,
-                },
-                Criterion = r.Criterion,
-                Reason = r.Reason,
-                Passed = r.Passed,
-            }).ToList(),
+            Rows = results.Select(r => ToReportRow(r, msaType)).ToList(),
         };
+    }
+
+    /// <summary>Map one evaluated measurement to a report row (shared by run-level and per-part reports).</summary>
+    private static MsaReportRow ToReportRow(MsaMeasurementResult r, MsaType msaType) => new()
+    {
+        Controller = r.Controller,
+        Dmc = msaType == MsaType.Msa3 ? string.Empty : r.Dmc,
+        Measurement = r.DisplayName,
+        N = r.N,
+        Mean = r.Mean,
+        StdDev = r.StdDev,
+        Reference = r.ReferenceValue,
+        Tolerance = r.Tolerance,
+        Expected = r.Expected ?? string.Empty,
+        Actual = r.Actual ?? FormatActual(r),
+        Metric = msaType switch
+        {
+            MsaType.Msa1 => $"Cg {FmtMetric(r.Cg)} / Cgk {FmtMetric(r.Cgk)}",
+            MsaType.Msa3 => $"%P/T {FmtMetric(r.PctTolerance)}",
+            _ => string.Empty,
+        },
+        Criterion = r.Criterion,
+        Reason = r.Reason,
+        Evaluated = r.Evaluated,
+        MatchedReference = r.MatchedReference,
+        Passed = r.Passed,
+    };
+
+    /// <summary>
+    /// Per-part PDF reports (task B4) for LimitSample/MSA1: one AllResults/FailuresOnly pair per DMC,
+    /// the file name carries BaseID AND DMC. Head/verdict are the PART's. Best-effort.
+    /// </summary>
+    private void GeneratePerPartPdfs(MsaReportData runReport, List<MsaMeasurementResult> results, MsaType msaType)
+    {
+        foreach (var g in results.GroupBy(r => r.Dmc, StringComparer.OrdinalIgnoreCase))
+        {
+            var partRows = g.ToList();
+            var verdict = MsaEvaluationText.PartVerdict(msaType, partRows);
+            var reason = verdict switch
+            {
+                MsaVerdict.Pass => string.Empty,
+                MsaVerdict.Fail => "one or more measurements failed",
+                _ => "part not evaluable (no reference / camera did not judge)",
+            };
+            var matched = partRows.Select(r => r.MatchedReference).FirstOrDefault(s => !string.IsNullOrEmpty(s)) ?? string.Empty;
+
+            var partReport = new MsaReportData
+            {
+                Module = runReport.Module,
+                TestType = runReport.TestType,
+                Controller = string.Join(", ", partRows.Select(r => r.Controller).Distinct()),
+                BaseId = runReport.BaseId,
+                Dmc = g.Key,
+                RunAt = runReport.RunAt,
+                OverallPass = verdict == MsaVerdict.Pass,
+                Verdict = verdict,
+                VerdictReason = string.IsNullOrEmpty(matched) ? reason : $"{reason}{(reason.Length > 0 ? "  ·  " : string.Empty)}reference: {matched}",
+                Notes = runReport.Notes.Where(n => n.Contains(g.Key, StringComparison.OrdinalIgnoreCase)).ToList(),
+                OutputDirectory = runReport.OutputDirectory,
+                Criterion = runReport.Criterion,
+                ReferenceFile = runReport.ReferenceFile,
+                ReferenceFileModified = runReport.ReferenceFileModified,
+                PartCount = 1,
+                LoopCount = runReport.LoopCount,
+                FromTime = runReport.FromTime,
+                ToTime = runReport.ToTime,
+                Rows = partRows.Select(r => ToReportRow(r, msaType)).ToList(),
+            };
+            GeneratePdf(partReport);
+        }
     }
 
     private static string FormatActual(MsaMeasurementResult r) =>

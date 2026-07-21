@@ -490,7 +490,28 @@ fills it from config so it is never a misleading "(none configured)".
 
 ### MSA Reference Files
 
-**MSA1 xm — module-wide** in `<ReferencePath>\MSA_<Module>.json` (`references`: measurement → xm).
+**MSA1 xm — per reference part with BEST-MATCH (changed 2026-07-21, task C).** The milled MSA1
+reference parts have no readable DMC (the camera emits fake DMCs, and one physical part appears under
+several fake DMCs in a run), so a part is matched to a reference by its measured values, not by DMC.
+Files: `<ReferencePath>\<Module>\MSA1\<Name>.json` (`HarryShared.Data.Msa1Reference`):
+```json
+{ "module":"M50", "label":"Referenzteil A", "created_at":"…", "template": false,
+  "values": { "Anode_Flatness_L": 0.012, "Pin_Area_1": 3.20 } }
+```
+- **DEMO templates:** at startup a `DEMO_<Module>.json` is auto-created for M10/M11/M20/M21/M50 with
+  ALL Result measurement names (from `measurement_definitions`) and 0 values + `template:true`.
+  Templates (`DEMO_` name or `template:true`) are **ignored** during evaluation — copy, rename, fill in.
+- **Best-match (`Msa1Matcher`, f=0.10, plausible ≥ 50 % hits):** per part (fake DMC), a measurement is
+  a *hit* when `|mean − xm| ≤ 0.10·tolerance`; the reference with the most hits wins (tie → smallest
+  Σ|mean−xm|/tolerance). Plausible match → Cg **and** Cgk (xm from the reference); a measurement
+  missing from the matched reference → **n/a** (never a fail). No plausible match → **Cg-only + note**.
+  Ambiguous (two references ~equally good) → a warning. Several fake DMCs may match the same file.
+  The chosen reference (label + file) and score are shown per part in the PDF and UI and stored in
+  `msa_results` (`matched_reference`, `match_score`). Legacy `MSA_<Module>.json` `references` is a
+  fallback when no MSA1 files exist.
+
+**MSA1 xm — legacy module-wide** in `<ReferencePath>\MSA_<Module>.json` (`references`: measurement → xm),
+read only as the best-match fallback above.
 
 **LimitSample — one file PER PART (per DMC), changed 2026-07-21.** Path:
 `<ReferencePath>\<Module>\LimitSamples\<sanitized-DMC>.json` (`[MSA] ReferencePath`, resolved from
@@ -516,6 +537,21 @@ when a module has no per-part files, the legacy module-wide `limit_sample_expect
 `MSA_<Module>.json` is read as a fallback with a WARNING ("old format"); the editor writes only
 per-part files. The editor lists taught parts (DMC, taught-at, #prepared errors) with open/edit/delete
 and logs + shows the fully resolved save path.
+
+**Per-part verdicts + SPS aggregation (task A, 2026-07-21).** LimitSample/MSA1 compute an explicit
+verdict PER PART (`MsaEvaluationText.PartVerdict`): INVALID if a part has no reference / nothing
+evaluated / (LimitSample) no prepared error checked; FAIL if any evaluated measurement failed; else
+PASS. The run result reported to the PLC is the **worst of the parts** (`OverallFromParts`): any part
+INVALID → `Error;<reason>`; else any part FAIL → `NG`; else `OK`. MSA3 is one study over all parts
+(`OverallVerdict`).
+
+**MSA UI (task B).** The MSA tab shows, per selected run: a **parts list** (DMC · per-part verdict ·
+"x/y ok" · MSA1 matched reference) and, for the selected part, its **measurements** (ok / nicht ok /
+n.a. + reason). Buttons act on the selected part: **Open PDF Complete**, **Open PDF (nur Fehler)** and
+**Open Folder** (`<ReportPath>\<Date>\<Module>\<BaseID>`). Per-part PDFs are generated for
+LimitSample/MSA1 with **BaseID + DMC** in the file name
+(`<Module>_<Type>_<BaseID>_<DMC>_AllResults.pdf` / `_FailuresOnly.pdf`); MSA3 keeps the run-level
+report. The Excel-export button was removed (the raw CSV already lives in the run's `RAW\` folder).
 
 ### Database Strategy for MSA
 - Use **separate table** `msa_measurements` (identical structure to `measurements_serial`)
