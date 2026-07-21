@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.IO;
+using HarryDataServer.Configuration;
 using HarryDataServer.Infrastructure;
 using HarryDataServer.Models;
 using QuestPDF.Fluent;
@@ -54,10 +55,13 @@ public sealed class PdfReportService : IPdfReportService
         var paths = ResolvePaths(report);
         Directory.CreateDirectory(Path.GetDirectoryName(paths.AllResults)!);
 
-        BuildDocument(report, report.Rows).GeneratePdf(paths.AllResults);
+        // Fill the reference-file head from config when the report did not carry it (on-demand UI path, task 1).
+        var (refFile, refMtime) = ResolveReferenceInfo(report);
+
+        BuildDocument(report, report.Rows, refFile, refMtime).GeneratePdf(paths.AllResults);
 
         var failures = report.Rows.Where(r => !r.Passed).ToList();
-        BuildDocument(report, failures).GeneratePdf(paths.FailuresOnly);
+        BuildDocument(report, failures, refFile, refMtime).GeneratePdf(paths.FailuresOnly);
 
         _log.Information("MSA PDF reports written for {Module}/{Type} ({Failures} failure(s)): {All} | {Fail}",
             report.Module, report.TestType, failures.Count, paths.AllResults, paths.FailuresOnly);
@@ -66,7 +70,22 @@ public sealed class PdfReportService : IPdfReportService
 
     private static string Fmt(double? v) => v?.ToString("0.###", CultureInfo.InvariantCulture) ?? "—";
 
-    private static IDocument BuildDocument(MsaReportData report, IReadOnlyList<MsaReportRow> rows) =>
+    /// <summary>Resolve the reference file path + mtime for the head, filling from config when the
+    /// report did not carry it (e.g. the on-demand UI path builds via <see cref="MsaReportData.FromRun"/>).</summary>
+    private (string File, DateTime? Modified) ResolveReferenceInfo(MsaReportData report)
+    {
+        var file = report.ReferenceFile;
+        if (string.IsNullOrEmpty(file))
+            file = MsaReferenceLoader.ReferenceFilePath(_config.Config.Msa.ReferencePath, report.Module);
+
+        var mtime = report.ReferenceFileModified;
+        if (mtime is null && !string.IsNullOrEmpty(file) && File.Exists(file))
+            mtime = File.GetLastWriteTime(file);
+        return (file, mtime);
+    }
+
+    private static IDocument BuildDocument(
+        MsaReportData report, IReadOnlyList<MsaReportRow> rows, string referenceFile, DateTime? referenceModified) =>
         Document.Create(container =>
         {
             container.Page(page =>
@@ -100,18 +119,27 @@ public sealed class PdfReportService : IPdfReportService
                     col.Item().Text(t =>
                     {
                         t.Span("Reference file: ").SemiBold();
-                        t.Span(string.IsNullOrEmpty(report.ReferenceFile) ? "(none configured)" : report.ReferenceFile);
-                        t.Span(report.ReferenceFileModified is { } m
+                        t.Span(string.IsNullOrEmpty(referenceFile) ? "(none configured)" : referenceFile);
+                        t.Span(referenceModified is { } m
                             ? $"  (modified {m:yyyy-MM-dd HH:mm:ss})"
                             : "  (NOT FOUND)");
                     });
                     col.Item().PaddingTop(3).Text(t =>
                     {
                         t.Span("Overall result: ").SemiBold();
-                        var span = t.Span(report.OverallPass ? "PASS" : "FAIL").Bold();
-                        if (report.OverallPass) span.FontColor(Colors.Green.Darken2);
-                        else span.FontColor(Colors.Red.Darken2);
+                        var (label, color) = report.Verdict switch
+                        {
+                            MsaVerdict.Pass => ("PASS", Colors.Green.Darken2),
+                            MsaVerdict.Fail => ("FAIL", Colors.Red.Darken2),
+                            _ => ("INVALID", Colors.Orange.Darken2),
+                        };
+                        t.Span(label).Bold().FontColor(color);
+                        if (!string.IsNullOrEmpty(report.VerdictReason))
+                            t.Span($"  —  {report.VerdictReason}").FontColor(color);
                     });
+                    // Cameras that produced no real judgement in the run (task 4).
+                    foreach (var warning in report.ControllerWarnings)
+                        col.Item().Text(t => t.Span("⚠ " + warning).FontColor(Colors.Orange.Darken2).SemiBold());
                     col.Item().PaddingTop(3).LineHorizontal(1).LineColor(Colors.Grey.Medium);
                 });
 

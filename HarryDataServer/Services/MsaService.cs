@@ -308,7 +308,7 @@ VALUES
         const string sql = @"
 SELECT base_id, controller_name, evaluated_at, display_name, cg_value, cgk_value, pct_tolerance,
        expected_value, actual_value, passed, n_values, mean_value, std_dev, reference_value,
-       tolerance, criterion, reason
+       tolerance, criterion, reason, evaluated
 FROM msa_results
 WHERE msa_type = @type AND controller_name LIKE @mod
 ORDER BY evaluated_at, base_id, id;";
@@ -351,6 +351,7 @@ ORDER BY evaluated_at, base_id, id;";
                     Tolerance = reader.IsDBNull(14) ? null : reader.GetDouble(14),
                     Criterion = reader.IsDBNull(15) ? string.Empty : reader.GetString(15),
                     Reason = reader.IsDBNull(16) ? string.Empty : reader.GetString(16),
+                    Evaluated = !reader.IsDBNull(17) && reader.GetInt32(17) != 0,
                 });
             }
 
@@ -461,25 +462,47 @@ ORDER BY evaluated_at, base_id, id;";
 
             var msaType = MsaTypeExtensions.FromDbString(rows[0].MsaType);
             var reference = GetReference(module);
+            var referenceLoaded = reference is not null;
+
+            // Controllers that produced at least one real OK/NOK judgement (status 0/1). A controller
+            // delivering only status 2/−1 "did not evaluate" (task 4) — its LimitSample features are
+            // neutralised (neither pass nor fail) and surfaced as a warning.
+            var judged = rows.GroupBy(r => r.CameraName)
+                .Where(g => g.Any(r => r.ResultStatus is 0 or 1))
+                .Select(g => g.Key)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
             var toleranceCache = new Dictionary<(int, int), double>();
             var results = new List<MsaMeasurementResult>();
-
             foreach (var group in rows.GroupBy(r => r.DefinitionId))
             {
-                var first = group.First();
+                var list = group.ToList();
+                var first = list[0];
                 var tolerance = await GetToleranceAsync(conn, first.CameraId, first.ParameterSet, toleranceCache, ct)
                     .ConfigureAwait(false);
 
-                results.Add(Evaluate(msaType, group.ToList(), tolerance, reference));
+                results.Add(Evaluate(msaType, list, tolerance, reference, judged.Contains(first.CameraName)));
             }
 
-            var passed = results.Count > 0 && results.All(r => r.Passed);
+            // Overall verdict — never a silent PASS (task 2): Invalid when nothing could be judged.
+            var (verdict, verdictReason) = MsaEvaluationText.OverallVerdict(msaType, referenceLoaded, results);
 
-            // Never a silent 0/FAIL (task B2): log every FAIL/degenerate measurement with its reason.
-            foreach (var r in results.Where(r => !r.Passed))
+            // Cameras that produced no real judgement in this run (task 4).
+            var controllerWarnings = rows.Select(r => r.CameraName).Distinct(StringComparer.OrdinalIgnoreCase)
+                .Where(c => !judged.Contains(c))
+                .OrderBy(c => c, StringComparer.OrdinalIgnoreCase)
+                .Select(c => $"{c}: {MsaEvaluationText.CameraDidNotJudge}")
+                .ToList();
+
+            if (verdict != MsaVerdict.Pass)
+                _log.Warning("MSA {Type} BaseID {Base}: overall {Verdict}{Reason}.", msaType, baseId, verdict,
+                    string.IsNullOrEmpty(verdictReason) ? string.Empty : $" — {verdictReason}");
+            foreach (var r in results.Where(r => r.Evaluated && !r.Passed))
                 _log.Warning("MSA {Type} {Ctrl}/{Name} base={Base}: FAIL — {Reason}",
                     msaType, r.Controller, r.DisplayName, baseId,
                     string.IsNullOrWhiteSpace(r.Reason) ? "(no reason given)" : r.Reason);
+            foreach (var w in controllerWarnings)
+                _log.Warning("MSA {Type} BaseID {Base}: {Warning}", msaType, baseId, w);
 
             await StoreResultsAsync(conn, baseId, msaType, results, ct).ConfigureAwait(false);
 
@@ -488,7 +511,8 @@ ORDER BY evaluated_at, base_id, id;";
             var runAt = BaseId.TryGetTimestamp(baseId, out var dt) ? dt : DateTime.Now;
             var reportDir = MsaResultLayout.EnsureWritableReportDir(
                 msa.ReportPath, msa.ReportFallbackPath, msa.ResultPath, module, runAt, _log);
-            var report = BuildReport(baseId, module, msaType, rows, results, passed, runAt, msa.ReferencePath, reportDir);
+            var report = BuildReport(baseId, module, msaType, rows, results, verdict, verdictReason,
+                controllerWarnings, runAt, msa.ReferencePath, reportDir);
 
             // Existing per-run collection (measurement summary CSV + images) stays under ResultPath.
             ExportCsv(baseId, module, msaType, results);
@@ -497,10 +521,16 @@ ORDER BY evaluated_at, base_id, id;";
             GeneratePdf(report);
             await ExportRawDataAsync(conn, baseId, module, msaType, reportDir, ct).ConfigureAwait(false);
 
-            var word = passed ? "OK" : "NG";
+            // Map the verdict to the PLC word (never a silent OK): Pass→OK, Fail→NG, Invalid→Error;<reason>.
+            var word = verdict switch
+            {
+                MsaVerdict.Pass => "OK",
+                MsaVerdict.Fail => "NG",
+                _ => $"Error;{verdictReason}",
+            };
             _evaluations[baseId] = word;
-            _log.Information("MSA {Type} for BaseID {Base}: {Verdict} ({Count} measurements).",
-                msaType, baseId, word, results.Count);
+            _log.Information("MSA {Type} for BaseID {Base}: {Verdict} ({Count} measurement(s), {Eval} evaluated).",
+                msaType, baseId, verdict, results.Count, results.Count(r => r.Evaluated));
 
             // Push the result to the PLC on the same open connection — no re-request needed.
             // (The cached word above also lets a late re-Request still answer, as a safety net.)
@@ -529,7 +559,7 @@ ORDER BY evaluated_at, base_id, id;";
     /// verdict (n, mean, σ, reference, tolerance) and a plain-text reason on FAIL (task B).
     /// </summary>
     private MsaMeasurementResult Evaluate(
-        MsaType msaType, List<MsaRow> group, double tolerance, MsaReferenceFile? reference)
+        MsaType msaType, List<MsaRow> group, double tolerance, MsaReferenceFile? reference, bool controllerJudged)
     {
         var first = group[0];
         var values = group.Where(r => r.Value.HasValue).Select(r => r.Value!.Value).ToList();
@@ -553,7 +583,8 @@ ORDER BY evaluated_at, base_id, id;";
                     Controller = first.CameraName, Dmc = first.Dmc,
                     Cg = r.Cg, Cgk = r.Cgk, N = n, Mean = mean, StdDev = sd,
                     ReferenceValue = hasRef ? xm : null, Tolerance = tol,
-                    Criterion = criterion, Reason = reason, Passed = passed,
+                    Criterion = criterion, Reason = reason,
+                    Evaluated = tolerance > 0 && n >= 2 && (sd ?? 0) > 0, Passed = passed,
                 };
             }
             case MsaType.Msa3:
@@ -571,7 +602,8 @@ ORDER BY evaluated_at, base_id, id;";
                     DefinitionId = first.DefinitionId, DisplayName = first.DisplayName,
                     Controller = first.CameraName, Dmc = first.Dmc,
                     PctTolerance = r.PctTolerance, N = n, Mean = mean, StdDev = sd, Tolerance = tol,
-                    Criterion = criterion, Reason = reason, Passed = passed,
+                    Criterion = criterion, Reason = reason,
+                    Evaluated = tolerance > 0 && dof > 0, Passed = passed,
                 };
             }
             case MsaType.LimitSample:
@@ -579,15 +611,30 @@ ORDER BY evaluated_at, base_id, id;";
                 var hasRef = reference?.LimitSampleExpected.ContainsKey(first.DisplayName) ?? false;
                 var shouldFail = reference?.LimitSampleExpected.GetValueOrDefault(first.DisplayName) ?? false;
                 var wasRejected = group.Any(r => r.ResultStatus == 0);
-                var (passed, reason) = MsaEvaluationText.LimitSampleVerdict(hasRef, shouldFail, wasRejected);
+
+                bool passed, evaluated;
+                string reason;
+                if (!controllerJudged)
+                {
+                    // Camera produced no real OK/NOK judgement (only status 2/−1): neither pass nor
+                    // fail — surfaced as a controller warning, not counted toward an overall PASS (task 4).
+                    passed = true; evaluated = false; reason = MsaEvaluationText.CameraDidNotJudge;
+                }
+                else
+                {
+                    (passed, reason) = MsaEvaluationText.LimitSampleVerdict(hasRef, shouldFail, wasRejected);
+                    evaluated = hasRef;
+                }
+
                 return new MsaMeasurementResult
                 {
                     DefinitionId = first.DefinitionId, DisplayName = first.DisplayName,
                     Controller = first.CameraName, Dmc = first.Dmc,
                     Expected = shouldFail ? "reject" : "accept",
-                    Actual = wasRejected ? "rejected" : "accepted",
+                    Actual = !controllerJudged ? "not evaluated" : (wasRejected ? "rejected" : "accepted"),
                     N = n, Mean = mean, StdDev = sd,
-                    Criterion = criterion, Reason = reason, Passed = passed,
+                    Criterion = criterion, Reason = reason,
+                    Evaluated = evaluated, ExpectedReject = hasRef && shouldFail, Passed = passed,
                 };
             }
             default:
@@ -595,7 +642,7 @@ ORDER BY evaluated_at, base_id, id;";
                 {
                     DefinitionId = first.DefinitionId, DisplayName = first.DisplayName,
                     Controller = first.CameraName, Dmc = first.Dmc, Passed = false,
-                    Reason = "unknown MSA type",
+                    Evaluated = false, Reason = "unknown MSA type",
                 };
         }
     }
@@ -688,11 +735,11 @@ ORDER BY s.recorded_at DESC;";
 INSERT INTO msa_results
   (controller_name, dmc, base_id, msa_type, msa_version, definition_id, display_name,
    cg_value, cgk_value, pct_tolerance, expected_value, actual_value,
-   n_values, mean_value, std_dev, reference_value, tolerance, criterion, reason, passed)
+   n_values, mean_value, std_dev, reference_value, tolerance, criterion, reason, evaluated, passed)
 VALUES
   (@ctrl, @dmc, @base, @type, @ver, @def, @name,
    @cg, @cgk, @pct, @expected, @actual,
-   @n, @mean, @sd, @ref, @tol, @crit, @reason, @passed);";
+   @n, @mean, @sd, @ref, @tol, @crit, @reason, @eval, @passed);";
 
         foreach (var r in results)
         {
@@ -717,6 +764,7 @@ VALUES
             cmd.Parameters.AddWithValue("@tol", (object?)r.Tolerance ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@crit", (object?)(string.IsNullOrEmpty(r.Criterion) ? null : r.Criterion) ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@reason", (object?)(string.IsNullOrEmpty(r.Reason) ? null : r.Reason) ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@eval", r.Evaluated ? 1 : 0);
             cmd.Parameters.AddWithValue("@passed", r.Passed ? 1 : 0);
             await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
         }
@@ -898,7 +946,8 @@ ORDER BY m.controller_name, m.dmc, m.loop_number, md.display_name;";
     /// (parts/loops/time range/reference file) and per-measurement detail (task B).</summary>
     private MsaReportData BuildReport(
         string baseId, string module, MsaType msaType, List<MsaRow> rows,
-        List<MsaMeasurementResult> results, bool passed, DateTime runAt, string referencePath, string? outputDir)
+        List<MsaMeasurementResult> results, MsaVerdict verdict, string verdictReason,
+        IReadOnlyList<string> controllerWarnings, DateTime runAt, string referencePath, string? outputDir)
     {
         var referenceFile = MsaReferenceLoader.ReferenceFilePath(referencePath, module);
         DateTime? referenceModified = !string.IsNullOrEmpty(referenceFile) && File.Exists(referenceFile)
@@ -912,7 +961,10 @@ ORDER BY m.controller_name, m.dmc, m.loop_number, md.display_name;";
             Controller = string.Join(", ", results.Select(r => r.Controller).Distinct()),
             BaseId = baseId,
             RunAt = runAt,
-            OverallPass = passed,
+            OverallPass = verdict == MsaVerdict.Pass,
+            Verdict = verdict,
+            VerdictReason = verdictReason,
+            ControllerWarnings = controllerWarnings,
             OutputDirectory = outputDir,
             PartCount = rows.Select(r => r.Dmc).Distinct().Count(),
             LoopCount = rows.Select(r => r.LoopNumber).Distinct().Count(),

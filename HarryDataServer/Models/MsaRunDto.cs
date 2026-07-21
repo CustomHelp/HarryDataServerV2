@@ -20,6 +20,9 @@ public sealed class MsaResultRow
     public string Criterion { get; init; } = string.Empty;
     public string Reason { get; init; } = string.Empty;
 
+    /// <summary>Whether the measurement was actually assessed against its criterion (task 2).</summary>
+    public bool Evaluated { get; init; }
+
     public bool Passed { get; init; }
 }
 

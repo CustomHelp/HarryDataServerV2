@@ -256,7 +256,25 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
-        var marked = _allRows.Where(r => r.Module == module && r.Expectation != Expectation.Ignore).ToList();
+        // Teach guard (task 3): a controller that produced no real OK/NOK judgement (only status 2/99,
+        // i.e. every row is Ignore) must NOT be a teach source. If NO camera of the module judged, refuse.
+        var moduleRows = _allRows.Where(r => r.Module == module).ToList();
+        var camerasJudged = moduleRows
+            .GroupBy(r => r.CameraName, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Any(r => r.Expectation != Expectation.Ignore), StringComparer.OrdinalIgnoreCase);
+        var notJudged = camerasJudged.Where(kv => !kv.Value).Select(kv => kv.Key).OrderBy(c => c).ToList();
+
+        if (camerasJudged.Count > 0 && camerasJudged.Values.All(v => !v))
+        {
+            StatusMessage = $"Kamera hat nicht bewertet – Einlernen nicht möglich (Modul {module}: nur Status 2/99).";
+            MessageBox.Show(
+                $"Der/die Controller von {module} haben für dieses Teil keine Bewertung (Status 0/1) geliefert – nur Status 2/99.\n\n" +
+                "Einlernen nicht möglich. Bitte Kameraprogramm/-modus prüfen und ein Grenzmuster verwenden, das die Kamera als NOK erkennt.",
+                "Einlernen nicht möglich", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var marked = moduleRows.Where(r => r.Expectation != Expectation.Ignore).ToList();
         if (marked.Count == 0)
         {
             StatusMessage = $"No measurements marked for module {module}.";
@@ -289,7 +307,14 @@ public partial class MainViewModel : ObservableObject
             var conflictNote = conflicts.Count == 0
                 ? string.Empty
                 : $"  ⚠ {conflicts.Count} duplicate name(s) had mixed marks → set to ShouldFail: {string.Join(", ", conflicts.Take(5))}";
-            StatusMessage = $"Saved {Path.GetFileName(path)} — {expected.Count} entries ({fails} should-fail).{conflictNote}";
+            // Task 3: a reference with no prepared errors (ShouldFail) can never prove a rejection — warn.
+            var vacuousNote = fails == 0
+                ? "  ⚠ Keine erwarteten Fehler (ShouldFail) — die Referenz prüft nichts; die MSA-Auswertung meldet dann INVALID."
+                : string.Empty;
+            var notJudgedNote = notJudged.Count == 0
+                ? string.Empty
+                : $"  ⚠ Nicht bewertet (nur Status 2/99): {string.Join(", ", notJudged.Take(5))}";
+            StatusMessage = $"Saved {Path.GetFileName(path)} — {expected.Count} entries ({fails} should-fail).{conflictNote}{vacuousNote}{notJudgedNote}";
         }
         catch (Exception ex)
         {

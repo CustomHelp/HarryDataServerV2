@@ -9,6 +9,15 @@ public enum MsaType
     LimitSample,
 }
 
+/// <summary>Overall verdict of an MSA run. <see cref="Invalid"/> means the run could not be judged
+/// (e.g. no limits, no reference, nothing evaluated) — it is NEVER a silent PASS (task 2).</summary>
+public enum MsaVerdict
+{
+    Invalid,
+    Pass,
+    Fail,
+}
+
 public static class MsaTypeExtensions
 {
     public static MsaType FromMode(CameraOperatingMode mode) => mode switch
@@ -97,6 +106,15 @@ public sealed class MsaMeasurementResult
 
     /// <summary>Plain-text reason — always set on FAIL/degenerate (never a silent 0/FAIL), empty on a clean pass.</summary>
     public string Reason { get; init; } = string.Empty;
+
+    /// <summary>True only when this measurement was actually assessed against its criterion (MSA1/3:
+    /// a real capability with tolerance &gt; 0 and enough data; LimitSample: a reference entry existed
+    /// AND the camera actually judged). Non-evaluated rows do NOT count toward an overall PASS (task 2).</summary>
+    public bool Evaluated { get; init; }
+
+    /// <summary>LimitSample only: the reference marks this measurement as a prepared error that must be
+    /// rejected. An overall PASS requires at least one such expected error to have been checked (task 2).</summary>
+    public bool ExpectedReject { get; init; }
 
     public bool Passed { get; init; }
 }

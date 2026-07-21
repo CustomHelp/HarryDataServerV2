@@ -52,10 +52,12 @@ public sealed class MsaReferenceLoader
         if (string.IsNullOrWhiteSpace(referenceFolder))
             return null;
 
-        var path = Path.Combine(referenceFolder, $"MSA_{module}.json");
+        // Always log the FULL resolved path so "not loaded" issues are diagnosable (task 1).
+        var path = Path.GetFullPath(Path.Combine(referenceFolder, $"MSA_{module}.json"));
         if (!File.Exists(path))
         {
-            _log.Warning("MSA reference file not found for module {Module}: {Path}", module, path);
+            _log.Warning("MSA reference for {Module}: file NOT FOUND at {Path} (resolved from ReferencePath '{Folder}').",
+                module, path, referenceFolder);
             return null;
         }
 
@@ -64,13 +66,21 @@ public sealed class MsaReferenceLoader
             var json = File.ReadAllText(path);
             var file = JsonSerializer.Deserialize<MsaReferenceFile>(json, Options);
             if (file is not null)
-                _log.Information("Loaded MSA reference for {Module} ({Count} references).",
-                    module, file.References.Count);
+            {
+                var expectedRejects = file.LimitSampleExpected.Count(kv => kv.Value);
+                _log.Information(
+                    "MSA reference for {Module}: LOADED from {Path} — {Refs} xm reference(s), {Entries} limit-sample entrie(s) ({Rejects} expected reject(s)).",
+                    module, path, file.References.Count, file.LimitSampleExpected.Count, expectedRejects);
+            }
+            else
+            {
+                _log.Warning("MSA reference for {Module}: file {Path} parsed to null.", module, path);
+            }
             return file;
         }
         catch (Exception ex)
         {
-            _log.Error(ex, "Failed to parse MSA reference file {Path}", path);
+            _log.Error(ex, "MSA reference for {Module}: FAILED to parse {Path}.", module, path);
             return null;
         }
     }

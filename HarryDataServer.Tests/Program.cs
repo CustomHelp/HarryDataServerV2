@@ -38,6 +38,7 @@ internal static class Program
         Msa1_TooFewValues_ReportsReason();
         MsaCalculator_Msa3_ComputesPctTolerance();
         MsaChannelForModule_MapsBothWays();
+        OverallVerdict_NoVacuousPass();
 
         Console.WriteLine();
         if (_failures == 0)
@@ -174,6 +175,33 @@ internal static class Program
             SpsChannelExtensions.MsaChannelForModule(SpsChannel.MsaM11.ModuleKey()));
         AssertTrue("unknown module -> null", SpsChannelExtensions.MsaChannelForModule("XX") is null);
     }
+
+    private static void OverallVerdict_NoVacuousPass()
+    {
+        Console.WriteLine("[Case J] Overall verdict — never a vacuous PASS (task 2)");
+        // LimitSample: nothing evaluated → INVALID (was a false PASS before).
+        AssertEqual("all not-evaluated → INVALID", MsaVerdict.Invalid,
+            MsaEvaluationText.OverallVerdict(MsaType.LimitSample, true,
+                new[] { Res(false, true), Res(false, true) }).Verdict);
+        // LimitSample: evaluated but no prepared error to verify → INVALID.
+        AssertEqual("no expected reject → INVALID", MsaVerdict.Invalid,
+            MsaEvaluationText.OverallVerdict(MsaType.LimitSample, true,
+                new[] { Res(true, true, expectedReject: false) }).Verdict);
+        // LimitSample: a prepared error correctly rejected → PASS.
+        AssertEqual("expected reject detected → PASS", MsaVerdict.Pass,
+            MsaEvaluationText.OverallVerdict(MsaType.LimitSample, true,
+                new[] { Res(true, true, expectedReject: true) }).Verdict);
+        // LimitSample: a prepared error NOT rejected → FAIL.
+        AssertEqual("expected reject missed → FAIL", MsaVerdict.Fail,
+            MsaEvaluationText.OverallVerdict(MsaType.LimitSample, true,
+                new[] { Res(true, false, expectedReject: true) }).Verdict);
+        // MSA3: nothing evaluable (e.g. tolerance 0) → INVALID (not a vacuous pass).
+        AssertEqual("MSA3 nothing evaluated → INVALID", MsaVerdict.Invalid,
+            MsaEvaluationText.OverallVerdict(MsaType.Msa3, true, new[] { Res(false, false) }).Verdict);
+    }
+
+    private static MsaMeasurementResult Res(bool evaluated, bool passed, bool expectedReject = false) =>
+        new() { DisplayName = "x", Controller = "c", Evaluated = evaluated, Passed = passed, ExpectedReject = expectedReject };
 
     // ---- helpers -----------------------------------------------------------
 

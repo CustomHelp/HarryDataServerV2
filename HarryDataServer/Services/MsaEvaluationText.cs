@@ -28,6 +28,48 @@ public static class MsaEvaluationText
     public static string NoTolerance =>
         "no tolerance available (no Min/Max limits stored for this parameter set — request a Settings telegram)";
 
+    /// <summary>Reason/warning when a controller produced no real OK/NOK judgement in the run (only
+    /// status 2 "not evaluated" / −1 / −2), so its measurements cannot pass or fail (task 4).</summary>
+    public static string CameraDidNotJudge =>
+        "camera did not evaluate (only status 2/−1) — check program/mode";
+
+    /// <summary>
+    /// Overall run verdict (task 2). Never a silent PASS: returns <see cref="MsaVerdict.Invalid"/>
+    /// with a plain reason when nothing could be judged. A LimitSample PASS additionally requires at
+    /// least one expected error (prepared reject) to have been actually checked.
+    /// </summary>
+    public static (MsaVerdict Verdict, string Reason) OverallVerdict(
+        MsaType type, bool referenceLoaded, IReadOnlyList<MsaMeasurementResult> results)
+    {
+        if (results.Count == 0)
+            return (MsaVerdict.Invalid, "no measurements were received for this run");
+
+        var evaluated = results.Where(r => r.Evaluated).ToList();
+        if (evaluated.Count == 0)
+        {
+            var why = type switch
+            {
+                MsaType.LimitSample => referenceLoaded
+                    ? "no measurement had a matching reference entry, or the camera did not judge"
+                    : "reference file missing — no expected pass/fail defined",
+                MsaType.Msa1 or MsaType.Msa3 =>
+                    "no measurement could be evaluated (no tolerance/limits — is the settings table empty? — or too few values)",
+                _ => "no measurement could be evaluated",
+            };
+            return (MsaVerdict.Invalid, $"{type.ToDbString()}: {why}");
+        }
+
+        if (type == MsaType.LimitSample && !evaluated.Any(r => r.ExpectedReject))
+            return (MsaVerdict.Invalid,
+                "LimitSample: no prepared error in the reference to verify (need ≥ 1 expected reject)");
+
+        var failed = evaluated.Count(r => !r.Passed);
+        if (failed > 0)
+            return (MsaVerdict.Fail, $"{failed} of {evaluated.Count} evaluated measurement(s) failed");
+
+        return (MsaVerdict.Pass, string.Empty);
+    }
+
     /// <summary>MSA1 verdict + reason from the computed capability and context.</summary>
     public static (bool Passed, string Reason) Msa1Verdict(
         int n, double sigma, double tolerance, double cg, double cgk, bool hasReference)

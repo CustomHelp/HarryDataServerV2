@@ -436,6 +436,33 @@ a Settings telegram)*, *only n=3 value(s) (need ≥ 2)*, *%P/T 34.2 % > 20 %*, *
 **most common live cause of all-zero/FAIL is an empty `settings` table → `T = 0`**; the tolerance is
 `Max − Min` from `settings`, which is populated only after a Settings telegram is received/requested.
 
+**Overall verdict is tri-state — never a vacuous PASS (`MsaVerdict`, added 2026-07-21).** Only
+measurements with `Evaluated = true` count toward the verdict (MSA1/3: a real capability with
+`T > 0` and enough data; LimitSample: a reference entry existed AND the camera actually judged). The
+run is **`Invalid`** (pushed as `Error;<reason>`, not OK) when: no measurements, or **0 evaluated**
+(e.g. reference missing / all "no reference entry" / no limits), or — **LimitSample** — **no expected
+error (prepared reject) was checked**. `Pass` requires ≥1 evaluated, all evaluated passed, and (for
+LimitSample) ≥1 expected reject verified; otherwise `Fail`. Per-row `evaluated` is stored in
+`msa_results`, so the UI (`MsaReportData.FromRun`) recomputes the same verdict and never shows a
+vacuous PASS either.
+
+**Camera-did-not-judge (task 4).** A controller that produced **no real OK/NOK** in the run (only
+status 2 "not evaluated" / −1) is surfaced per controller in the report head and log
+("*camera did not evaluate (only status 2/−1) — check program/mode*"); its LimitSample features are
+neutralised (neither pass nor fail, `Evaluated = false`) so they cannot create a false PASS.
+
+**LimitSample teach guard (`HarryLimitSample`).** The teach tool pre-marks each measurement from its
+result status (1 → ShouldPass, 0 → ShouldFail, else Ignore). Saving is **refused** when the selected
+module's controllers produced no judgement at all in the scanned part ("*Kamera hat nicht bewertet –
+Einlernen nicht möglich*"), and a reference with **0 ShouldFail** entries is flagged (it would make
+the run `Invalid`).
+
+**Reference loading is always logged with the full resolved path** (`MsaReferenceLoader`):
+`LOADED from <path> — N xm reference(s), M limit-sample entrie(s) (K expected reject(s))` or
+`NOT FOUND at <path>`. The path resolves relative to the Harry.ini folder (absolute/UNC honoured).
+The PDF head shows the reference file path + modified date (or NOT FOUND); the on-demand UI path
+fills it from config so it is never a misleading "(none configured)".
+
 **Report + raw export + paths (tasks B/C/D):**
 - Each `msa_results` row also stores `n_values`, `mean_value`, `std_dev`, `reference_value`,
   `tolerance`, `criterion`, `reason` (schema auto-added on startup).
