@@ -95,4 +95,18 @@ public sealed class Msa1Reference
     /// <summary>The real (non-template) references usable for best-match.</summary>
     public static List<Msa1Reference> LoadCandidates(string referenceFolder, string module) =>
         LoadAll(referenceFolder, module).Where(r => !r.IsTemplate).ToList();
+
+    /// <summary>
+    /// Best-match candidates for the module AND its baugleich mirror (M10↔M11, M20↔M21): an MSA1
+    /// reference part taught on one strand is also a valid candidate on the other. Modules without a
+    /// mirror behave exactly like <see cref="LoadCandidates"/>.
+    /// </summary>
+    public static List<Msa1Reference> LoadCandidatesWithMirror(string referenceFolder, string module)
+    {
+        var list = LoadCandidates(referenceFolder, module);
+        var mirror = ModuleMirror.MirrorOf(module);
+        if (mirror is not null)
+            list.AddRange(LoadCandidates(referenceFolder, mirror));
+        return list;
+    }
 }

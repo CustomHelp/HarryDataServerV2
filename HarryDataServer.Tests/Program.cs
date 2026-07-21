@@ -48,6 +48,7 @@ internal static class Program
         Msa1Reference_TemplatesAndCandidates();
         PerPartPdfName_ContainsBaseIdAndDmc();
         PartAggregation_WorstOfParts();
+        MirrorModules_ShareReferences();
 
         Console.WriteLine();
         if (_failures == 0)
@@ -337,6 +338,39 @@ internal static class Program
             MsaEvaluationText.OverallFromParts(new[] { ("p1", MsaVerdict.Pass), ("p2", MsaVerdict.Fail) }).Verdict);
         AssertEqual("all PASS → PASS", MsaVerdict.Pass,
             MsaEvaluationText.OverallFromParts(new[] { ("p1", MsaVerdict.Pass), ("p2", MsaVerdict.Pass) }).Verdict);
+    }
+
+    private static void MirrorModules_ShareReferences()
+    {
+        Console.WriteLine("[Case R] Baugleich mirror shares LimitSample + MSA1 references (M10<->M11)");
+        AssertEqual("MirrorOf M10 = M11", "M11", ModuleMirror.MirrorOf("M10"));
+        AssertEqual("MirrorOf M11 = M10", "M10", ModuleMirror.MirrorOf("M11"));
+        AssertTrue("MirrorOf M50 = null", ModuleMirror.MirrorOf("M50") is null);
+
+        var tmp = Path.Combine(Path.GetTempPath(), "hds_mirror_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            // A LimitSample part taught on M11 must be visible when loading references for M10.
+            var ls = new LimitSampleReference { Dmc = "MIRROR-DMC-1", Module = "M11", TaughtAt = DateTime.UnixEpoch };
+            ls.Expected["A"] = LimitSampleReference.ShouldFail;
+            ls.Save(tmp);
+            var seenFromM10 = LimitSampleReference.LoadAllWithMirror(tmp, "M10");
+            AssertTrue("M10 sees the M11 LimitSample part", seenFromM10.Any(r => r.Dmc == "MIRROR-DMC-1"));
+
+            // An MSA1 reference taught on M11 must be a best-match candidate for M10.
+            var m1 = new Msa1Reference { Module = "M11", Label = "Mirror Ref" };
+            m1.Values["A"] = 1.0;
+            m1.Save(tmp, "MirrorRef");
+            var candFromM10 = Msa1Reference.LoadCandidatesWithMirror(tmp, "M10");
+            AssertTrue("M10 gets the M11 MSA1 candidate", candFromM10.Any(c => c.Label == "Mirror Ref"));
+
+            // A module without a mirror is unaffected (no partner folder pulled in).
+            AssertEqual("M50 has no mirror parts", 0, LimitSampleReference.LoadAllWithMirror(tmp, "M50").Count);
+        }
+        finally
+        {
+            try { Directory.Delete(tmp, recursive: true); } catch { /* best effort */ }
+        }
     }
 
     /// <summary>Minimal IConfigService stub for the PDF-name test (never reads config when OutputDirectory is set).</summary>

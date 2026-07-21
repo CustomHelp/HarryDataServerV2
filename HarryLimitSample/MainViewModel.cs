@@ -30,6 +30,10 @@ public partial class MainViewModel : ObservableObject
     /// <summary>DMC of the currently loaded/scanned part — the key of the per-part reference file.</summary>
     private string _currentDmc = string.Empty;
 
+    /// <summary>Modules that can hold references — pre-filled so a module can be picked (and
+    /// "Load existing" / the taught-parts list used) WITHOUT scanning a part first.</summary>
+    private static readonly string[] KnownModules = { "M10", "M11", "M20", "M21", "M50" };
+
     public MainViewModel(QueryService query, HarryConfig config, ScannerCompanionClient scanner)
     {
         _query = query;
@@ -39,6 +43,13 @@ public partial class MainViewModel : ObservableObject
         ReferenceFolder = string.IsNullOrWhiteSpace(config.MsaReferencePath)
             ? "(not set in Harry.ini [MSA] ReferencePath)"
             : config.MsaReferencePath;
+
+        // Pre-fill the module list so a module is selectable before any search (Load existing /
+        // taught-parts list work immediately). The list stays fixed; a search only changes the selection.
+        Modules.Add("(all)");
+        foreach (var m in KnownModules)
+            Modules.Add(m);
+        SelectedModule = "(all)";
 
         // Scanner bridge: remember the operator's last Active/Inactive choice; subscribe to the
         // rebroadcast client. Codes are received regardless of the toggle, but only forwarded to the
@@ -164,7 +175,7 @@ public partial class MainViewModel : ObservableObject
         NotFound = false;
         _allRows.Clear();
         Rows.Clear();
-        Modules.Clear();
+        // Modules stays the fixed known list (filled at startup); a search only changes the selection.
 
         try
         {
@@ -188,9 +199,6 @@ public partial class MainViewModel : ObservableObject
                 _allRows.Add(new LimitSampleRow(m));
 
             var modules = _allRows.Select(r => r.Module).Distinct().OrderBy(m => m).ToList();
-            Modules.Add("(all)");
-            foreach (var m in modules)
-                Modules.Add(m);
             SelectedModule = modules.Count == 1 ? modules[0] : "(all)";
 
             OnPropertyChanged(nameof(SavePathPreview));
@@ -365,9 +373,11 @@ public partial class MainViewModel : ObservableObject
         var module = ResolveTargetModule();
         if (module is null)
             return;
-        foreach (var r in LimitSampleReference.LoadAll(_config.MsaReferencePath, module)
+        // Baugleich modules (M10↔M11, M20↔M21) share references — show the module AND its mirror,
+        // tagged with each part's OWN module so Open/Delete act on the correct file/folder.
+        foreach (var r in LimitSampleReference.LoadAllWithMirror(_config.MsaReferencePath, module)
                      .OrderByDescending(r => r.TaughtAt))
-            TaughtParts.Add(new TaughtPartRow(r.Dmc, r.TaughtAt, r.ExpectedRejectCount, module));
+            TaughtParts.Add(new TaughtPartRow(r.Dmc, r.TaughtAt, r.ExpectedRejectCount, r.Module));
     }
 
     /// <summary>Open a taught part into the grid for viewing/re-editing (its expectations become rows).</summary>
@@ -392,9 +402,17 @@ public partial class MainViewModel : ObservableObject
         }
         _currentDmc = reference.Dmc;
 
-        Modules.Clear();
-        Modules.Add(part.Module);
-        SelectedModule = part.Module;   // triggers ApplyModuleFilter + SavePathPreview
+        // Keep the fixed module list; just select the part's module. If it is already selected the
+        // setter is a no-op, so refresh the grid/list explicitly.
+        if (SelectedModule == part.Module)
+        {
+            ApplyModuleFilter();
+            RefreshTaughtParts();
+        }
+        else
+        {
+            SelectedModule = part.Module;   // triggers ApplyModuleFilter + RefreshTaughtParts
+        }
         OnPropertyChanged(nameof(SavePathPreview));
         StatusMessage = $"Loaded taught part {part.Dmc} ({reference.Expected.Count} entries, {reference.ExpectedRejectCount} should-fail) for editing.";
     }

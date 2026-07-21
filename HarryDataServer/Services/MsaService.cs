@@ -698,7 +698,8 @@ ORDER BY evaluated_at, base_id, id;";
         var notes = new List<string>();
         var criterion = MsaEvaluationText.Criterion(MsaType.LimitSample);
 
-        var taught = LimitSampleReference.LoadAll(referenceFolder, module);
+        // Baugleich modules (M10↔M11, M20↔M21) share references — load the module AND its mirror.
+        var taught = LimitSampleReference.LoadAllWithMirror(referenceFolder, module);
         var taughtByDmc = new Dictionary<string, LimitSampleReference>(StringComparer.OrdinalIgnoreCase);
         foreach (var t in taught)
             taughtByDmc[t.Dmc] = t;
@@ -892,8 +893,9 @@ ORDER BY md.display_name;";
             tolByMeasurement.TryAdd(f.DisplayName, tol);
         }
 
-        // Candidate reference parts (non-DEMO); legacy references block as a fallback.
-        var candidates = Msa1Reference.LoadCandidates(referenceFolder, module)
+        // Candidate reference parts (non-DEMO); baugleich mirror (M10↔M11, M20↔M21) candidates are
+        // included so an MSA1 reference taught on one strand is usable on the other. Legacy block is a fallback.
+        var candidates = Msa1Reference.LoadCandidatesWithMirror(referenceFolder, module)
             .Select(r => new Msa1Matcher.Candidate(
                 string.IsNullOrWhiteSpace(r.Label) ? Path.GetFileNameWithoutExtension(r.SourceFile) : r.Label,
                 Path.GetFileName(r.SourceFile),

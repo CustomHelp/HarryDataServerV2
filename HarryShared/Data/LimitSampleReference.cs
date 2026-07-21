@@ -115,6 +115,26 @@ public sealed class LimitSampleReference
         return result;
     }
 
+    /// <summary>
+    /// Load taught parts for the module AND its baugleich mirror (M10↔M11, M20↔M21), so a reference
+    /// taught on one strand also applies to the other. On a DMC collision the OWN module wins (the
+    /// mirror's copy is only a fallback). Modules without a mirror behave exactly like <see cref="LoadAll"/>.
+    /// </summary>
+    public static List<LimitSampleReference> LoadAllWithMirror(string referenceFolder, string module)
+    {
+        var own = LoadAll(referenceFolder, module);
+        var mirror = ModuleMirror.MirrorOf(module);
+        if (mirror is null)
+            return own;
+
+        var byDmc = new Dictionary<string, LimitSampleReference>(StringComparer.OrdinalIgnoreCase);
+        foreach (var r in LoadAll(referenceFolder, mirror))
+            byDmc[r.Dmc] = r;
+        foreach (var r in own)   // own module wins over the mirror on the same DMC
+            byDmc[r.Dmc] = r;
+        return byDmc.Values.ToList();
+    }
+
     /// <summary>Delete one taught part's file; true when a file was removed.</summary>
     public static bool Delete(string referenceFolder, string module, string dmc)
     {

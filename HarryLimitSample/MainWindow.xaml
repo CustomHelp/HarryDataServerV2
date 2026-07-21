@@ -4,6 +4,9 @@
         Title="HarryLimitSample" Height="760" Width="1100"
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource WindowBg}">
+    <Window.InputBindings>
+        <KeyBinding Modifiers="Control" Key="S" Command="{Binding SaveCommand}" />
+    </Window.InputBindings>
     <DockPanel>
         <!-- ===== Top bar ===== -->
         <Border DockPanel.Dock="Top" Background="{DynamicResource PanelBg}" Padding="14,8"
@@ -65,9 +68,12 @@
                     <TextBox Width="80" Text="{Binding MsaVersion}" VerticalAlignment="Center" Margin="0,0,16,0" />
 
                     <Button Content="Load existing" Command="{Binding LoadExistingCommand}" Margin="0,0,4,0" />
-                    <Button Content="Clear marks" Command="{Binding ClearMarksCommand}" Margin="0,0,4,0" />
+                    <Button Content="Clear marks" Command="{Binding ClearMarksCommand}" Margin="0,0,12,0" />
                     <StackPanel Orientation="Vertical">
-                        <Button Content="Save part reference" Command="{Binding SaveCommand}" Width="170" />
+                        <Button Content="Save reference  (Ctrl+S)" Command="{Binding SaveCommand}"
+                                Width="220" Padding="10,6" FontWeight="Bold"
+                                Background="{DynamicResource Accent}" Foreground="White"
+                                ToolTip="Save the marks below as this part's reference file (Ctrl+S)" />
                         <TextBlock Text="{Binding SavePathPreview}" Foreground="{DynamicResource TextDimBrush}"
                                    FontSize="11" Margin="0,3,0,0" TextTrimming="CharacterEllipsis" MaxWidth="360" />
                     </StackPanel>
@@ -84,7 +90,7 @@
             <Grid Grid.Row="2">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="320" />
+                    <ColumnDefinition Width="470" />
                 </Grid.ColumnDefinitions>
 
                 <DataGrid Grid.Column="0" ItemsSource="{Binding Rows}">
@@ -109,15 +115,24 @@
                 <!-- Taught parts of the selected module (per-part reference files) -->
                 <Border Grid.Column="1" Style="{StaticResource Card}" Margin="8,0,0,0">
                     <DockPanel>
-                        <TextBlock DockPanel.Dock="Top" Text="Taught parts (this module)" FontWeight="SemiBold"
-                                   Margin="0,0,0,6" />
+                        <TextBlock DockPanel.Dock="Top" Text="Taught parts (this module + baugleich mirror)" FontWeight="SemiBold"
+                                   Margin="0,0,0,6" TextWrapping="Wrap" />
                         <TextBlock DockPanel.Dock="Bottom" FontSize="11" Foreground="{DynamicResource TextDimBrush}"
                                    TextWrapping="Wrap" Margin="0,6,0,0"
-                                   Text="Open loads a part for re-editing; Delete removes its reference file." />
+                                   Text="Includes the baugleich partner module (M10↔M11, M20↔M21). Open re-loads a part for editing; Delete removes its reference file." />
                         <DataGrid ItemsSource="{Binding TaughtParts}" AutoGenerateColumns="False"
-                                  IsReadOnly="True" HeadersVisibility="Column">
+                                  IsReadOnly="True" HeadersVisibility="Column"
+                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                             <DataGrid.Columns>
-                                <DataGridTextColumn Header="DMC" Binding="{Binding Dmc}" Width="*" />
+                                <DataGridTextColumn Header="DMC" Binding="{Binding Dmc}" Width="*" MinWidth="60">
+                                    <DataGridTextColumn.ElementStyle>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+                                            <Setter Property="ToolTip" Value="{Binding Dmc}" />
+                                        </Style>
+                                    </DataGridTextColumn.ElementStyle>
+                                </DataGridTextColumn>
+                                <DataGridTextColumn Header="Modul" Binding="{Binding Module}" Width="Auto" MinWidth="44" />
                                 <DataGridTextColumn Header="Taught" Binding="{Binding TaughtAt, StringFormat=yyyy-MM-dd HH:mm}" Width="Auto" />
                                 <DataGridTextColumn Header="#Fail" Binding="{Binding ExpectedFailCount}" Width="Auto" />
                                 <DataGridTemplateColumn Width="Auto">
