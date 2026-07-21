@@ -24,6 +24,10 @@ public sealed class TcpSpsServer : ISpsServer
 
     private readonly List<TcpListener> _listeners = new();
     private readonly System.Collections.Concurrent.ConcurrentDictionary<SpsChannel, int> _connectionsByChannel = new();
+
+    /// <summary>The current PLC connection per MSA channel, so a finished evaluation can be PUSHED
+    /// on the same open connection (push model). Newest connection wins; removed on disconnect.</summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<SpsChannel, SpsClientConnection> _msaConnections = new();
     private CancellationTokenSource? _cts;
     private readonly List<Task> _acceptTasks = new();
     private int _listeningChannels;
@@ -142,11 +146,16 @@ public sealed class TcpSpsServer : ISpsServer
         StatusChanged?.Invoke();
         _log.Information("SPS {Channel}: client connected from {Remote}.", channel, remote);
 
+        SpsClientConnection? conn = null;
         try
         {
             client.NoDelay = true;
             await using var stream = client.GetStream();
-            await ReceiveLoopAsync(channel, stream, token).ConfigureAwait(false);
+            conn = new SpsClientConnection(stream);
+            // Register MSA connections so a completed evaluation can be pushed here (newest wins).
+            if (channel.IsMsaChannel())
+                _msaConnections[channel] = conn;
+            await ReceiveLoopAsync(channel, conn, token).ConfigureAwait(false);
         }
         catch (OperationCanceledException) { /* shutting down */ }
         catch (Exception ex)
@@ -155,6 +164,10 @@ public sealed class TcpSpsServer : ISpsServer
         }
         finally
         {
+            // Only drop the map entry if it is still THIS connection (a newer one may have replaced it).
+            if (channel.IsMsaChannel() && conn is not null)
+                _msaConnections.TryRemove(new KeyValuePair<SpsChannel, SpsClientConnection>(channel, conn));
+            conn?.Dispose();
             try { client.Dispose(); } catch { /* ignore */ }
             Interlocked.Decrement(ref _activeConnections);
             _connectionsByChannel.AddOrUpdate(channel, 0, (_, n) => Math.Max(0, n - 1));
@@ -163,8 +176,9 @@ public sealed class TcpSpsServer : ISpsServer
         }
     }
 
-    private async Task ReceiveLoopAsync(SpsChannel channel, NetworkStream stream, CancellationToken token)
+    private async Task ReceiveLoopAsync(SpsChannel channel, SpsClientConnection conn, CancellationToken token)
     {
+        var stream = conn.Stream;
         var buffer = new byte[BufferSize];
         var accumulator = new List<byte>(BufferSize);
 
@@ -193,7 +207,7 @@ public sealed class TcpSpsServer : ISpsServer
                 if (channel == SpsChannel.PartExit && PartExitHandler is { } partHandler)
                 {
                     var ack = await HandlePartExitAckAsync(partHandler, text).ConfigureAwait(false);
-                    await stream.WriteAsync(Encoding.Latin1.GetBytes(ack), token).ConfigureAwait(false);
+                    await WriteAsync(conn, Encoding.Latin1.GetBytes(ack), token).ConfigureAwait(false);
                     ChannelActivity?.Invoke(channel, true, ack.TrimEnd('\r', '\n'));
                     continue;
                 }
@@ -202,7 +216,7 @@ public sealed class TcpSpsServer : ISpsServer
                 if (response is not null)
                 {
                     var bytes = Encoding.Latin1.GetBytes(response + ResponseTerminator);
-                    await stream.WriteAsync(bytes, token).ConfigureAwait(false);
+                    await WriteAsync(conn, bytes, token).ConfigureAwait(false);
                     ChannelActivity?.Invoke(channel, true, response);
                 }
             }
@@ -213,6 +227,66 @@ public sealed class TcpSpsServer : ISpsServer
                 accumulator.Clear();
             }
         }
+    }
+
+    /// <summary>
+    /// Push a completed MSA result to the PLC on the module's channel without a fresh request
+    /// (push model, CLAUDE.md §5). Writes on the SAME connection that answered "Wait"; serialised
+    /// with the receive-loop responses via the per-connection write lock. No-op (logged) when the
+    /// channel has no open connection (e.g. the PLC closed it — it must stay open to receive this).
+    /// </summary>
+    public async Task<bool> PushMsaResultAsync(string moduleKey, string baseId, string status, CancellationToken ct = default)
+    {
+        var channel = SpsChannelExtensions.MsaChannelForModule(moduleKey);
+        if (channel is null)
+        {
+            _log.Warning("SPS: cannot push MSA result — unknown module '{Module}'.", moduleKey);
+            return false;
+        }
+
+        if (!_msaConnections.TryGetValue(channel.Value, out var conn))
+        {
+            _log.Warning("SPS {Channel}: cannot push MSA result {Status} for {Base} — no open PLC connection (it must stay open to receive the push).",
+                channel.Value, status, baseId);
+            return false;
+        }
+
+        var response = WithBaseId(status, baseId);
+        try
+        {
+            await WriteAsync(conn, Encoding.Latin1.GetBytes(response + ResponseTerminator), ct).ConfigureAwait(false);
+            ChannelActivity?.Invoke(channel.Value, true, response);
+            _log.Information("SPS {Channel}: pushed MSA result '{Response}' (unsolicited).", channel.Value, response);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _log.Warning("SPS {Channel}: failed to push MSA result for {Base}: {Message}", channel.Value, baseId, ex.Message);
+            return false;
+        }
+    }
+
+    /// <summary>Serialise all writes to one connection (receive-loop responses + unsolicited pushes).</summary>
+    private static async Task WriteAsync(SpsClientConnection conn, byte[] bytes, CancellationToken token)
+    {
+        await conn.WriteLock.WaitAsync(token).ConfigureAwait(false);
+        try
+        {
+            await conn.Stream.WriteAsync(bytes, token).ConfigureAwait(false);
+        }
+        finally
+        {
+            conn.WriteLock.Release();
+        }
+    }
+
+    /// <summary>One PLC connection: its stream plus a write lock so responses and pushes never interleave.</summary>
+    private sealed class SpsClientConnection : IDisposable
+    {
+        public SpsClientConnection(NetworkStream stream) => Stream = stream;
+        public NetworkStream Stream { get; }
+        public SemaphoreSlim WriteLock { get; } = new(1, 1);
+        public void Dispose() => WriteLock.Dispose();
     }
 
     /// <summary>Compute the response for one received telegram on a channel.</summary>

@@ -36,6 +36,18 @@ public static class SpsChannelExtensions
         channel is SpsChannel.MsaM10 or SpsChannel.MsaM11 or SpsChannel.MsaM20
             or SpsChannel.MsaM21 or SpsChannel.MsaM50;
 
+    /// <summary>The MSA channel that serves a module key ("M10".."M50"), or null if unknown.
+    /// Reverse of <see cref="ModuleKey"/> — used to push a completed MSA result back to the PLC.</summary>
+    public static SpsChannel? MsaChannelForModule(string? moduleKey) => moduleKey?.Trim().ToUpperInvariant() switch
+    {
+        "M10" => SpsChannel.MsaM10,
+        "M11" => SpsChannel.MsaM11,
+        "M20" => SpsChannel.MsaM20,
+        "M21" => SpsChannel.MsaM21,
+        "M50" => SpsChannel.MsaM50,
+        _ => null,
+    };
+
     /// <summary>1-based channel number as documented in CLAUDE.md section 5.</summary>
     public static int Number(this SpsChannel channel) => (int)channel + 1;
 

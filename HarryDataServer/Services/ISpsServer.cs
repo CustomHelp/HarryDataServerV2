@@ -41,11 +41,21 @@ public interface ISpsServer
 
     /// <summary>
     /// Handler for MSA trigger requests (channels 3–7): given the module key
-    /// ("M10".."M50") and the BaseID, returns the response word
-    /// ("Wait" / "OK" / "NG" / "Error;&lt;desc&gt;"). Set by the MSA engine in Phase 10;
-    /// until then a null handler answers "Wait".
+    /// ("M10".."M50") and the BaseID, returns the IMMEDIATE response word — always "Wait" in the
+    /// push model (the completed OK/NG is delivered later via <see cref="PushMsaResultAsync"/> on
+    /// the same open connection, without the PLC re-requesting). "Error;&lt;desc&gt;" only on a bad
+    /// request format. Set by the MSA engine in Phase 10; until then a null handler answers "Wait".
     /// </summary>
     Func<string, string, string>? MsaRequestHandler { get; set; }
+
+    /// <summary>
+    /// Push a completed MSA result to the PLC on the module's channel WITHOUT the PLC polling again
+    /// (push model, CLAUDE.md §5). <paramref name="status"/> is "OK"/"NG"/"Error;&lt;desc&gt;"; the
+    /// BaseID is inserted as field 1 → "&lt;status&gt;;&lt;BaseID&gt;[;&lt;desc&gt;]", terminated with CR, on
+    /// the SAME connection that sent the "Wait". Returns false (logged) when that channel has no open
+    /// connection or the write fails. The PLC must keep the request connection open to receive it.
+    /// </summary>
+    Task<bool> PushMsaResultAsync(string moduleKey, string baseId, string status, CancellationToken ct = default);
 
     /// <summary>
     /// Async handler for Part Exit (channel 2). When set, the server defers the

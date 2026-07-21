@@ -296,13 +296,26 @@ is answered with `<32×'0'>;false`). Empty fields are allowed:
 **Request telegram:** `Request;<BaseID>` — `<BaseID>` is the bare **14-char** BaseID (no loop
 counter). The completion handler aggregates `msa_measurements` on an **exact** `base_id`
 match, scoped by `controller_name` (module) for safety.
-**Responses:** the requested BaseID is **mirrored back as field 1** so the PLC can correlate
-the poll response with its request — format `<Status>;<BaseID>[;<description>]`:
-- `Wait;<BaseID>` — currently processing, try again
-- `OK;<BaseID>` — MSA passed
-- `NG;<BaseID>` — MSA failed
-- `Error;<BaseID>;<description>` — error occurred (BaseID field empty when the request
-  format was invalid, e.g. `Error;;expected 'Request;<BaseID>'`)
+
+**PUSH model (not poll) — changed 2026-07-21.** The PLC sends the `Request` **once**. The server
+answers **`Wait;<BaseID>` immediately**, then — when the evaluation finishes — **pushes the result
+on the SAME open connection without the PLC requesting again** (`ISpsServer.PushMsaResultAsync` →
+`TcpSpsServer`). The requested BaseID is **mirrored back as field 1** so the PLC can correlate the
+push with its request — format `<Status>;<BaseID>[;<description>]`:
+- `Wait;<BaseID>` — immediate acknowledgement (evaluation running); **no further Wait polling needed**
+- `OK;<BaseID>` — MSA passed (pushed when done)
+- `NG;<BaseID>` — MSA failed (pushed when done)
+- `Error;<BaseID>;<description>` — error (BaseID field empty when the request format was invalid,
+  e.g. `Error;;expected 'Request;<BaseID>'`)
+
+> **The PLC MUST keep the request connection open** to receive the pushed result (coordinate with
+> the PLC programmer). If it closes the connection, the push is logged as skipped ("no open PLC
+> connection"); the result is still cached, so a later re-`Request` on a fresh connection returns
+> it (poll fallback retained). Because the PLC no longer re-polls, `MsaService.EvaluateAsync`
+> **retries internally** (up to `MaxGatherAttempts`, one flush interval apart) while the run's rows
+> are still being committed to `msa_measurements` — it never gives up waiting for a second request.
+> Writes on a connection (receive-loop responses + unsolicited pushes) are serialised by a
+> per-connection write lock.
 
 ---
 

@@ -22,6 +22,11 @@ public sealed class MsaService : IMsaService
 {
     private const int MaxItemsPerFlush = 10_000;
 
+    /// <summary>How many times EvaluateAsync re-checks the DB for the run's measurements before
+    /// giving up (push model — the PLC does not re-poll). Each wait is one flush interval, so with
+    /// the default 1 s interval this is ~60 s for the rows to be committed by the flush loop.</summary>
+    private const int MaxGatherAttempts = 60;
+
     private readonly ICameraService _cameras;
     private readonly IDatabaseService _database;
     private readonly MeasurementDefinitionCache _cache;
@@ -426,18 +431,32 @@ ORDER BY evaluated_at, base_id, id;";
         try
         {
             await using var conn = await _database.OpenConnectionAsync(ct).ConfigureAwait(false);
-            var rows = await GatherAsync(conn, module, baseId, ct).ConfigureAwait(false);
-            if (rows.Count == 0)
+
+            // PUSH MODEL (CLAUDE.md §5): the PLC sends ONE Request, gets "Wait", and does not poll
+            // again — we deliver the result ourselves. So we must not give up when the run's rows are
+            // not in the DB yet (they are committed on MsaService's own SaveInterval tick, slightly
+            // after the run completes): retry internally until they land, then push, instead of
+            // clearing the entry and waiting for a re-request.
+            List<MsaRow> rows = new();
+            for (var attempt = 1; ; attempt++)
             {
-                // No rows YET — the run's measurements are almost certainly still in the flush queue
-                // (they are committed on the SaveInterval tick, not synchronously with the run). This
-                // is NOT an error: clear the entry so the next Request re-triggers and again answers
-                // "Wait" until the data lands (idempotent poll, CLAUDE.md §5 / Problem 3). Only a
-                // genuine exception below is cached as a terminal "Error".
-                _evaluations.TryRemove(baseId, out _);
-                _log.Information("MSA {Module} BaseID {Base}: no measurements in DB yet ({Pending} still queued); will retry on next request (Wait).",
-                    module, baseId, _queue.Count);
-                return;
+                rows = await GatherAsync(conn, module, baseId, ct).ConfigureAwait(false);
+                if (rows.Count > 0)
+                    break;
+
+                if (attempt >= MaxGatherAttempts)
+                {
+                    const string msg = "no measurements received for this run";
+                    _evaluations[baseId] = $"Error;{msg}";
+                    _log.Warning("MSA {Module} BaseID {Base}: {Msg} after {N} attempts → Error (pushed).",
+                        module, baseId, msg, attempt);
+                    await _sps.PushMsaResultAsync(module, baseId, $"Error;{msg}", CancellationToken.None).ConfigureAwait(false);
+                    return;
+                }
+
+                _log.Information("MSA {Module} BaseID {Base}: no measurements in DB yet ({Pending} queued); retry {N}/{Max} in {Sec}s (still Wait).",
+                    module, baseId, _queue.Count, attempt, MaxGatherAttempts, _flushInterval.TotalSeconds);
+                await Task.Delay(_flushInterval, ct).ConfigureAwait(false);
             }
 
             var msaType = MsaTypeExtensions.FromDbString(rows[0].MsaType);
@@ -478,9 +497,19 @@ ORDER BY evaluated_at, base_id, id;";
             GeneratePdf(report);
             await ExportRawDataAsync(conn, baseId, module, msaType, reportDir, ct).ConfigureAwait(false);
 
-            _evaluations[baseId] = passed ? "OK" : "NG";
+            var word = passed ? "OK" : "NG";
+            _evaluations[baseId] = word;
             _log.Information("MSA {Type} for BaseID {Base}: {Verdict} ({Count} measurements).",
-                msaType, baseId, passed ? "OK" : "NG", results.Count);
+                msaType, baseId, word, results.Count);
+
+            // Push the result to the PLC on the same open connection — no re-request needed.
+            // (The cached word above also lets a late re-Request still answer, as a safety net.)
+            await _sps.PushMsaResultAsync(module, baseId, word, ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // Shutting down — leave no terminal state cached; a later request re-triggers.
+            _evaluations.TryRemove(baseId, out _);
         }
         catch (Exception ex)
         {
@@ -488,6 +517,8 @@ ORDER BY evaluated_at, base_id, id;";
             // the concrete reason (never a silent Error, CLAUDE.md §5 / Problem 3).
             _evaluations[baseId] = $"Error;{ex.Message}";
             _log.Error(ex, "MSA {Module} evaluation failed for BaseID {Base}: {Reason} → Error.", module, baseId, ex.Message);
+            try { await _sps.PushMsaResultAsync(module, baseId, $"Error;{ex.Message}", CancellationToken.None).ConfigureAwait(false); }
+            catch (Exception pushEx) { _log.Debug("MSA {Module}: error push failed for {Base}: {Msg}", module, baseId, pushEx.Message); }
         }
     }
 

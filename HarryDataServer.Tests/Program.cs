@@ -37,6 +37,7 @@ internal static class Program
         Msa3_WithinThreshold_Passes();
         Msa1_TooFewValues_ReportsReason();
         MsaCalculator_Msa3_ComputesPctTolerance();
+        MsaChannelForModule_MapsBothWays();
 
         Console.WriteLine();
         if (_failures == 0)
@@ -162,6 +163,16 @@ internal static class Program
             new double[] { 20.0, 20.2, 19.8 },
         }, tolerance: 5.0);
         AssertTrue("pct > 0 with variation", r.PctTolerance > 0);
+    }
+
+    private static void MsaChannelForModule_MapsBothWays()
+    {
+        Console.WriteLine("[Case I] MSA channel <-> module mapping (push target lookup)");
+        AssertEqual("M50 -> MsaM50", SpsChannel.MsaM50, SpsChannelExtensions.MsaChannelForModule("M50"));
+        AssertEqual("m20 (case-insensitive) -> MsaM20", SpsChannel.MsaM20, SpsChannelExtensions.MsaChannelForModule("m20"));
+        AssertEqual("round-trips via ModuleKey", SpsChannel.MsaM11,
+            SpsChannelExtensions.MsaChannelForModule(SpsChannel.MsaM11.ModuleKey()));
+        AssertTrue("unknown module -> null", SpsChannelExtensions.MsaChannelForModule("XX") is null);
     }
 
     // ---- helpers -----------------------------------------------------------
