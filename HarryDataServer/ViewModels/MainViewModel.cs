@@ -8,6 +8,7 @@ using HarryDataServer.Communication;
 using HarryDataServer.Infrastructure;
 using HarryDataServer.Models;
 using HarryDataServer.Services;
+using HarryShared.Help;
 
 namespace HarryDataServer.ViewModels;
 
@@ -88,6 +89,11 @@ public sealed partial class MainViewModel : ObservableObject
     // --- Top bar / shell ---
     public string AppName => "HarryDataServer";
     public string AppVersion { get; }
+
+    /// <summary>Open the shared bilingual help window (also on F1).</summary>
+    [RelayCommand]
+    private void ShowHelp() =>
+        HelpWindow.Show(System.Windows.Application.Current?.MainWindow, SuiteHelp.Server(AppVersion));
     public string ConfigFile { get; }
 
     public ObservableCollection<CameraViewModel> Cameras { get; }

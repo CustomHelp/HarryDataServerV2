@@ -5,6 +5,9 @@
         Title="HarryDataServer V2" Height="800" Width="1320"
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource WindowBg}">
+    <Window.InputBindings>
+        <KeyBinding Key="F1" Command="{Binding ShowHelpCommand}" />
+    </Window.InputBindings>
     <DockPanel>
         <!-- ===== Top bar ===== -->
         <Border DockPanel.Dock="Top" Background="{DynamicResource PanelBg}" Padding="14,8"
@@ -31,6 +34,8 @@
                               ToolTip="Alle eingehenden Roh-Telegramme in den Capture-Ordner neben der EXE schreiben (Testfunktion)" />
                     <Button x:Name="ThemeToggle" Click="OnThemeToggle" Content="Theme"
                             Padding="8,3" Margin="0,0,14,0" ToolTip="Switch light / dark theme" />
+                    <Button Content="?" Command="{Binding ShowHelpCommand}" Padding="10,3" Margin="0,0,14,0"
+                            FontWeight="Bold" ToolTip="Help / Hilfe (F1)" />
                     <TextBlock Text="{Binding AppVersion}" Foreground="{DynamicResource TextDimBrush}"
                                VerticalAlignment="Center" Margin="0,0,14,0" />
                     <Ellipse Width="12" Height="12" Fill="{Binding SystemStatusBrush}" VerticalAlignment="Center" />

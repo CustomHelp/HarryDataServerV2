@@ -7,6 +7,7 @@ using System.Windows.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HarryShared.Config;
+using HarryShared.Help;
 using Microsoft.Win32;
 
 namespace HarryCollageCreator;
@@ -35,6 +36,11 @@ public partial class MainViewModel : ObservableObject
 
     public string AppName => "HarryCollageCreator — Collage.ini Editor";
     public string AppVersion => "v" + (GetType().Assembly.GetName().Version?.ToString(3) ?? "2.0.0");
+
+    /// <summary>Open the shared bilingual help window (also on F1).</summary>
+    [RelayCommand]
+    private void ShowHelp() =>
+        HelpWindow.Show(System.Windows.Application.Current?.MainWindow, SuiteHelp.Collage(AppVersion));
 
     public ObservableCollection<ImageSlot> Slots { get; } = new();
 

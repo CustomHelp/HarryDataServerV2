@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.Input;
 using HarryShared.Communication;
 using HarryShared.Config;
 using HarryShared.Data;
+using HarryShared.Help;
 using HarryShared.Theming;
 using Microsoft.Win32;
 
@@ -44,6 +45,11 @@ public partial class MainViewModel : ObservableObject
 
     public string AppName => "HarryAnalysis — Part Inspector";
     public string AppVersion => "v" + (GetType().Assembly.GetName().Version?.ToString(3) ?? "2.0.0");
+
+    /// <summary>Open the shared bilingual help window (also on F1).</summary>
+    [RelayCommand]
+    private void ShowHelp() =>
+        HelpWindow.Show(System.Windows.Application.Current?.MainWindow, SuiteHelp.Analysis(AppVersion));
     public string ConfigFile { get; }
 
     /// <summary>Last 20 scans, newest first (in-memory only).</summary>

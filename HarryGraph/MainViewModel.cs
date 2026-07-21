@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HarryShared.Config;
 using HarryShared.Data;
+using HarryShared.Help;
 
 namespace HarryGraph;
 
@@ -43,6 +44,11 @@ public partial class MainViewModel : ObservableObject
 
     public string AppName => "HarryGraph — Measurement Trend";
     public string AppVersion => "v" + (GetType().Assembly.GetName().Version?.ToString(3) ?? "2.0.0");
+
+    /// <summary>Open the shared bilingual help window (also on F1).</summary>
+    [RelayCommand]
+    private void ShowHelp() =>
+        HelpWindow.Show(System.Windows.Application.Current?.MainWindow, SuiteHelp.Graph(AppVersion));
     public string ConfigFile { get; }
 
     public ObservableCollection<GraphPanelViewModel> Panels { get; } = new();

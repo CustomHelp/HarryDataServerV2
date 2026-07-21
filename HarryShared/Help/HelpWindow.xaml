@@ -1,0 +1,93 @@
+<Window x:Class="HarryShared.Help.HelpWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="{Binding Title}" Height="680" Width="660"
+        WindowStartupLocation="CenterOwner"
+        Foreground="{DynamicResource TextBrush}"
+        Background="{DynamicResource WindowBg}">
+    <DockPanel>
+        <!-- Header -->
+        <Border DockPanel.Dock="Top" Background="{DynamicResource PanelBg}" Padding="14,10"
+                BorderBrush="{DynamicResource Accent}" BorderThickness="0,0,0,2">
+            <DockPanel>
+                <Image DockPanel.Dock="Left" Height="28" VerticalAlignment="Center" Margin="0,0,12,0"
+                       Source="pack://application:,,,/HarryShared;component/Assets/CustomHelpLogo.png" />
+                <Button DockPanel.Dock="Right" Content="{Binding SwitchLabel}"
+                        Command="{Binding ToggleLanguageCommand}" Padding="12,4" FontWeight="SemiBold"
+                        ToolTip="Switch language / Sprache umschalten" />
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="{Binding AppName}" FontSize="17" FontWeight="Bold" />
+                    <TextBlock Text="{Binding VersionLabel}" Foreground="{DynamicResource TextDimBrush}" FontSize="12" />
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- Footer -->
+        <Border DockPanel.Dock="Bottom" Background="{DynamicResource PanelBg}" Padding="14,8">
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Content="{Binding CloseLabel}" IsCancel="True"
+                        Padding="16,5" MinWidth="90" />
+                <TextBlock Text="{Binding Support}" VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextDimBrush}" FontSize="12" />
+            </DockPanel>
+        </Border>
+
+        <!-- Body -->
+        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16,14">
+            <StackPanel>
+                <!-- Description -->
+                <TextBlock Text="{Binding Description}" TextWrapping="Wrap" FontSize="13" Margin="0,0,0,14" />
+
+                <!-- How to use -->
+                <TextBlock Text="{Binding HowToHeader}" FontSize="15" FontWeight="Bold"
+                           Foreground="{DynamicResource AccentLight}" Margin="0,0,0,6" />
+                <ItemsControl ItemsSource="{Binding Sections}" Margin="0,0,0,14">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Margin="0,0,0,10">
+                                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="13" Margin="0,0,0,3" />
+                                <ItemsControl ItemsSource="{Binding Steps}" Margin="8,0,0,0">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid Margin="0,1,0,1">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="•  " Foreground="{DynamicResource TextDimBrush}" />
+                                                <TextBlock Grid.Column="1" Text="{Binding}" TextWrapping="Wrap" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- Shortcuts -->
+                <TextBlock Text="{Binding ShortcutsHeader}" FontSize="15" FontWeight="Bold"
+                           Foreground="{DynamicResource AccentLight}" Margin="0,0,0,6" />
+                <ItemsControl ItemsSource="{Binding Shortcuts}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="0,2,0,2">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="150" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0" Background="{DynamicResource CardBg}" CornerRadius="3"
+                                        Padding="8,2" Margin="0,0,10,0" HorizontalAlignment="Left"
+                                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                                    <TextBlock Text="{Binding Keys}" FontFamily="Consolas" />
+                                </Border>
+                                <TextBlock Grid.Column="1" Text="{Binding Action}" TextWrapping="Wrap"
+                                           VerticalAlignment="Center" />
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</Window>

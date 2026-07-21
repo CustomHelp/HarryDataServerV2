@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.Input;
 using HarryShared.Communication;
 using HarryShared.Config;
 using HarryShared.Data;
+using HarryShared.Help;
 using HarryShared.Theming;
 
 namespace HarryLimitSample;
@@ -253,6 +254,11 @@ public partial class MainViewModel : ObservableObject
             StatusMessage = "Load failed: " + ex.Message;
         }
     }
+
+    /// <summary>Open the shared bilingual help window for this app (also on F1).</summary>
+    [RelayCommand]
+    private void ShowHelp() =>
+        HelpWindow.Show(Application.Current?.MainWindow, SuiteHelp.LimitSample(AppVersion));
 
     /// <summary>Reset every visible row to Ignore (remove from the reference).</summary>
     [RelayCommand]

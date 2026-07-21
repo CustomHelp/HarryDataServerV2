@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HarryShared.Config;
 using HarryShared.Data;
+using HarryShared.Help;
 using Microsoft.Win32;
 using OxyPlot;
 using OxyPlot.Axes;
@@ -59,6 +60,11 @@ public partial class MainViewModel : ObservableObject
 
     public string AppName => "HarryCounter — NG Error Counter";
     public string AppVersion => "v" + (GetType().Assembly.GetName().Version?.ToString(3) ?? "2.0.0");
+
+    /// <summary>Open the shared bilingual help window (also on F1).</summary>
+    [RelayCommand]
+    private void ShowHelp() =>
+        HelpWindow.Show(System.Windows.Application.Current?.MainWindow, SuiteHelp.Counter(AppVersion));
     public string ConfigFile { get; }
 
     public IReadOnlyList<GroupDimension> Dimensions { get; } = new[]
