@@ -156,8 +156,20 @@ public sealed class MsaConfig
     public string ReferencePath { get; init; } = string.Empty;
 
     /// <summary>Root folder for per-run MSA/LimitSample result collection (output). On run
-    /// completion the server gathers the PDF reports, the measurement CSV and the run images
-    /// under <c>&lt;ResultPath&gt;\YYYY\MM\DD\&lt;BaseID&gt;\{PDF,CSV,IMG}</c>. Kept SEPARATE from
+    /// completion the server gathers the measurement CSV and the run images
+    /// under <c>&lt;ResultPath&gt;\YYYY\MM\DD\&lt;BaseID&gt;\{CSV,IMG}</c>. Kept SEPARATE from
     /// <see cref="ReferencePath"/>. When empty, falls back to ReferencePath\MSA_Results.</summary>
     public string ResultPath { get; init; } = string.Empty;
+
+    /// <summary>Root folder for the human-facing MSA outputs — the PDF reports AND the raw-data
+    /// export (Minitab). Files land in <c>&lt;ReportPath&gt;\&lt;Module&gt;\&lt;yyyy-MM-dd&gt;\</c>.
+    /// Absolute local, mapped-drive and UNC (<c>\\server\share</c>) paths are all supported; a
+    /// relative path resolves against the config dir. When empty, falls back to
+    /// <see cref="ReportFallbackPath"/> (then ResultPath, then a built-in local default).</summary>
+    public string ReportPath { get; init; } = string.Empty;
+
+    /// <summary>Local fallback for <see cref="ReportPath"/> when the primary (e.g. a network
+    /// drive) is not reachable at write time. A WARNING is logged and the run is still written —
+    /// never a crash or data loss. Default <c>D:\HarryDataServer\MSA_Reports</c> when empty.</summary>
+    public string ReportFallbackPath { get; init; } = string.Empty;
 }

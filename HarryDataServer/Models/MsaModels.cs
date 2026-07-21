@@ -57,6 +57,14 @@ public sealed class MsaMeasurementResult
 {
     public int DefinitionId { get; init; }
     public string DisplayName { get; init; } = string.Empty;
+
+    /// <summary>The camera this measurement belongs to (disambiguates the same display name across
+    /// e.g. KF1/KF3 within one module run).</summary>
+    public string Controller { get; init; } = string.Empty;
+
+    /// <summary>A representative DMC (for the msa_results.dmc column); an MSA run aggregates many.</summary>
+    public string Dmc { get; init; } = string.Empty;
+
     public double? Cg { get; init; }
     public double? Cgk { get; init; }
     public double? PctTolerance { get; init; }
@@ -66,6 +74,29 @@ public sealed class MsaMeasurementResult
 
     /// <summary>LimitSample only: what actually happened ("rejected"/"accepted").</summary>
     public string? Actual { get; init; }
+
+    // --- Reporting context (task B): the numbers behind the verdict ---
+
+    /// <summary>Number of measured values that went into the calculation.</summary>
+    public int N { get; init; }
+
+    /// <summary>Mean of the measured values (null when N = 0).</summary>
+    public double? Mean { get; init; }
+
+    /// <summary>Sample standard deviation of the measured values (null when N &lt; 2).</summary>
+    public double? StdDev { get; init; }
+
+    /// <summary>Reference value xm (MSA1) from the reference file; null when not applicable/known.</summary>
+    public double? ReferenceValue { get; init; }
+
+    /// <summary>Tolerance USL−LSL used (from the settings limits); null/0 when no limits are stored.</summary>
+    public double? Tolerance { get; init; }
+
+    /// <summary>The pass criterion that was applied, e.g. "Cgk ≥ 1.33" or "%P/T ≤ 20 %".</summary>
+    public string Criterion { get; init; } = string.Empty;
+
+    /// <summary>Plain-text reason — always set on FAIL/degenerate (never a silent 0/FAIL), empty on a clean pass.</summary>
+    public string Reason { get; init; } = string.Empty;
 
     public bool Passed { get; init; }
 }

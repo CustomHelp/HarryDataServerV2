@@ -1,5 +1,6 @@
 using System.IO;
 using HarryDataServer.Models;
+using HarryDataServer.Services;
 
 namespace HarryDataServer.Infrastructure;
 
@@ -46,6 +47,68 @@ public static class MsaResultLayout
 
     public static string ImgDir(string resultPath, string referencePath, string baseId) =>
         Path.Combine(RunRoot(resultPath, referencePath, baseId), ImgSubfolder);
+
+    /// <summary>Built-in local fallback root for the report output when nothing else is set.</summary>
+    public const string DefaultReportFallback = @"D:\HarryDataServer\MSA_Reports";
+
+    /// <summary>
+    /// The report output folder <c>&lt;root&gt;\&lt;Module&gt;\&lt;yyyy-MM-dd&gt;</c> for the PDF
+    /// reports and the raw-data export (task D). Unlike the per-run collection folder this groups by
+    /// module + calendar day (the customer's requested layout, e.g. <c>X:\MSA_Reports\M50\2026-07-21</c>).
+    /// </summary>
+    public static string ReportModuleDate(string root, string module, DateTime runAt) =>
+        Path.Combine(root, Sanitize(module), runAt.ToString("yyyy-MM-dd"));
+
+    /// <summary>
+    /// Resolve AND create a writable report directory (task D3). Tries the primary root
+    /// (<c>[MSA] ReportPath</c>); if that cannot be created/written (network drive down, UNC
+    /// unreachable, permission denied) it logs a WARNING and falls back to the local
+    /// <c>[MSA] ReportFallbackPath</c> (or <see cref="DefaultReportFallback"/>). The run is never
+    /// lost and the caller never sees an exception from an unreachable network path.
+    /// <paramref name="reportPath"/> may be empty → the fallback is used directly.
+    /// Returns the created directory, or null only if even the local fallback fails.
+    /// </summary>
+    public static string? EnsureWritableReportDir(
+        string reportPath, string reportFallbackPath, string resultPath, string module, DateTime runAt, ILogService log)
+    {
+        var fallbackRoot =
+            !string.IsNullOrWhiteSpace(reportFallbackPath) ? reportFallbackPath : DefaultReportFallback;
+
+        // Primary preference: ReportPath → else ResultPath → else the local fallback.
+        var primaryRoot =
+            !string.IsNullOrWhiteSpace(reportPath) ? reportPath :
+            !string.IsNullOrWhiteSpace(resultPath) ? resultPath :
+            fallbackRoot;
+
+        var primaryDir = ReportModuleDate(primaryRoot, module, runAt);
+        try
+        {
+            Directory.CreateDirectory(primaryDir);
+            return primaryDir;
+        }
+        catch (Exception ex)
+        {
+            var fallbackDir = ReportModuleDate(fallbackRoot, module, runAt);
+            if (string.Equals(Path.GetFullPath(primaryDir), Path.GetFullPath(fallbackDir), StringComparison.OrdinalIgnoreCase))
+            {
+                log.Error(ex, "MSA report directory {Dir} could not be created (no fallback available).", primaryDir);
+                return null;
+            }
+
+            log.Warning("MSA report path {Primary} not writable ({Message}); falling back to local {Fallback}.",
+                primaryDir, ex.Message, fallbackDir);
+            try
+            {
+                Directory.CreateDirectory(fallbackDir);
+                return fallbackDir;
+            }
+            catch (Exception ex2)
+            {
+                log.Error(ex2, "MSA report fallback directory {Dir} could not be created either.", fallbackDir);
+                return null;
+            }
+        }
+    }
 
     private static string Sanitize(string value)
     {

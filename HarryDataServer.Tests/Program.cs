@@ -32,6 +32,12 @@ internal static class Program
         OldOffByOneTemplate_ScramblesValueAndStatus();
         Normal_Production_Correct72Based_YieldsRealValues();
 
+        Msa3_NoLimits_ReportsToleranceReason_NotSilentZero();
+        Msa3_OverThreshold_ReportsPctReason();
+        Msa3_WithinThreshold_Passes();
+        Msa1_TooFewValues_ReportsReason();
+        MsaCalculator_Msa3_ComputesPctTolerance();
+
         Console.WriteLine();
         if (_failures == 0)
         {
@@ -102,6 +108,60 @@ internal static class Program
         var rows = ExtractRows(telegram, template, runType: 0 /* Normal */);
 
         AssertRow(rows, "GlueDot_1_Volume", expectValue: 0.043, expectStatus: 1);
+    }
+
+    // ---- MSA evaluation / reason tests (task B: never a silent 0/FAIL) ----
+
+    private static void Msa3_NoLimits_ReportsToleranceReason_NotSilentZero()
+    {
+        Console.WriteLine("[Case D] MSA3 with no limits (tolerance=0) → FAIL with a tolerance reason");
+        // This is the live root cause: the settings table is empty, so tolerance = 0.
+        var (passed, reason) = MsaEvaluationText.Msa3Verdict(parts: 4, degreesOfFreedom: 8, tolerance: 0, pctTolerance: 0);
+        AssertTrue("fails", !passed);
+        AssertTrue("reason mentions limits/tolerance, not blank",
+            reason.Contains("tolerance", StringComparison.OrdinalIgnoreCase) && reason.Length > 0);
+        Console.WriteLine($"       reason = \"{reason}\"");
+    }
+
+    private static void Msa3_OverThreshold_ReportsPctReason()
+    {
+        Console.WriteLine("[Case E] MSA3 %P/T over 20% → FAIL with an explicit %P/T reason");
+        var (passed, reason) = MsaEvaluationText.Msa3Verdict(parts: 4, degreesOfFreedom: 8, tolerance: 0.5, pctTolerance: 34.2);
+        AssertTrue("fails", !passed);
+        AssertTrue("reason shows the value and the limit", reason.Contains("34.2") && reason.Contains("20"));
+        Console.WriteLine($"       reason = \"{reason}\"");
+    }
+
+    private static void Msa3_WithinThreshold_Passes()
+    {
+        Console.WriteLine("[Case F] MSA3 %P/T within 20% → pass, no reason");
+        var (passed, reason) = MsaEvaluationText.Msa3Verdict(parts: 4, degreesOfFreedom: 8, tolerance: 0.5, pctTolerance: 12.0);
+        AssertTrue("passes", passed);
+        AssertTrue("no reason on clean pass", reason.Length == 0);
+    }
+
+    private static void Msa1_TooFewValues_ReportsReason()
+    {
+        Console.WriteLine("[Case G] MSA1 with n<2 → FAIL with an n reason");
+        var (passed, reason) = MsaEvaluationText.Msa1Verdict(n: 1, sigma: 0, tolerance: 0.5, cg: 0, cgk: 0, hasReference: true);
+        AssertTrue("fails", !passed);
+        AssertTrue("reason mentions n", reason.Contains("n="));
+        Console.WriteLine($"       reason = \"{reason}\"");
+    }
+
+    private static void MsaCalculator_Msa3_ComputesPctTolerance()
+    {
+        Console.WriteLine("[Case H] MsaCalculator.Msa3 sanity");
+        // tolerance 0 → degenerate 0/false (the guard that produced the live all-zero FAIL).
+        var zero = MsaCalculator.Msa3(new IReadOnlyList<double>[] { new double[] { 1, 2, 3 } }, tolerance: 0);
+        AssertTrue("tolerance 0 → pct 0 & fail", zero.PctTolerance == 0 && !zero.Passed);
+        // With variation and a real tolerance, %P/T is positive and finite.
+        var r = MsaCalculator.Msa3(new IReadOnlyList<double>[]
+        {
+            new double[] { 10.0, 10.1, 9.9 },
+            new double[] { 20.0, 20.2, 19.8 },
+        }, tolerance: 5.0);
+        AssertTrue("pct > 0 with variation", r.PctTolerance > 0);
     }
 
     // ---- helpers -----------------------------------------------------------

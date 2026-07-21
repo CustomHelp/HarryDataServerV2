@@ -397,6 +397,50 @@ DegreesOfFreedom = Σ over parts (measurementsPerPart − 1)
 > sample/loop count (e.g. 30 × 3 → DoF = 60). Parts are grouped by DMC; loops are the
 > repeated measurements of one part.
 
+### MSA Evaluation Methodology (implementation — `MsaService.Evaluate`, verified 2026-07-21)
+
+**One study per measurement over all parts; loops = repetitions — NOT one MSA per part.**
+`GatherAsync` pulls every `msa_measurements` row for the run (exact `base_id`, scoped by module
+`controller_name LIKE '<Module>%'`, so a module run legitimately spans several cameras, e.g.
+`M50_ST110_KF1` **and** `KF3`). Rows are grouped by `definition_id` → **one result per
+(camera × measurement)**; the `Controller` is carried on every result and report row so the same
+`display_name` on KF1 and KF3 is disambiguated (this is the "doubled rows" the un-labelled report
+used to show — not two parts).
+
+Per type (thresholds in `MsaCalculator`: Cg/Cgk ≥ 1.33, %P/T ≤ 20 %):
+- **MSA1** — all values of the measurement are the 50 repetitions of one part; `σ` = sample
+  StdDev; `Cg = 0.2·T/(6σ)`, `Cgk = (0.2·T − |x̄−xm|)/(6σ)`; `xm` from the reference file by
+  `display_name`. `T = USL − LSL` from the latest `settings` limits for (camera, parameter set).
+- **MSA3** — group the measurement's rows by DMC = parts, loops = repetitions;
+  `%P/T = 6·√(ΣΣ(x̄ᵢ−xᵢⱼ)² / DoF)/T`, `DoF = Σ(nᵢ−1)` (dynamic — correct for any part/loop count).
+  MSA3 uses **only** `T` + the values (the reference file is not needed). This is the
+  repeatability (EV) vs. tolerance; the automated vision system has no appraiser term, so EV ≈ GRR.
+- **LimitSample** — `shouldFail` from the reference; pass unless a prepared error was not rejected.
+
+**Never a silent 0/FAIL (`MsaEvaluationText`).** Every FAIL/degenerate result carries a plain-text
+`Reason` (also logged as WARNING): e.g. *no tolerance available (no Min/Max limits stored — request
+a Settings telegram)*, *only n=3 value(s) (need ≥ 2)*, *%P/T 34.2 % > 20 %*, *Cgk 0.9 < 1.33*. The
+**most common live cause of all-zero/FAIL is an empty `settings` table → `T = 0`**; the tolerance is
+`Max − Min` from `settings`, which is populated only after a Settings telegram is received/requested.
+
+**Report + raw export + paths (tasks B/C/D):**
+- Each `msa_results` row also stores `n_values`, `mean_value`, `std_dev`, `reference_value`,
+  `tolerance`, `criterion`, `reason` (schema auto-added on startup).
+- The **PDF reports** (AllResults + FailuresOnly, landscape) show a head with msa_type, controllers,
+  #parts (DMCs), #loops, time range, applied criterion, and the reference file (**full path +
+  modified date, or NOT FOUND**); each row shows Controller, n, Mean, StdDev, Ref(xm), Tol(T),
+  Cg/Cgk or %P/T, Result and Reason.
+- A **raw-data export** for Minitab is written next to the PDFs: long format
+  `Controller;BaseID;Loop;DMC;Measurement;Value;Status;Timestamp` (all cameras/parts/loops/
+  measurements). Per CLAUDE.md §15 **no Excel library is used** — it is a `;`-separated UTF-8-BOM CSV
+  that opens in Excel and imports 1:1 into Minitab.
+- **`[MSA] ReportPath`** (new) is the output root for PDFs **and** the raw export, laid out as
+  `<ReportPath>\<Module>\<yyyy-MM-dd>\`. Absolute local, mapped-drive and UNC paths are supported;
+  relative resolves against the config dir. If the primary path is unreachable at write time it
+  falls back to **`[MSA] ReportFallbackPath`** (default `D:\HarryDataServer\MSA_Reports`) with a
+  WARNING — never a crash or data loss. `[MSA] ReferencePath` also accepts absolute/UNC paths. The
+  per-run **measurement CSV + images** collection stays under `[MSA] ResultPath\YYYY\MM\DD\<BaseID>`.
+
 ### MSA JSON Reference Files
 - Location: configurable per module in Harry.ini
 - One file per module per MSA version

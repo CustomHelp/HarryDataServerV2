@@ -3,12 +3,23 @@ namespace HarryDataServer.Models;
 /// <summary>One measurement line of a stored MSA run (from <c>msa_results</c>).</summary>
 public sealed class MsaResultRow
 {
+    public string Controller { get; init; } = string.Empty;
     public string DisplayName { get; init; } = string.Empty;
     public double? Cg { get; init; }
     public double? Cgk { get; init; }
     public double? PctTolerance { get; init; }
     public string? Expected { get; init; }
     public string? Actual { get; init; }
+
+    // Task B: the numbers behind the verdict, persisted for the report / UI.
+    public int N { get; init; }
+    public double? Mean { get; init; }
+    public double? StdDev { get; init; }
+    public double? ReferenceValue { get; init; }
+    public double? Tolerance { get; init; }
+    public string Criterion { get; init; } = string.Empty;
+    public string Reason { get; init; } = string.Empty;
+
     public bool Passed { get; init; }
 }
 

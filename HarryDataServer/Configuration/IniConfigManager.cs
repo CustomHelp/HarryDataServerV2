@@ -68,6 +68,8 @@ public sealed class IniConfigManager
         {
             ReferencePath = ResolvePath(Str(s, "ReferencePath", string.Empty), configDir),
             ResultPath = ResolvePath(Str(s, "ResultPath", string.Empty), configDir),
+            ReportPath = ResolvePath(Str(s, "ReportPath", string.Empty), configDir),
+            ReportFallbackPath = ResolvePath(Str(s, "ReportFallbackPath", string.Empty), configDir),
         };
     }
 

@@ -301,7 +301,9 @@ VALUES
             return runs;
 
         const string sql = @"
-SELECT base_id, controller_name, evaluated_at, display_name, cg_value, cgk_value, pct_tolerance, expected_value, actual_value, passed
+SELECT base_id, controller_name, evaluated_at, display_name, cg_value, cgk_value, pct_tolerance,
+       expected_value, actual_value, passed, n_values, mean_value, std_dev, reference_value,
+       tolerance, criterion, reason
 FROM msa_results
 WHERE msa_type = @type AND controller_name LIKE @mod
 ORDER BY evaluated_at, base_id, id;";
@@ -329,6 +331,7 @@ ORDER BY evaluated_at, base_id, id;";
 
                 entry.Rows.Add(new MsaResultRow
                 {
+                    Controller = reader.IsDBNull(1) ? string.Empty : reader.GetString(1),
                     DisplayName = reader.IsDBNull(3) ? string.Empty : reader.GetString(3),
                     Cg = reader.IsDBNull(4) ? null : reader.GetDouble(4),
                     Cgk = reader.IsDBNull(5) ? null : reader.GetDouble(5),
@@ -336,6 +339,13 @@ ORDER BY evaluated_at, base_id, id;";
                     Expected = reader.IsDBNull(7) ? null : reader.GetString(7),
                     Actual = reader.IsDBNull(8) ? null : reader.GetString(8),
                     Passed = reader.GetInt32(9) != 0,
+                    N = reader.IsDBNull(10) ? 0 : reader.GetInt32(10),
+                    Mean = reader.IsDBNull(11) ? null : reader.GetDouble(11),
+                    StdDev = reader.IsDBNull(12) ? null : reader.GetDouble(12),
+                    ReferenceValue = reader.IsDBNull(13) ? null : reader.GetDouble(13),
+                    Tolerance = reader.IsDBNull(14) ? null : reader.GetDouble(14),
+                    Criterion = reader.IsDBNull(15) ? string.Empty : reader.GetString(15),
+                    Reason = reader.IsDBNull(16) ? string.Empty : reader.GetString(16),
                 });
             }
 
@@ -445,12 +455,28 @@ ORDER BY evaluated_at, base_id, id;";
             }
 
             var passed = results.Count > 0 && results.All(r => r.Passed);
-            await StoreResultsAsync(conn, baseId, msaType, rows[0], results, ct).ConfigureAwait(false);
 
-            // Gather the whole run under <ResultPath>\YYYY\MM\DD\<BaseID>\{CSV,PDF,IMG}.
-            ExportCsv(baseId, module, msaType, rows[0], results);
-            GeneratePdf(baseId, module, msaType, rows[0], results, passed);
+            // Never a silent 0/FAIL (task B2): log every FAIL/degenerate measurement with its reason.
+            foreach (var r in results.Where(r => !r.Passed))
+                _log.Warning("MSA {Type} {Ctrl}/{Name} base={Base}: FAIL — {Reason}",
+                    msaType, r.Controller, r.DisplayName, baseId,
+                    string.IsNullOrWhiteSpace(r.Reason) ? "(no reason given)" : r.Reason);
+
+            await StoreResultsAsync(conn, baseId, msaType, results, ct).ConfigureAwait(false);
+
+            // Human-facing output folder: <ReportPath>\<Module>\<yyyy-MM-dd> with network fallback (task D).
+            var msa = _config.Config.Msa;
+            var runAt = BaseId.TryGetTimestamp(baseId, out var dt) ? dt : DateTime.Now;
+            var reportDir = MsaResultLayout.EnsureWritableReportDir(
+                msa.ReportPath, msa.ReportFallbackPath, msa.ResultPath, module, runAt, _log);
+            var report = BuildReport(baseId, module, msaType, rows, results, passed, runAt, msa.ReferencePath, reportDir);
+
+            // Existing per-run collection (measurement summary CSV + images) stays under ResultPath.
+            ExportCsv(baseId, module, msaType, results);
             MoveRunImages(baseId);
+            // Reports + raw-data export (Minitab) into the report folder (task B/C).
+            GeneratePdf(report);
+            await ExportRawDataAsync(conn, baseId, module, msaType, reportDir, ct).ConfigureAwait(false);
 
             _evaluations[baseId] = passed ? "OK" : "NG";
             _log.Information("MSA {Type} for BaseID {Base}: {Verdict} ({Count} measurements).",
@@ -465,60 +491,88 @@ ORDER BY evaluated_at, base_id, id;";
         }
     }
 
+    /// <summary>
+    /// Evaluate ONE measurement (all rows of one definition = one camera + feature) across all its
+    /// parts and loops (CLAUDE.md §7: an MSA is one study per measurement over all parts, loops are
+    /// the repetitions — not one MSA per part). Enriches the result with the numbers behind the
+    /// verdict (n, mean, σ, reference, tolerance) and a plain-text reason on FAIL (task B).
+    /// </summary>
     private MsaMeasurementResult Evaluate(
         MsaType msaType, List<MsaRow> group, double tolerance, MsaReferenceFile? reference)
     {
         var first = group[0];
+        var values = group.Where(r => r.Value.HasValue).Select(r => r.Value!.Value).ToList();
+        var n = values.Count;
+        double? mean = n > 0 ? MsaCalculator.Mean(values) : null;
+        double? sd = n >= 2 ? MsaCalculator.SampleStdDev(values) : null;
+        double? tol = tolerance > 0 ? tolerance : null;
+        var criterion = MsaEvaluationText.Criterion(msaType);
 
         switch (msaType)
         {
             case MsaType.Msa1:
             {
-                var values = group.Where(r => r.Value.HasValue).Select(r => r.Value!.Value).ToList();
+                var hasRef = reference?.References.ContainsKey(first.DisplayName) ?? false;
                 var xm = reference?.References.GetValueOrDefault(first.DisplayName) ?? 0;
                 var r = MsaCalculator.Msa1(values, tolerance, xm);
+                var (passed, reason) = MsaEvaluationText.Msa1Verdict(n, sd ?? 0, tolerance, r.Cg, r.Cgk, hasRef);
                 return new MsaMeasurementResult
                 {
                     DefinitionId = first.DefinitionId, DisplayName = first.DisplayName,
-                    Cg = r.Cg, Cgk = r.Cgk, Passed = r.Passed,
+                    Controller = first.CameraName, Dmc = first.Dmc,
+                    Cg = r.Cg, Cgk = r.Cgk, N = n, Mean = mean, StdDev = sd,
+                    ReferenceValue = hasRef ? xm : null, Tolerance = tol,
+                    Criterion = criterion, Reason = reason, Passed = passed,
                 };
             }
             case MsaType.Msa3:
             {
-                var parts = group
+                var partLists = group
                     .GroupBy(r => r.Dmc)
-                    .Select(g => (IReadOnlyList<double>)g.Where(r => r.Value.HasValue).Select(r => r.Value!.Value).ToList())
+                    .Select(g => g.Where(r => r.Value.HasValue).Select(r => r.Value!.Value).ToList())
                     .ToList();
-                var r = MsaCalculator.Msa3(parts, tolerance);
+                var partCount = partLists.Count;
+                var dof = partLists.Where(p => p.Count >= 2).Sum(p => p.Count - 1);
+                var r = MsaCalculator.Msa3(partLists.Select(p => (IReadOnlyList<double>)p).ToList(), tolerance);
+                var (passed, reason) = MsaEvaluationText.Msa3Verdict(partCount, dof, tolerance, r.PctTolerance);
                 return new MsaMeasurementResult
                 {
                     DefinitionId = first.DefinitionId, DisplayName = first.DisplayName,
-                    PctTolerance = r.PctTolerance, Passed = r.Passed,
+                    Controller = first.CameraName, Dmc = first.Dmc,
+                    PctTolerance = r.PctTolerance, N = n, Mean = mean, StdDev = sd, Tolerance = tol,
+                    Criterion = criterion, Reason = reason, Passed = passed,
                 };
             }
             case MsaType.LimitSample:
             {
+                var hasRef = reference?.LimitSampleExpected.ContainsKey(first.DisplayName) ?? false;
                 var shouldFail = reference?.LimitSampleExpected.GetValueOrDefault(first.DisplayName) ?? false;
                 var wasRejected = group.Any(r => r.ResultStatus == 0);
-                var passed = !shouldFail || wasRejected;
+                var (passed, reason) = MsaEvaluationText.LimitSampleVerdict(hasRef, shouldFail, wasRejected);
                 return new MsaMeasurementResult
                 {
-                    DefinitionId = first.DefinitionId, DisplayName = first.DisplayName, Passed = passed,
+                    DefinitionId = first.DefinitionId, DisplayName = first.DisplayName,
+                    Controller = first.CameraName, Dmc = first.Dmc,
                     Expected = shouldFail ? "reject" : "accept",
                     Actual = wasRejected ? "rejected" : "accepted",
+                    N = n, Mean = mean, StdDev = sd,
+                    Criterion = criterion, Reason = reason, Passed = passed,
                 };
             }
             default:
                 return new MsaMeasurementResult
                 {
-                    DefinitionId = first.DefinitionId, DisplayName = first.DisplayName, Passed = false,
+                    DefinitionId = first.DefinitionId, DisplayName = first.DisplayName,
+                    Controller = first.CameraName, Dmc = first.Dmc, Passed = false,
+                    Reason = "unknown MSA type",
                 };
         }
     }
 
     private sealed record MsaRow(
         int DefinitionId, string Dmc, double? Value, int? ResultStatus,
-        string MsaType, string? MsaVersion, string DisplayName, int ParameterSet, int CameraId, string CameraName);
+        string MsaType, string? MsaVersion, string DisplayName, int ParameterSet, int CameraId, string CameraName,
+        int LoopNumber, DateTime MeasuredAt);
 
     /// <summary>
     /// Collect every measurement of one MSA run. The run is identified by an EXACT match on
@@ -530,7 +584,7 @@ ORDER BY evaluated_at, base_id, id;";
     {
         const string sql = @"
 SELECT m.definition_id, m.dmc, m.measurement_value, m.result_status, m.msa_type, m.msa_version,
-       md.display_name, md.parameter_set, md.camera_id, c.camera_name
+       md.display_name, md.parameter_set, md.camera_id, c.camera_name, m.loop_number, m.measured_at
 FROM msa_measurements m
 JOIN measurement_definitions md ON md.id = m.definition_id
 JOIN cameras c ON c.id = md.camera_id
@@ -553,7 +607,9 @@ WHERE m.base_id = @b AND m.controller_name LIKE @mod;";
                 reader.GetString(6),
                 reader.GetInt32(7),
                 reader.GetInt32(8),
-                reader.GetString(9)));
+                reader.GetString(9),
+                reader.GetInt32(10),
+                reader.GetDateTime(11)));
         }
         return rows;
     }
@@ -594,23 +650,28 @@ ORDER BY s.recorded_at DESC;";
     }
 
     private static async Task StoreResultsAsync(
-        MySqlConnection conn, string baseId, MsaType msaType, MsaRow sample,
+        MySqlConnection conn, string baseId, MsaType msaType,
         List<MsaMeasurementResult> results, CancellationToken ct)
     {
         const string sql = @"
 INSERT INTO msa_results
-  (controller_name, dmc, base_id, msa_type, msa_version, definition_id, display_name, cg_value, cgk_value, pct_tolerance, expected_value, actual_value, passed)
+  (controller_name, dmc, base_id, msa_type, msa_version, definition_id, display_name,
+   cg_value, cgk_value, pct_tolerance, expected_value, actual_value,
+   n_values, mean_value, std_dev, reference_value, tolerance, criterion, reason, passed)
 VALUES
-  (@ctrl, @dmc, @base, @type, @ver, @def, @name, @cg, @cgk, @pct, @expected, @actual, @passed);";
+  (@ctrl, @dmc, @base, @type, @ver, @def, @name,
+   @cg, @cgk, @pct, @expected, @actual,
+   @n, @mean, @sd, @ref, @tol, @crit, @reason, @passed);";
 
         foreach (var r in results)
         {
             await using var cmd = new MySqlCommand(sql, conn);
-            cmd.Parameters.AddWithValue("@ctrl", sample.CameraName);
-            cmd.Parameters.AddWithValue("@dmc", sample.Dmc);
+            // controller/dmc are per result now (a module run spans several cameras, e.g. KF1+KF3).
+            cmd.Parameters.AddWithValue("@ctrl", r.Controller);
+            cmd.Parameters.AddWithValue("@dmc", r.Dmc);
             cmd.Parameters.AddWithValue("@base", baseId);
             cmd.Parameters.AddWithValue("@type", msaType.ToDbString());
-            cmd.Parameters.AddWithValue("@ver", (object?)sample.MsaVersion ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@ver", DBNull.Value);
             cmd.Parameters.AddWithValue("@def", r.DefinitionId);
             cmd.Parameters.AddWithValue("@name", r.DisplayName);
             cmd.Parameters.AddWithValue("@cg", (object?)r.Cg ?? DBNull.Value);
@@ -618,12 +679,19 @@ VALUES
             cmd.Parameters.AddWithValue("@pct", (object?)r.PctTolerance ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@expected", (object?)r.Expected ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@actual", (object?)r.Actual ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@n", r.N);
+            cmd.Parameters.AddWithValue("@mean", (object?)r.Mean ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@sd", (object?)r.StdDev ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@ref", (object?)r.ReferenceValue ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@tol", (object?)r.Tolerance ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@crit", (object?)(string.IsNullOrEmpty(r.Criterion) ? null : r.Criterion) ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@reason", (object?)(string.IsNullOrEmpty(r.Reason) ? null : r.Reason) ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@passed", r.Passed ? 1 : 0);
             await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
         }
     }
 
-    private void ExportCsv(string baseId, string module, MsaType msaType, MsaRow sample, List<MsaMeasurementResult> results)
+    private void ExportCsv(string baseId, string module, MsaType msaType, List<MsaMeasurementResult> results)
     {
         var csv = _config.Config.Csv;
         if (!csv.MsaSave)
@@ -631,25 +699,26 @@ VALUES
 
         try
         {
-            // The MSA CSV goes into the run's CSV subfolder (the date is already in the path,
+            // The MSA summary CSV goes into the run's CSV subfolder (the date is already in the path,
             // so the writer does not add its own YYYY\MM\DD level).
             var msa = _config.Config.Msa;
             var csvDir = MsaResultLayout.CsvDir(msa.ResultPath, msa.ReferencePath, baseId);
             using var writer = new CsvFileWriter(csvDir, int.MaxValue, dateSubfolders: false, _log);
             // Filename label: module + type (CsvFileWriter prepends the DDMMYY_HHMMSS stamp, SOW §5.1.2).
             writer.Configure(
-                new[] { "BaseID", "Module", "Controller", "MsaType", "DMC", "DisplayName", "Cg", "Cgk", "PctTolerance", "Passed" },
+                new[] { "BaseID", "Module", "Controller", "MsaType", "DisplayName", "n", "Mean", "StdDev",
+                        "Reference", "Tolerance", "Cg", "Cgk", "PctTolerance", "Criterion", "Passed", "Reason" },
                 $"MSA_{module}_{msaType.ToDbString()}");
 
             foreach (var r in results)
             {
                 writer.WriteRow(new[]
                 {
-                    baseId, module, sample.CameraName, msaType.ToDbString(), sample.Dmc, r.DisplayName,
-                    r.Cg?.ToString("0.###", CultureInfo.InvariantCulture),
-                    r.Cgk?.ToString("0.###", CultureInfo.InvariantCulture),
-                    r.PctTolerance?.ToString("0.###", CultureInfo.InvariantCulture),
-                    r.Passed ? "1" : "0",
+                    baseId, module, r.Controller, msaType.ToDbString(), r.DisplayName,
+                    r.N.ToString(CultureInfo.InvariantCulture),
+                    Num(r.Mean), Num(r.StdDev), Num(r.ReferenceValue), Num(r.Tolerance),
+                    Num(r.Cg), Num(r.Cgk), Num(r.PctTolerance),
+                    r.Criterion, r.Passed ? "1" : "0", r.Reason,
                 });
             }
             writer.Flush();
@@ -658,6 +727,84 @@ VALUES
         {
             _log.Error(ex, "Failed to write MSA CSV for BaseID {Base}.", baseId);
         }
+    }
+
+    private static string? Num(double? v) => v?.ToString("0.####", CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Raw-data export for the customer's Minitab analysis (task C): one row per measured value in
+    /// long format — Controller | BaseID | Loop | DMC | Measurement | Value | Status | Timestamp —
+    /// covering every camera, part, loop and measurement of the run. CLAUDE.md §15 forbids Excel
+    /// libraries, so this is a ';'-separated UTF-8 (BOM) CSV that opens directly in Excel and imports
+    /// 1:1 into Minitab. Written next to the PDF reports (task C2/D). Best-effort — never fails the run.
+    /// </summary>
+    private async Task ExportRawDataAsync(
+        MySqlConnection conn, string baseId, string module, MsaType msaType, string? reportDir, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(reportDir))
+        {
+            _log.Warning("MSA raw-data export skipped for BaseID {Base}: no writable report directory.", baseId);
+            return;
+        }
+
+        try
+        {
+            const string sql = @"
+SELECT m.controller_name, m.loop_number, m.dmc, md.display_name, m.measurement_value, m.result_status, m.measured_at
+FROM msa_measurements m
+JOIN measurement_definitions md ON md.id = m.definition_id
+WHERE m.base_id = @b AND m.controller_name LIKE @mod
+ORDER BY m.controller_name, m.dmc, m.loop_number, md.display_name;";
+
+            // The BOM is written by UTF8Encoding(true) at save time so Excel picks the right encoding.
+            var sb = new System.Text.StringBuilder();
+            sb.Append("Controller;BaseID;Loop;DMC;Measurement;Value;Status;Timestamp\n");
+
+            var rowCount = 0;
+            await using (var cmd = new MySqlCommand(sql, conn))
+            {
+                cmd.Parameters.AddWithValue("@b", baseId);
+                cmd.Parameters.AddWithValue("@mod", module + "%");
+                await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+                while (await reader.ReadAsync(ct).ConfigureAwait(false))
+                {
+                    var controller = reader.GetString(0);
+                    var loop = reader.GetInt32(1);
+                    var dmc = reader.GetString(2);
+                    var name = reader.GetString(3);
+                    var value = reader.IsDBNull(4) ? string.Empty : reader.GetDouble(4).ToString("0.####", CultureInfo.InvariantCulture);
+                    var status = reader.IsDBNull(5) ? string.Empty : reader.GetInt32(5).ToString(CultureInfo.InvariantCulture);
+                    var at = reader.GetDateTime(6).ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+                    sb.Append(Csv(controller)).Append(';')
+                      .Append(Csv(baseId)).Append(';')
+                      .Append(loop.ToString(CultureInfo.InvariantCulture)).Append(';')
+                      .Append(Csv(dmc)).Append(';')
+                      .Append(Csv(name)).Append(';')
+                      .Append(value).Append(';')
+                      .Append(status).Append(';')
+                      .Append(at).Append('\n');
+                    rowCount++;
+                }
+            }
+
+            var file = Path.Combine(reportDir, $"{module}_{msaType.ToDbString()}_{FileNaming.Stamp(DateTime.Now)}_RawData.csv");
+            await File.WriteAllTextAsync(file, sb.ToString(), new System.Text.UTF8Encoding(true), ct).ConfigureAwait(false);
+            _log.Information("MSA raw-data export written for BaseID {Base}: {Rows} row(s) → {File}", baseId, rowCount, file);
+        }
+        catch (Exception ex)
+        {
+            _log.Error(ex, "Failed to write MSA raw-data export for BaseID {Base}.", baseId);
+        }
+    }
+
+    /// <summary>Quote a CSV field for the ';'-separated raw export (escapes ';', quotes, newlines).</summary>
+    private static string Csv(string value)
+    {
+        if (string.IsNullOrEmpty(value))
+            return string.Empty;
+        if (value.IndexOfAny(new[] { ';', '"', '\n', '\r' }) < 0)
+            return value;
+        return "\"" + value.Replace("\"", "\"\"") + "\"";
     }
 
     /// <summary>
@@ -704,33 +851,54 @@ VALUES
     }
 
     /// <summary>Generate the two MSA PDF reports (SOW §3.2.1). Best-effort: never fails the evaluation.</summary>
-    private void GeneratePdf(string baseId, string module, MsaType msaType, MsaRow sample, List<MsaMeasurementResult> results, bool passed)
+    private void GeneratePdf(MsaReportData report)
     {
         try
         {
-            var report = BuildReport(baseId, module, msaType, sample, results, passed);
             _pdf.Generate(report);
         }
         catch (Exception ex)
         {
-            _log.Error(ex, "Failed to generate MSA PDF report for BaseID {Base}.", baseId);
+            _log.Error(ex, "Failed to generate MSA PDF report for BaseID {Base}.", report.BaseId);
         }
     }
 
-    /// <summary>Build the PDF report model from a freshly-evaluated run.</summary>
-    private static MsaReportData BuildReport(
-        string baseId, string module, MsaType msaType, MsaRow sample, List<MsaMeasurementResult> results, bool passed) =>
-        new()
+    /// <summary>Build the PDF report model from a freshly-evaluated run, incl. the head context
+    /// (parts/loops/time range/reference file) and per-measurement detail (task B).</summary>
+    private MsaReportData BuildReport(
+        string baseId, string module, MsaType msaType, List<MsaRow> rows,
+        List<MsaMeasurementResult> results, bool passed, DateTime runAt, string referencePath, string? outputDir)
+    {
+        var referenceFile = MsaReferenceLoader.ReferenceFilePath(referencePath, module);
+        DateTime? referenceModified = !string.IsNullOrEmpty(referenceFile) && File.Exists(referenceFile)
+            ? File.GetLastWriteTime(referenceFile) : null;
+
+        return new MsaReportData
         {
             Module = module,
             TestType = msaType.ToDbString(),
-            Controller = sample.CameraName,
+            // A module run may span several cameras (e.g. KF1+KF3); list the distinct ones.
+            Controller = string.Join(", ", results.Select(r => r.Controller).Distinct()),
             BaseId = baseId,
-            RunAt = DateTime.Now,
+            RunAt = runAt,
             OverallPass = passed,
+            OutputDirectory = outputDir,
+            PartCount = rows.Select(r => r.Dmc).Distinct().Count(),
+            LoopCount = rows.Select(r => r.LoopNumber).Distinct().Count(),
+            FromTime = rows.Count > 0 ? rows.Min(r => r.MeasuredAt) : runAt,
+            ToTime = rows.Count > 0 ? rows.Max(r => r.MeasuredAt) : runAt,
+            Criterion = MsaEvaluationText.Criterion(msaType),
+            ReferenceFile = referenceFile,
+            ReferenceFileModified = referenceModified,
             Rows = results.Select(r => new MsaReportRow
             {
+                Controller = r.Controller,
                 Measurement = r.DisplayName,
+                N = r.N,
+                Mean = r.Mean,
+                StdDev = r.StdDev,
+                Reference = r.ReferenceValue,
+                Tolerance = r.Tolerance,
                 Expected = r.Expected ?? string.Empty,
                 Actual = r.Actual ?? FormatActual(r),
                 Metric = msaType switch
@@ -739,9 +907,12 @@ VALUES
                     MsaType.Msa3 => $"%P/T {FmtMetric(r.PctTolerance)}",
                     _ => string.Empty,
                 },
+                Criterion = r.Criterion,
+                Reason = r.Reason,
                 Passed = r.Passed,
             }).ToList(),
         };
+    }
 
     private static string FormatActual(MsaMeasurementResult r) =>
         r.Cg?.ToString("0.###", CultureInfo.InvariantCulture)

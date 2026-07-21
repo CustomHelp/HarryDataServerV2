@@ -42,6 +42,10 @@ public sealed class MsaReferenceLoader
 
     public MsaReferenceLoader(ILogService log) => _log = log;
 
+    /// <summary>The full path of the reference file for a module (whether or not it exists).</summary>
+    public static string ReferenceFilePath(string referenceFolder, string module) =>
+        string.IsNullOrWhiteSpace(referenceFolder) ? string.Empty : Path.Combine(referenceFolder, $"MSA_{module}.json");
+
     /// <summary>Load the reference file for a module, or null if absent/invalid.</summary>
     public MsaReferenceFile? Load(string referenceFolder, string module)
     {
