@@ -1,7 +1,7 @@
 <Window x:Class="HarryLimitSample.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="HarryLimitSample" Height="760" Width="1100"
+        Title="HarryLimitSample" Height="780" Width="1240"
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource WindowBg}">
     <Window.InputBindings>
@@ -46,6 +46,7 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
@@ -68,15 +69,7 @@
                     <TextBox Width="80" Text="{Binding MsaVersion}" VerticalAlignment="Center" Margin="0,0,16,0" />
 
                     <Button Content="Load existing" Command="{Binding LoadExistingCommand}" Margin="0,0,4,0" />
-                    <Button Content="Clear marks" Command="{Binding ClearMarksCommand}" Margin="0,0,12,0" />
-                    <StackPanel Orientation="Vertical">
-                        <Button Content="Save reference  (Ctrl+S)" Command="{Binding SaveCommand}"
-                                Width="220" Padding="10,6" FontWeight="Bold"
-                                Background="{DynamicResource Accent}" Foreground="White"
-                                ToolTip="Save the marks below as this part's reference file (Ctrl+S)" />
-                        <TextBlock Text="{Binding SavePathPreview}" Foreground="{DynamicResource TextDimBrush}"
-                                   FontSize="11" Margin="0,3,0,0" TextTrimming="CharacterEllipsis" MaxWidth="360" />
-                    </StackPanel>
+                    <Button Content="Clear marks" Command="{Binding ClearMarksCommand}" Margin="0,0,4,0" />
                 </WrapPanel>
             </Border>
 
@@ -86,26 +79,47 @@
                 <TextBlock Text="{Binding NotFoundText}" Foreground="White" FontWeight="Bold" />
             </Border>
 
+            <!-- ===== Save bar (always visible) ===== -->
+            <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,0,0,8" Padding="12,8">
+                <DockPanel>
+                    <Button DockPanel.Dock="Right" Content="Save reference  (Ctrl+S)"
+                            Command="{Binding SaveCommand}" VerticalAlignment="Center"
+                            Width="230" Padding="12,10" FontWeight="Bold" FontSize="14"
+                            Background="{DynamicResource Accent}" Foreground="White"
+                            ToolTip="Save the marks in the table as this part's reference file (Ctrl+S)" />
+                    <TextBlock Text="{Binding SavePathPreview}" VerticalAlignment="Center" Margin="0,0,12,0"
+                               Foreground="{DynamicResource TextDimBrush}" TextTrimming="CharacterEllipsis" />
+                </DockPanel>
+            </Border>
+
             <!-- Measurement grid (left) + taught-parts list (right) -->
-            <Grid Grid.Row="2">
+            <Grid Grid.Row="3">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="470" />
+                    <ColumnDefinition Width="460" />
                 </Grid.ColumnDefinitions>
 
-                <DataGrid Grid.Column="0" ItemsSource="{Binding Rows}">
+                <DataGrid Grid.Column="0" ItemsSource="{Binding Rows}"
+                          ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="Measurement" Binding="{Binding DisplayName}" Width="2*" />
-                        <DataGridTextColumn Header="Module" Binding="{Binding Module}" Width="80" />
-                        <DataGridTextColumn Header="Camera" Binding="{Binding CameraName}" Width="*" />
-                        <DataGridTextColumn Header="Value" Binding="{Binding ValueText}" Width="90" />
-                        <DataGridTextColumn Header="Result" Binding="{Binding ResultText}" Width="90" />
-                        <DataGridTemplateColumn Header="Expectation" Width="160">
+                        <DataGridTextColumn Header="Measurement" Binding="{Binding DisplayName}" Width="*" MinWidth="120">
+                            <DataGridTextColumn.ElementStyle>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+                                    <Setter Property="ToolTip" Value="{Binding DisplayName}" />
+                                </Style>
+                            </DataGridTextColumn.ElementStyle>
+                        </DataGridTextColumn>
+                        <DataGridTextColumn Header="Module" Binding="{Binding Module}" Width="Auto" MinWidth="44" />
+                        <DataGridTextColumn Header="Camera" Binding="{Binding CameraName}" Width="Auto" />
+                        <DataGridTextColumn Header="Value" Binding="{Binding ValueText}" Width="70" />
+                        <DataGridTextColumn Header="Result" Binding="{Binding ResultText}" Width="70" />
+                        <DataGridTemplateColumn Header="Expectation" Width="190" MinWidth="170">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <ComboBox SelectedItem="{Binding Expectation, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                               ItemsSource="{Binding DataContext.Expectations, RelativeSource={RelativeSource AncestorType=Window}}"
-                                              Margin="2" />
+                                              Margin="2" VerticalAlignment="Center" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
@@ -132,17 +146,18 @@
                                         </Style>
                                     </DataGridTextColumn.ElementStyle>
                                 </DataGridTextColumn>
-                                <DataGridTextColumn Header="Modul" Binding="{Binding Module}" Width="Auto" MinWidth="44" />
+                                <DataGridTextColumn Header="Module" Binding="{Binding Module}" Width="Auto" MinWidth="44" />
                                 <DataGridTextColumn Header="Taught" Binding="{Binding TaughtAt, StringFormat=yyyy-MM-dd HH:mm}" Width="Auto" />
                                 <DataGridTextColumn Header="#Fail" Binding="{Binding ExpectedFailCount}" Width="Auto" />
-                                <DataGridTemplateColumn Width="Auto">
+                                <!-- Fixed width so Open/Delete are ALWAYS fully visible (never clipped at the edge). -->
+                                <DataGridTemplateColumn Header="Action" Width="140">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <StackPanel Orientation="Horizontal">
-                                                <Button Content="Open" Margin="2" Padding="6,1"
+                                                <Button Content="Open" Margin="2" Padding="8,2"
                                                         Command="{Binding DataContext.OpenTaughtPartCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                         CommandParameter="{Binding}" />
-                                                <Button Content="Delete" Margin="2" Padding="6,1"
+                                                <Button Content="Delete" Margin="2" Padding="8,2"
                                                         Command="{Binding DataContext.DeleteTaughtPartCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                         CommandParameter="{Binding}" />
                                             </StackPanel>

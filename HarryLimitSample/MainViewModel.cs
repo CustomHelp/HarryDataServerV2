@@ -380,9 +380,14 @@ public partial class MainViewModel : ObservableObject
             TaughtParts.Add(new TaughtPartRow(r.Dmc, r.TaughtAt, r.ExpectedRejectCount, r.Module));
     }
 
-    /// <summary>Open a taught part into the grid for viewing/re-editing (its expectations become rows).</summary>
+    /// <summary>
+    /// Open a taught part for re-editing. The reference file only stores ShouldPass/ShouldFail, so to
+    /// let ANY measurement be changed (incl. promoting an Ignore) the part's FULL measurement set is
+    /// re-queried from the DB and the saved marks are overlaid on top. If the part is no longer in the
+    /// DB, fall back to showing just the saved marks (old behaviour).
+    /// </summary>
     [RelayCommand]
-    private void OpenTaughtPart(TaughtPartRow? part)
+    private async Task OpenTaughtPartAsync(TaughtPartRow? part)
     {
         if (part is null)
             return;
@@ -393,14 +398,44 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
-        _allRows.Clear();
-        foreach (var (name, expectation) in reference.Expected)
-        {
-            var exp = string.Equals(expectation, LimitSampleReference.ShouldFail, StringComparison.OrdinalIgnoreCase)
-                ? Expectation.ShouldFail : Expectation.ShouldPass;
-            _allRows.Add(new LimitSampleRow(name, part.Module, exp));
-        }
         _currentDmc = reference.Dmc;
+        _allRows.Clear();
+
+        // Re-query the whole part so every measurement is shown (incl. Ignore); overlay saved marks.
+        var loadedFromDb = false;
+        try
+        {
+            var dbPart = await _query.FindPartForInspectionAsync(reference.Dmc);
+            if (dbPart is not null)
+            {
+                foreach (var m in await _query.GetPartMeasurementsAsync(dbPart))
+                {
+                    var row = new LimitSampleRow(m);
+                    // Saved marks apply to THIS module only (a display_name can repeat across modules).
+                    if (m.Module == part.Module &&
+                        reference.Expected.TryGetValue(m.DisplayName, out var saved))
+                        row.Expectation = string.Equals(saved, LimitSampleReference.ShouldFail, StringComparison.OrdinalIgnoreCase)
+                            ? Expectation.ShouldFail : Expectation.ShouldPass;
+                    _allRows.Add(row);
+                }
+                loadedFromDb = _allRows.Count > 0;
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = "Re-query failed, showing saved marks only: " + ex.Message;
+        }
+
+        // Fallback: part no longer in the DB → show just the saved marks (no Ignore rows available).
+        if (!loadedFromDb)
+        {
+            foreach (var (name, expectation) in reference.Expected)
+            {
+                var exp = string.Equals(expectation, LimitSampleReference.ShouldFail, StringComparison.OrdinalIgnoreCase)
+                    ? Expectation.ShouldFail : Expectation.ShouldPass;
+                _allRows.Add(new LimitSampleRow(name, part.Module, exp));
+            }
+        }
 
         // Keep the fixed module list; just select the part's module. If it is already selected the
         // setter is a no-op, so refresh the grid/list explicitly.
@@ -414,7 +449,9 @@ public partial class MainViewModel : ObservableObject
             SelectedModule = part.Module;   // triggers ApplyModuleFilter + RefreshTaughtParts
         }
         OnPropertyChanged(nameof(SavePathPreview));
-        StatusMessage = $"Loaded taught part {part.Dmc} ({reference.Expected.Count} entries, {reference.ExpectedRejectCount} should-fail) for editing.";
+        StatusMessage = loadedFromDb
+            ? $"Loaded taught part {part.Dmc} — {Rows.Count} measurement(s) shown ({reference.ExpectedRejectCount} should-fail). Change any mark (incl. Ignore) and Save."
+            : $"Loaded taught part {part.Dmc} (saved marks only — part not in DB): {reference.Expected.Count} entries.";
     }
 
     /// <summary>Delete one taught part's reference file after confirmation.</summary>
