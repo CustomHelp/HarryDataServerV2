@@ -3,6 +3,9 @@ using HarryShared.Data;
 
 namespace HarryLimitSample;
 
+/// <summary>One taught part shown in the editor's "taught parts" list (per-part reference file).</summary>
+public sealed record TaughtPartRow(string Dmc, DateTime TaughtAt, int ExpectedFailCount, string Module);
+
 /// <summary>The operator's expectation for one measurement in a LimitSample reference.</summary>
 public enum Expectation
 {

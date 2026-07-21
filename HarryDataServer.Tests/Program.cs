@@ -2,8 +2,10 @@ using System.Globalization;
 using System.IO;
 using HarryDataServer.Communication;
 using HarryDataServer.Configuration;
+using HarryDataServer.Infrastructure;
 using HarryDataServer.Models;
 using HarryDataServer.Services;
+using HarryShared.Data;
 
 namespace HarryDataServer.Tests;
 
@@ -39,6 +41,9 @@ internal static class Program
         MsaCalculator_Msa3_ComputesPctTolerance();
         MsaChannelForModule_MapsBothWays();
         OverallVerdict_NoVacuousPass();
+        LimitSampleOverall_PerPartVerdict();
+        LimitSampleReference_RoundTrips();
+        ReportRunRoot_Layout();
 
         Console.WriteLine();
         if (_failures == 0)
@@ -202,6 +207,59 @@ internal static class Program
 
     private static MsaMeasurementResult Res(bool evaluated, bool passed, bool expectedReject = false) =>
         new() { DisplayName = "x", Controller = "c", Evaluated = evaluated, Passed = passed, ExpectedReject = expectedReject };
+
+    private static void LimitSampleOverall_PerPartVerdict()
+    {
+        Console.WriteLine("[Case K] LimitSample per-part overall verdict (task A/2)");
+        AssertEqual("no references → INVALID", MsaVerdict.Invalid,
+            MsaEvaluationText.LimitSampleOverall(false, false, Array.Empty<MsaMeasurementResult>(), "dir").Verdict);
+        AssertEqual("part without reference → INVALID", MsaVerdict.Invalid,
+            MsaEvaluationText.LimitSampleOverall(true, true, new[] { Res(true, true, true) }, "dir").Verdict);
+        AssertEqual("expected error detected → PASS", MsaVerdict.Pass,
+            MsaEvaluationText.LimitSampleOverall(true, false, new[] { Res(true, true, expectedReject: true) }, "dir").Verdict);
+        AssertEqual("expected error NOT detected → FAIL", MsaVerdict.Fail,
+            MsaEvaluationText.LimitSampleOverall(true, false, new[] { Res(true, false, expectedReject: true) }, "dir").Verdict);
+        AssertEqual("no expected error to verify → INVALID", MsaVerdict.Invalid,
+            MsaEvaluationText.LimitSampleOverall(true, false, new[] { Res(true, true, expectedReject: false) }, "dir").Verdict);
+    }
+
+    private static void LimitSampleReference_RoundTrips()
+    {
+        Console.WriteLine("[Case L] Per-part reference file save/load/delete + DMC sanitize");
+        var tmp = Path.Combine(Path.GetTempPath(), "hds_ls_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var r = new LimitSampleReference { Dmc = "AB/CD:1", Module = "M50", TaughtAt = DateTime.UnixEpoch };
+            r.Expected["F1"] = LimitSampleReference.ShouldFail;
+            r.Expected["F2"] = LimitSampleReference.ShouldPass;
+            var path = r.Save(tmp);
+
+            AssertTrue("file created", File.Exists(path));
+            AssertTrue("under <Module>\\LimitSamples", path.Replace('\\', '/').Contains("/M50/LimitSamples/"));
+            var fileName = Path.GetFileName(path);
+            AssertTrue("DMC sanitized in file name", !fileName.Contains('/') && !fileName.Contains(':'));
+
+            var all = LimitSampleReference.LoadAll(tmp, "M50");
+            AssertEqual("one taught part", 1, all.Count);
+            AssertEqual("original DMC preserved", "AB/CD:1", all[0].Dmc);
+            AssertEqual("one prepared error", 1, all[0].ExpectedRejectCount);
+
+            AssertTrue("delete removes it", LimitSampleReference.Delete(tmp, "M50", "AB/CD:1"));
+            AssertEqual("empty LimitSamples folder → INVALID feed", 0, LimitSampleReference.LoadAll(tmp, "M50").Count);
+        }
+        finally
+        {
+            try { Directory.Delete(tmp, recursive: true); } catch { /* best effort */ }
+        }
+    }
+
+    private static void ReportRunRoot_Layout()
+    {
+        Console.WriteLine("[Case M] Report run-root layout <root>\\<date>\\<module>\\<baseid>");
+        var root = MsaResultLayout.ReportRunRoot(@"X:\R", "M50", "50260721170000", new DateTime(2026, 7, 21, 17, 0, 0));
+        var norm = root.Replace('\\', '/');
+        AssertTrue("layout ends with /2026-07-21/M50/50260721170000", norm.EndsWith("/2026-07-21/M50/50260721170000"));
+    }
 
     // ---- helpers -----------------------------------------------------------
 

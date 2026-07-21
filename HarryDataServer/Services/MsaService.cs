@@ -6,6 +6,9 @@ using HarryDataServer.Configuration;
 using HarryDataServer.Infrastructure;
 using HarryDataServer.Models;
 using MySqlConnector;
+// Import only the per-part reference type — HarryShared.Data also has an MsaReferenceFile that would
+// clash with the server's HarryDataServer.Configuration.MsaReferenceFile.
+using LimitSampleReference = HarryShared.Data.LimitSampleReference;
 
 namespace HarryDataServer.Services;
 
@@ -308,7 +311,7 @@ VALUES
         const string sql = @"
 SELECT base_id, controller_name, evaluated_at, display_name, cg_value, cgk_value, pct_tolerance,
        expected_value, actual_value, passed, n_values, mean_value, std_dev, reference_value,
-       tolerance, criterion, reason, evaluated
+       tolerance, criterion, reason, evaluated, dmc
 FROM msa_results
 WHERE msa_type = @type AND controller_name LIKE @mod
 ORDER BY evaluated_at, base_id, id;";
@@ -352,6 +355,7 @@ ORDER BY evaluated_at, base_id, id;";
                     Criterion = reader.IsDBNull(15) ? string.Empty : reader.GetString(15),
                     Reason = reader.IsDBNull(16) ? string.Empty : reader.GetString(16),
                     Evaluated = !reader.IsDBNull(17) && reader.GetInt32(17) != 0,
+                    Dmc = reader.IsDBNull(18) ? string.Empty : reader.GetString(18),
                 });
             }
 
@@ -472,20 +476,32 @@ ORDER BY evaluated_at, base_id, id;";
                 .Select(g => g.Key)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-            var toleranceCache = new Dictionary<(int, int), double>();
-            var results = new List<MsaMeasurementResult>();
-            foreach (var group in rows.GroupBy(r => r.DefinitionId))
+            var msaCfg = _config.Config.Msa;
+            List<MsaMeasurementResult> results;
+            MsaVerdict verdict;
+            string verdictReason;
+            var notes = new List<string>();
+
+            if (msaType == MsaType.LimitSample)
             {
-                var list = group.ToList();
-                var first = list[0];
-                var tolerance = await GetToleranceAsync(conn, first.CameraId, first.ParameterSet, toleranceCache, ct)
-                    .ConfigureAwait(false);
-
-                results.Add(Evaluate(msaType, list, tolerance, reference, judged.Contains(first.CameraName)));
+                // Per-part evaluation (task A): each DMC is checked against its own reference file.
+                (results, verdict, verdictReason, notes) =
+                    EvaluateLimitSample(rows, module, msaCfg.ReferencePath, judged, reference);
             }
-
-            // Overall verdict — never a silent PASS (task 2): Invalid when nothing could be judged.
-            var (verdict, verdictReason) = MsaEvaluationText.OverallVerdict(msaType, referenceLoaded, results);
+            else
+            {
+                var toleranceCache = new Dictionary<(int, int), double>();
+                results = new List<MsaMeasurementResult>();
+                foreach (var group in rows.GroupBy(r => r.DefinitionId))
+                {
+                    var list = group.ToList();
+                    var first = list[0];
+                    var tolerance = await GetToleranceAsync(conn, first.CameraId, first.ParameterSet, toleranceCache, ct)
+                        .ConfigureAwait(false);
+                    results.Add(Evaluate(msaType, list, tolerance, reference, judged.Contains(first.CameraName)));
+                }
+                (verdict, verdictReason) = MsaEvaluationText.OverallVerdict(msaType, referenceLoaded, results);
+            }
 
             // Cameras that produced no real judgement in this run (task 4).
             var controllerWarnings = rows.Select(r => r.CameraName).Distinct(StringComparer.OrdinalIgnoreCase)
@@ -503,23 +519,25 @@ ORDER BY evaluated_at, base_id, id;";
                     string.IsNullOrWhiteSpace(r.Reason) ? "(no reason given)" : r.Reason);
             foreach (var w in controllerWarnings)
                 _log.Warning("MSA {Type} BaseID {Base}: {Warning}", msaType, baseId, w);
+            foreach (var n in notes)
+                _log.Information("MSA {Type} BaseID {Base}: {Note}", msaType, baseId, n);
 
             await StoreResultsAsync(conn, baseId, msaType, results, ct).ConfigureAwait(false);
 
-            // Human-facing output folder: <ReportPath>\<Module>\<yyyy-MM-dd> with network fallback (task D).
-            var msa = _config.Config.Msa;
+            // Human-facing run folder: <ReportPath>\<yyyy-MM-dd>\<Module>\<BaseID>\{PDF,RAW,IMG} (task B/D).
             var runAt = BaseId.TryGetTimestamp(baseId, out var dt) ? dt : DateTime.Now;
             var reportDir = MsaResultLayout.EnsureWritableReportDir(
-                msa.ReportPath, msa.ReportFallbackPath, msa.ResultPath, module, runAt, _log);
+                msaCfg.ReportPath, msaCfg.ReportFallbackPath, msaCfg.ResultPath, module, baseId, runAt, _log);
             var report = BuildReport(baseId, module, msaType, rows, results, verdict, verdictReason,
-                controllerWarnings, runAt, msa.ReferencePath, reportDir);
+                controllerWarnings, notes, runAt, msaCfg.ReferencePath, reportDir);
 
-            // Existing per-run collection (measurement summary CSV + images) stays under ResultPath.
+            // Existing per-run measurement summary CSV stays under ResultPath (unchanged).
             ExportCsv(baseId, module, msaType, results);
-            MoveRunImages(baseId);
-            // Reports + raw-data export (Minitab) into the report folder (task B/C).
+            // Report PDFs + RAW export + run images into the run folder's subfolders (task B/C).
             GeneratePdf(report);
-            await ExportRawDataAsync(conn, baseId, module, msaType, reportDir, ct).ConfigureAwait(false);
+            await ExportRawDataAsync(conn, baseId, module, msaType,
+                reportDir is null ? null : Path.Combine(reportDir, MsaResultLayout.RawSubfolder), ct).ConfigureAwait(false);
+            CopyRunImages(baseId, reportDir is null ? null : Path.Combine(reportDir, MsaResultLayout.ImgSubfolder));
 
             // Map the verdict to the PLC word (never a silent OK): Pass→OK, Fail→NG, Invalid→Error;<reason>.
             var word = verdict switch
@@ -645,6 +663,125 @@ ORDER BY evaluated_at, base_id, id;";
                     Evaluated = false, Reason = "unknown MSA type",
                 };
         }
+    }
+
+    /// <summary>
+    /// LimitSample evaluation, PER PART (task A): each DMC in the run is checked against its own
+    /// reference file <c>&lt;ReferencePath&gt;\&lt;Module&gt;\LimitSamples\&lt;DMC&gt;.json</c>. Every ShouldFail
+    /// (prepared error) must be rejected for THAT part; ShouldPass must be accepted. A run DMC with no
+    /// reference → the part is INVALID; a taught DMC missing from the run → a note. Falls back to the
+    /// legacy module-wide <c>limit_sample_expected</c> (MSA_&lt;module&gt;.json) with a WARNING when no
+    /// per-part files exist at all (backward compatibility, task A6).
+    /// </summary>
+    private (List<MsaMeasurementResult> Results, MsaVerdict Verdict, string Reason, List<string> Notes)
+        EvaluateLimitSample(List<MsaRow> rows, string module, string referenceFolder,
+            HashSet<string> judged, MsaReferenceFile? legacy)
+    {
+        var results = new List<MsaMeasurementResult>();
+        var notes = new List<string>();
+        var criterion = MsaEvaluationText.Criterion(MsaType.LimitSample);
+
+        var taught = LimitSampleReference.LoadAll(referenceFolder, module);
+        var taughtByDmc = new Dictionary<string, LimitSampleReference>(StringComparer.OrdinalIgnoreCase);
+        foreach (var t in taught)
+            taughtByDmc[t.Dmc] = t;
+
+        var legacyMap = legacy?.LimitSampleExpected;   // name → shouldFail (module-wide, old format)
+        var useLegacy = taught.Count == 0 && legacyMap is { Count: > 0 };
+        if (useLegacy)
+            _log.Warning("MSA LimitSample {Module}: no per-part references in {Dir} — using legacy module-wide limit_sample_expected (old format).",
+                module, LimitSampleReference.FolderFor(referenceFolder, module));
+
+        var runDmcs = new HashSet<string>(rows.Select(r => r.Dmc), StringComparer.OrdinalIgnoreCase);
+        var missingRef = false;
+
+        foreach (var dmcGroup in rows.GroupBy(r => r.Dmc, StringComparer.OrdinalIgnoreCase))
+        {
+            var dmc = dmcGroup.Key;
+            var defaultCtrl = dmcGroup.First().CameraName;
+
+            Dictionary<string, bool>? expected = null;
+            if (taughtByDmc.TryGetValue(dmc, out var partRef))
+                expected = partRef.Expected.ToDictionary(
+                    kv => kv.Key,
+                    kv => string.Equals(kv.Value, LimitSampleReference.ShouldFail, StringComparison.OrdinalIgnoreCase),
+                    StringComparer.OrdinalIgnoreCase);
+            else if (useLegacy)
+                expected = new Dictionary<string, bool>(legacyMap!, StringComparer.OrdinalIgnoreCase);
+
+            if (expected is null || expected.Count == 0)
+            {
+                missingRef = true;
+                results.Add(new MsaMeasurementResult
+                {
+                    DisplayName = "(part not referenced)", Controller = defaultCtrl, Dmc = dmc,
+                    Evaluated = false, Passed = false, Criterion = criterion,
+                    Reason = $"no LimitSample reference for DMC {dmc}",
+                });
+                continue;
+            }
+
+            var byFeature = dmcGroup.GroupBy(r => r.DisplayName, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
+
+            foreach (var (feature, shouldFail) in expected)
+            {
+                byFeature.TryGetValue(feature, out var frows);
+                var ctrl = frows is { Count: > 0 } ? frows[0].CameraName : defaultCtrl;
+
+                if (frows is null || frows.Count == 0)
+                {
+                    results.Add(new MsaMeasurementResult
+                    {
+                        DisplayName = feature, Controller = ctrl, Dmc = dmc,
+                        Expected = shouldFail ? "reject" : "accept", Actual = "no measurement",
+                        Evaluated = false, ExpectedReject = shouldFail, Passed = false,
+                        Reason = "no measurement for this feature in the run", Criterion = criterion,
+                    });
+                    continue;
+                }
+
+                if (!judged.Contains(ctrl))
+                {
+                    // Camera produced no OK/NOK (only status 2/−1): neutral, not counted (task 4).
+                    results.Add(new MsaMeasurementResult
+                    {
+                        DisplayName = feature, Controller = ctrl, Dmc = dmc,
+                        Expected = shouldFail ? "reject" : "accept", Actual = "not evaluated",
+                        Evaluated = false, ExpectedReject = shouldFail, Passed = true,
+                        Reason = MsaEvaluationText.CameraDidNotJudge, Criterion = criterion, N = frows.Count,
+                    });
+                    continue;
+                }
+
+                var wasRejected = frows.Any(r => r.ResultStatus == 0);
+                var passed = shouldFail ? wasRejected : !wasRejected;
+                results.Add(new MsaMeasurementResult
+                {
+                    DisplayName = feature, Controller = ctrl, Dmc = dmc,
+                    Expected = shouldFail ? "reject" : "accept",
+                    Actual = wasRejected ? "rejected" : "accepted",
+                    Evaluated = true, ExpectedReject = shouldFail, Passed = passed,
+                    Reason = passed ? string.Empty
+                        : (shouldFail ? "prepared error was NOT rejected" : "good feature was rejected"),
+                    Criterion = criterion, N = frows.Count,
+                });
+            }
+        }
+
+        // Taught parts that did not appear in this run → hint (task A3).
+        foreach (var t in taught)
+            if (!runDmcs.Contains(t.Dmc))
+                notes.Add($"taught part {t.Dmc} was not in this run");
+
+        // Overall verdict — never a vacuous PASS (task 2/A3).
+        var (verdict, reason) = MsaEvaluationText.LimitSampleOverall(
+            referencesExist: taught.Count > 0 || useLegacy,
+            anyPartUnreferenced: missingRef,
+            results,
+            LimitSampleReference.FolderFor(referenceFolder, module));
+
+        return (results, verdict, reason, notes);
     }
 
     private sealed record MsaRow(
@@ -866,6 +1003,7 @@ ORDER BY m.controller_name, m.dmc, m.loop_number, md.display_name;";
                 }
             }
 
+            Directory.CreateDirectory(reportDir); // the RAW\ subfolder may not exist yet
             var file = Path.Combine(reportDir, $"{module}_{msaType.ToDbString()}_{FileNaming.Stamp(DateTime.Now)}_RawData.csv");
             await File.WriteAllTextAsync(file, sb.ToString(), new System.Text.UTF8Encoding(true), ct).ConfigureAwait(false);
             _log.Information("MSA raw-data export written for BaseID {Base}: {Rows} row(s) → {File}", baseId, rowCount, file);
@@ -887,45 +1025,52 @@ ORDER BY m.controller_name, m.dmc, m.loop_number, md.display_name;";
     }
 
     /// <summary>
-    /// Move every image of this run out of the GoldenSample input folder into the run's IMG
-    /// subfolder (<c>&lt;ResultPath&gt;\YYYY\MM\DD\&lt;BaseID&gt;\IMG</c>). A run's images are those whose
-    /// filename Field 1 starts with the 14-char BaseID (the loop counter + zero padding follow).
-    /// Best-effort: never fails the evaluation.
+    /// COPY this run's images from the GoldenSample NAS input folder into the run's IMG folder
+    /// (task C). Copies (never moves) so the NAS originals stay untouched. A run's images are those
+    /// whose filename Field 1 starts with the 14-char BaseID (the loop counter + padding follow).
+    /// Missing/unmatched images are NOT a run error — only a log note ("n found / m copied").
     /// </summary>
-    private void MoveRunImages(string baseId)
+    private void CopyRunImages(string baseId, string? imgDir)
     {
-        var src = ImageFileName.SortedRoot(_config.Config.Nas.HighResGoldenSamplePath);
-        if (src is null || !Directory.Exists(src))
+        if (string.IsNullOrWhiteSpace(imgDir))
             return;
 
+        var goldenSample = _config.Config.Nas.HighResGoldenSamplePath;
+        var src = ImageFileName.SortedRoot(goldenSample);
+        if (src is null || !Directory.Exists(src))
+        {
+            _log.Information("MSA images for BaseID {Base}: GoldenSample source '{Src}' not available — 0 copied.",
+                baseId, goldenSample);
+            return;
+        }
+
+        var found = 0;
+        var copied = 0;
         try
         {
-            var msa = _config.Config.Msa;
-            var imgDir = MsaResultLayout.ImgDir(msa.ResultPath, msa.ReferencePath, baseId);
-            var moved = 0;
-
             foreach (var file in Directory.EnumerateFiles(src, "*", SearchOption.AllDirectories))
             {
                 if (!ImageFileName.MatchesBaseId(Path.GetFileName(file), baseId))
                     continue;
+                found++;
                 try
                 {
                     Directory.CreateDirectory(imgDir);
-                    File.Move(file, Path.Combine(imgDir, Path.GetFileName(file)), overwrite: true);
-                    moved++;
+                    File.Copy(file, Path.Combine(imgDir, Path.GetFileName(file)), overwrite: true);
+                    copied++;
                 }
                 catch (Exception ex)
                 {
-                    _log.Debug("Could not move MSA image {File}: {Message}", file, ex.Message);
+                    _log.Debug("Could not copy MSA image {File}: {Message}", file, ex.Message);
                 }
             }
 
-            if (moved > 0)
-                _log.Information("Moved {Count} run image(s) for BaseID {Base} into {Dir}.", moved, baseId, imgDir);
+            _log.Information("MSA images for BaseID {Base}: {Found} found, {Copied} copied into {Dir}.",
+                baseId, found, copied, imgDir);
         }
         catch (Exception ex)
         {
-            _log.Error(ex, "Failed to move run images for BaseID {Base}.", baseId);
+            _log.Error(ex, "Failed to copy run images for BaseID {Base}.", baseId);
         }
     }
 
@@ -947,7 +1092,8 @@ ORDER BY m.controller_name, m.dmc, m.loop_number, md.display_name;";
     private MsaReportData BuildReport(
         string baseId, string module, MsaType msaType, List<MsaRow> rows,
         List<MsaMeasurementResult> results, MsaVerdict verdict, string verdictReason,
-        IReadOnlyList<string> controllerWarnings, DateTime runAt, string referencePath, string? outputDir)
+        IReadOnlyList<string> controllerWarnings, IReadOnlyList<string> notes,
+        DateTime runAt, string referencePath, string? outputDir)
     {
         var referenceFile = MsaReferenceLoader.ReferenceFilePath(referencePath, module);
         DateTime? referenceModified = !string.IsNullOrEmpty(referenceFile) && File.Exists(referenceFile)
@@ -965,6 +1111,7 @@ ORDER BY m.controller_name, m.dmc, m.loop_number, md.display_name;";
             Verdict = verdict,
             VerdictReason = verdictReason,
             ControllerWarnings = controllerWarnings,
+            Notes = notes,
             OutputDirectory = outputDir,
             PartCount = rows.Select(r => r.Dmc).Distinct().Count(),
             LoopCount = rows.Select(r => r.LoopNumber).Distinct().Count(),
@@ -976,6 +1123,7 @@ ORDER BY m.controller_name, m.dmc, m.loop_number, md.display_name;";
             Rows = results.Select(r => new MsaReportRow
             {
                 Controller = r.Controller,
+                Dmc = msaType == MsaType.LimitSample ? r.Dmc : string.Empty,
                 Measurement = r.DisplayName,
                 N = r.N,
                 Mean = r.Mean,

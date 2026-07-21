@@ -22,6 +22,7 @@ public static class MsaResultLayout
     public const string PdfSubfolder = "PDF";
     public const string CsvSubfolder = "CSV";
     public const string ImgSubfolder = "IMG";
+    public const string RawSubfolder = "RAW";
 
     /// <summary>
     /// The run root <c>&lt;root&gt;\YYYY\MM\DD\&lt;BaseID&gt;</c>. <paramref name="resultPath"/> is
@@ -52,24 +53,23 @@ public static class MsaResultLayout
     public const string DefaultReportFallback = @"D:\HarryDataServer\MSA_Reports";
 
     /// <summary>
-    /// The report output folder <c>&lt;root&gt;\&lt;Module&gt;\&lt;yyyy-MM-dd&gt;</c> for the PDF
-    /// reports and the raw-data export (task D). Unlike the per-run collection folder this groups by
-    /// module + calendar day (the customer's requested layout, e.g. <c>X:\MSA_Reports\M50\2026-07-21</c>).
+    /// The per-run report root <c>&lt;root&gt;\&lt;yyyy-MM-dd&gt;\&lt;Module&gt;\&lt;BaseID&gt;</c>
+    /// (2026-07-21 layout). The three outputs live in its subfolders: <c>PDF\</c>, <c>RAW\</c>,
+    /// <c>IMG\</c>. Date is the run's calendar day.
     /// </summary>
-    public static string ReportModuleDate(string root, string module, DateTime runAt) =>
-        Path.Combine(root, Sanitize(module), runAt.ToString("yyyy-MM-dd"));
+    public static string ReportRunRoot(string root, string module, string baseId, DateTime runAt) =>
+        Path.Combine(root, runAt.ToString("yyyy-MM-dd"), Sanitize(module), Sanitize(baseId));
 
     /// <summary>
-    /// Resolve AND create a writable report directory (task D3). Tries the primary root
+    /// Resolve AND create a writable per-run report root (task B/D). Tries the primary root
     /// (<c>[MSA] ReportPath</c>); if that cannot be created/written (network drive down, UNC
     /// unreachable, permission denied) it logs a WARNING and falls back to the local
-    /// <c>[MSA] ReportFallbackPath</c> (or <see cref="DefaultReportFallback"/>). The run is never
-    /// lost and the caller never sees an exception from an unreachable network path.
-    /// <paramref name="reportPath"/> may be empty → the fallback is used directly.
-    /// Returns the created directory, or null only if even the local fallback fails.
+    /// <c>[MSA] ReportFallbackPath</c> (or <see cref="DefaultReportFallback"/>) — SAME layout. The run
+    /// is never lost and the caller never sees an exception from an unreachable network path.
+    /// Returns the created run root (append PDF/RAW/IMG), or null only if even the local fallback fails.
     /// </summary>
     public static string? EnsureWritableReportDir(
-        string reportPath, string reportFallbackPath, string resultPath, string module, DateTime runAt, ILogService log)
+        string reportPath, string reportFallbackPath, string resultPath, string module, string baseId, DateTime runAt, ILogService log)
     {
         var fallbackRoot =
             !string.IsNullOrWhiteSpace(reportFallbackPath) ? reportFallbackPath : DefaultReportFallback;
@@ -80,7 +80,7 @@ public static class MsaResultLayout
             !string.IsNullOrWhiteSpace(resultPath) ? resultPath :
             fallbackRoot;
 
-        var primaryDir = ReportModuleDate(primaryRoot, module, runAt);
+        var primaryDir = ReportRunRoot(primaryRoot, module, baseId, runAt);
         try
         {
             Directory.CreateDirectory(primaryDir);
@@ -88,7 +88,7 @@ public static class MsaResultLayout
         }
         catch (Exception ex)
         {
-            var fallbackDir = ReportModuleDate(fallbackRoot, module, runAt);
+            var fallbackDir = ReportRunRoot(fallbackRoot, module, baseId, runAt);
             if (string.Equals(Path.GetFullPath(primaryDir), Path.GetFullPath(fallbackDir), StringComparison.OrdinalIgnoreCase))
             {
                 log.Error(ex, "MSA report directory {Dir} could not be created (no fallback available).", primaryDir);

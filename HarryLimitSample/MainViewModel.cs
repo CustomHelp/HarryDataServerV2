@@ -27,6 +27,9 @@ public partial class MainViewModel : ObservableObject
     private readonly ScannerCompanionClient _scanner;
     private readonly List<LimitSampleRow> _allRows = new();
 
+    /// <summary>DMC of the currently loaded/scanned part — the key of the per-part reference file.</summary>
+    private string _currentDmc = string.Empty;
+
     public MainViewModel(QueryService query, HarryConfig config, ScannerCompanionClient scanner)
     {
         _query = query;
@@ -60,13 +63,20 @@ public partial class MainViewModel : ObservableObject
             var module = ResolveTargetModule();
             if (module is null)
                 return "Saving to: select a single module to see the path";
-            return "Saving to: " + Path.Combine(_config.MsaReferencePath, MsaReferenceFile.FileName(module));
+            if (string.IsNullOrWhiteSpace(_currentDmc))
+                return "Saving to: (scan a part first — one reference file per DMC)";
+            // Per-part reference file: <ReferencePath>\<Module>\LimitSamples\<DMC>.json (task A).
+            return "Saving to: " + LimitSampleReference.PathFor(_config.MsaReferencePath, module, _currentDmc);
         }
     }
 
     public ObservableCollection<LimitSampleRow> Rows { get; } = new();
     public ObservableCollection<string> Modules { get; } = new();
     public Array Expectations => Enum.GetValues(typeof(Expectation));
+
+    /// <summary>All taught parts (per-part reference files) of the selected module — DMC, when taught,
+    /// and how many prepared errors — with open/delete per row (task A5).</summary>
+    public ObservableCollection<TaughtPartRow> TaughtParts { get; } = new();
 
     [ObservableProperty] private string _scanText = string.Empty;
     [ObservableProperty] private string _msaVersion = "v1";
@@ -127,6 +137,7 @@ public partial class MainViewModel : ObservableObject
     {
         ApplyModuleFilter();
         OnPropertyChanged(nameof(SavePathPreview));
+        RefreshTaughtParts();
     }
 
     private void ApplyModuleFilter()
@@ -168,6 +179,10 @@ public partial class MainViewModel : ObservableObject
                 return;
             }
 
+            _currentDmc = !string.IsNullOrWhiteSpace(part.Dmc) ? part.Dmc!
+                        : !string.IsNullOrWhiteSpace(part.SerialNumber) ? part.SerialNumber
+                        : scan;
+
             var measurements = await _query.GetPartMeasurementsAsync(part);
             foreach (var m in measurements)
                 _allRows.Add(new LimitSampleRow(m));
@@ -178,8 +193,10 @@ public partial class MainViewModel : ObservableObject
                 Modules.Add(m);
             SelectedModule = modules.Count == 1 ? modules[0] : "(all)";
 
-            StatusMessage = $"Loaded {_allRows.Count} measurement(s) across {modules.Count} module(s). " +
-                            "Mark each as Should Pass / Should Fail / Ignore, then Save.";
+            OnPropertyChanged(nameof(SavePathPreview));
+            RefreshTaughtParts();
+            StatusMessage = $"Loaded {_allRows.Count} measurement(s) for DMC {_currentDmc} across {modules.Count} module(s). " +
+                            "Mark each as Should Pass / Should Fail / Ignore, then Save (one file per part).";
         }
         catch (Exception ex)
         {
@@ -281,16 +298,30 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
+        if (string.IsNullOrWhiteSpace(_currentDmc))
+        {
+            StatusMessage = "Cannot save: the scanned part has no DMC/serial (a per-part reference needs a DMC).";
+            MessageBox.Show("Das geladene Teil hat keinen DMC/keine Seriennummer — eine Per-Teil-Referenz braucht einen DMC.",
+                "Kein DMC", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
         try
         {
-            // Preserve the existing references (xm) block if a file already exists.
-            var file = MsaReferenceFile.Load(_config.MsaReferencePath, module) ?? new MsaReferenceFile();
-            file.Module = module;
-            file.MsaVersion = MsaVersion.Trim();
+            // One file PER PART (task A): <ReferencePath>\<Module>\LimitSamples\<DMC>.json.
+            var reference = new LimitSampleReference
+            {
+                Dmc = _currentDmc,
+                Module = module,
+                TaughtAt = DateTime.Now,
+                Controllers = marked.Select(r => r.CameraName)
+                    .Where(s => !string.IsNullOrWhiteSpace(s))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(s => s, StringComparer.OrdinalIgnoreCase)
+                    .ToList(),
+            };
 
-            // The reference is keyed by display_name, which can repeat across cameras —
-            // collapse duplicates into one entry (ShouldFail wins) and flag any conflicts.
-            var expected = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+            // Keyed by display_name (can repeat across cameras) — collapse (ShouldFail wins), flag conflicts.
             var conflicts = new List<string>();
             foreach (var group in marked.GroupBy(r => r.DisplayName, StringComparer.OrdinalIgnoreCase))
             {
@@ -298,15 +329,14 @@ public partial class MainViewModel : ObservableObject
                 var anyPass = group.Any(r => r.Expectation == Expectation.ShouldPass);
                 if (anyFail && anyPass)
                     conflicts.Add(group.Key);
-                expected[group.Key] = anyFail; // prepared error (reject) wins over accept
+                reference.Expected[group.Key] = anyFail ? LimitSampleReference.ShouldFail : LimitSampleReference.ShouldPass;
             }
-            file.LimitSampleExpected = expected;
 
-            var path = file.Save(_config.MsaReferencePath);
-            var fails = expected.Count(kv => kv.Value);
+            var path = reference.Save(_config.MsaReferencePath);
+            var fails = reference.ExpectedRejectCount;
             var conflictNote = conflicts.Count == 0
                 ? string.Empty
-                : $"  ⚠ {conflicts.Count} duplicate name(s) had mixed marks → set to ShouldFail: {string.Join(", ", conflicts.Take(5))}";
+                : $"  ⚠ {conflicts.Count} duplicate name(s) had mixed marks → ShouldFail: {string.Join(", ", conflicts.Take(5))}";
             // Task 3: a reference with no prepared errors (ShouldFail) can never prove a rejection — warn.
             var vacuousNote = fails == 0
                 ? "  ⚠ Keine erwarteten Fehler (ShouldFail) — die Referenz prüft nichts; die MSA-Auswertung meldet dann INVALID."
@@ -314,12 +344,81 @@ public partial class MainViewModel : ObservableObject
             var notJudgedNote = notJudged.Count == 0
                 ? string.Empty
                 : $"  ⚠ Nicht bewertet (nur Status 2/99): {string.Join(", ", notJudged.Take(5))}";
-            StatusMessage = $"Saved {Path.GetFileName(path)} — {expected.Count} entries ({fails} should-fail).{conflictNote}{vacuousNote}{notJudgedNote}";
+            StatusMessage = $"Saved {path} — {reference.Expected.Count} entries ({fails} should-fail).{conflictNote}{vacuousNote}{notJudgedNote}";
+            RefreshTaughtParts();
         }
         catch (Exception ex)
         {
             StatusMessage = "Save failed: " + ex.Message;
             MessageBox.Show(ex.Message, "Save Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    // --- Taught parts list (per-part references of the selected module) ---
+
+    /// <summary>Reload the taught-parts list for the current target module from the LimitSamples folder.</summary>
+    private void RefreshTaughtParts()
+    {
+        TaughtParts.Clear();
+        if (string.IsNullOrWhiteSpace(_config.MsaReferencePath))
+            return;
+        var module = ResolveTargetModule();
+        if (module is null)
+            return;
+        foreach (var r in LimitSampleReference.LoadAll(_config.MsaReferencePath, module)
+                     .OrderByDescending(r => r.TaughtAt))
+            TaughtParts.Add(new TaughtPartRow(r.Dmc, r.TaughtAt, r.ExpectedRejectCount, module));
+    }
+
+    /// <summary>Open a taught part into the grid for viewing/re-editing (its expectations become rows).</summary>
+    [RelayCommand]
+    private void OpenTaughtPart(TaughtPartRow? part)
+    {
+        if (part is null)
+            return;
+        var reference = LimitSampleReference.Load(_config.MsaReferencePath, part.Module, part.Dmc);
+        if (reference is null)
+        {
+            StatusMessage = $"Could not load taught part {part.Dmc}.";
+            return;
+        }
+
+        _allRows.Clear();
+        foreach (var (name, expectation) in reference.Expected)
+        {
+            var exp = string.Equals(expectation, LimitSampleReference.ShouldFail, StringComparison.OrdinalIgnoreCase)
+                ? Expectation.ShouldFail : Expectation.ShouldPass;
+            _allRows.Add(new LimitSampleRow(name, part.Module, exp));
+        }
+        _currentDmc = reference.Dmc;
+
+        Modules.Clear();
+        Modules.Add(part.Module);
+        SelectedModule = part.Module;   // triggers ApplyModuleFilter + SavePathPreview
+        OnPropertyChanged(nameof(SavePathPreview));
+        StatusMessage = $"Loaded taught part {part.Dmc} ({reference.Expected.Count} entries, {reference.ExpectedRejectCount} should-fail) for editing.";
+    }
+
+    /// <summary>Delete one taught part's reference file after confirmation.</summary>
+    [RelayCommand]
+    private void DeleteTaughtPart(TaughtPartRow? part)
+    {
+        if (part is null)
+            return;
+        if (MessageBox.Show($"Delete the LimitSample reference for DMC {part.Dmc} (module {part.Module})?",
+                "Delete taught part", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+            return;
+
+        try
+        {
+            var removed = LimitSampleReference.Delete(_config.MsaReferencePath, part.Module, part.Dmc);
+            StatusMessage = removed ? $"Deleted taught part {part.Dmc}." : $"No file found for {part.Dmc}.";
+            RefreshTaughtParts();
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = "Delete failed: " + ex.Message;
+            MessageBox.Show(ex.Message, "Delete Error", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 

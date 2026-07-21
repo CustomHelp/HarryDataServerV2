@@ -474,18 +474,48 @@ fills it from config so it is never a misleading "(none configured)".
   `Controller;BaseID;Loop;DMC;Measurement;Value;Status;Timestamp` (all cameras/parts/loops/
   measurements). Per CLAUDE.md §15 **no Excel library is used** — it is a `;`-separated UTF-8-BOM CSV
   that opens in Excel and imports 1:1 into Minitab.
-- **`[MSA] ReportPath`** (new) is the output root for PDFs **and** the raw export, laid out as
-  `<ReportPath>\<Module>\<yyyy-MM-dd>\`. Absolute local, mapped-drive and UNC paths are supported;
-  relative resolves against the config dir. If the primary path is unreachable at write time it
-  falls back to **`[MSA] ReportFallbackPath`** (default `D:\HarryDataServer\MSA_Reports`) with a
-  WARNING — never a crash or data loss. `[MSA] ReferencePath` also accepts absolute/UNC paths. The
-  per-run **measurement CSV + images** collection stays under `[MSA] ResultPath\YYYY\MM\DD\<BaseID>`.
+- **Report layout (`[MSA] ReportPath`, changed 2026-07-21):** one folder **per run** —
+  `<ReportPath>\<yyyy-MM-dd>\<Module>\<BaseID>\` with three subfolders **`PDF\`** (the two reports),
+  **`RAW\`** (the Minitab CSV) and **`IMG\`** (the run's images, see below). Date = run's calendar day.
+  Absolute local, mapped-drive and UNC paths are supported; relative resolves against the config dir.
+  If the primary path is unreachable at write time it falls back to **`[MSA] ReportFallbackPath`**
+  (default `D:\HarryDataServer\MSA_Reports`) — SAME layout — with a WARNING, never a crash/data loss.
+  Old flat `<ReportPath>\<Module>\<Date>\` files are left untouched (no migration). The per-run
+  **measurement summary CSV** still lives under `[MSA] ResultPath\YYYY\MM\DD\<BaseID>\CSV`.
+- **Run images (`IMG\`, task C):** `MsaService.CopyRunImages` **copies** (never moves — NAS originals
+  stay) every image whose filename Field 1 starts with the 14-char BaseID from the **GoldenSample**
+  NAS input (`[NAS] HighResGoldenSamplePath`) into `IMG\`. Missing/unmatched images are not a run
+  error — only a log line "n found / m copied". (Predecessor `MoveRunImages` moved GoldenSample-only
+  images into the old ResultPath IMG tree and so appeared inactive.)
 
-### MSA JSON Reference Files
-- Location: configurable per module in Harry.ini
-- One file per module per MSA version
-- Contains: `reference_value` (xm) per measurement name for MSA1
-- Contains: expected pass/fail per measurement for LimitSample
+### MSA Reference Files
+
+**MSA1 xm — module-wide** in `<ReferencePath>\MSA_<Module>.json` (`references`: measurement → xm).
+
+**LimitSample — one file PER PART (per DMC), changed 2026-07-21.** Path:
+`<ReferencePath>\<Module>\LimitSamples\<sanitized-DMC>.json` (`[MSA] ReferencePath`, resolved from
+Harry.ini by BOTH the server and the HarryLimitSample editor). Schema (`HarryShared.Data.LimitSampleReference`):
+```json
+{
+  "dmc": "26062612255644444444000000124051",
+  "module": "M50",
+  "taught_at": "2026-07-21T17:04:33",
+  "source_base_id": "50260721170000",
+  "controllers": ["M50_ST110_KF1", "M50_ST110_KF3"],
+  "expected": { "Anode_Flatness_L": "ShouldFail", "Pin_Area_1": "ShouldPass" }
+}
+```
+Only measurements the camera actually judged (status 0/1) are stored (status-2 omitted). The DMC is
+sanitized for the file name; the original DMC stays in the JSON.
+
+**Per-part evaluation:** each run DMC is checked against ITS file — every `ShouldFail` (prepared
+error) must be rejected for that part, every `ShouldPass` accepted. A run DMC with no file → that
+part **INVALID** with a plain reason; a taught DMC missing from the run → a **note** in the report.
+Overall PASS only if ≥1 prepared error was checked and all evaluated parts passed. **Back-compat:**
+when a module has no per-part files, the legacy module-wide `limit_sample_expected` in
+`MSA_<Module>.json` is read as a fallback with a WARNING ("old format"); the editor writes only
+per-part files. The editor lists taught parts (DMC, taught-at, #prepared errors) with open/edit/delete
+and logs + shows the fully resolved save path.
 
 ### Database Strategy for MSA
 - Use **separate table** `msa_measurements` (identical structure to `measurements_serial`)

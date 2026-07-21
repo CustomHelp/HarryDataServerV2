@@ -122,6 +122,33 @@ public static class MsaEvaluationText
         return (true, string.Empty);
     }
 
+    /// <summary>
+    /// Overall LimitSample verdict from the per-part results (task A/2). INVALID when there are no
+    /// references at all, when a run part has no reference, when nothing was evaluated, or when no
+    /// prepared error (ShouldFail) was checked — never a vacuous PASS. PASS only if every evaluated
+    /// prepared error was detected.
+    /// </summary>
+    public static (MsaVerdict Verdict, string Reason) LimitSampleOverall(
+        bool referencesExist, bool anyPartUnreferenced,
+        IReadOnlyList<MsaMeasurementResult> results, string referencesFolderForMessage)
+    {
+        if (!referencesExist)
+            return (MsaVerdict.Invalid, $"no LimitSample references found in {referencesFolderForMessage}");
+        if (anyPartUnreferenced)
+            return (MsaVerdict.Invalid, "one or more parts in the run have no LimitSample reference");
+
+        var evaluated = results.Where(r => r.Evaluated).ToList();
+        if (evaluated.Count == 0)
+            return (MsaVerdict.Invalid, "no measurement could be evaluated (camera did not judge?)");
+        if (!evaluated.Any(r => r.ExpectedReject))
+            return (MsaVerdict.Invalid, "no prepared error (ShouldFail) to verify");
+
+        var failed = evaluated.Count(r => !r.Passed);
+        return failed > 0
+            ? (MsaVerdict.Fail, $"{failed} of {evaluated.Count} evaluated measurement(s) failed")
+            : (MsaVerdict.Pass, string.Empty);
+    }
+
     private static string Join(IEnumerable<string> parts)
     {
         var list = parts.Where(p => !string.IsNullOrWhiteSpace(p)).ToList();

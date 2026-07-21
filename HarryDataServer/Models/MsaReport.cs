@@ -9,6 +9,9 @@ public sealed class MsaReportRow
     /// <summary>The camera the measurement belongs to (disambiguates KF1/KF3 within a module run).</summary>
     public string Controller { get; init; } = string.Empty;
 
+    /// <summary>The part DMC (LimitSample is evaluated per part; blank for MSA1/3 aggregate rows).</summary>
+    public string Dmc { get; init; } = string.Empty;
+
     public string Measurement { get; init; } = string.Empty;
 
     /// <summary>Number of measured values used.</summary>
@@ -65,6 +68,9 @@ public sealed class MsaReportData
     /// <summary>Cameras that produced no real judgement in the run (task 4), one line each.</summary>
     public IReadOnlyList<string> ControllerWarnings { get; init; } = Array.Empty<string>();
 
+    /// <summary>Informational notes (e.g. taught LimitSample parts that were not in this run, task A3).</summary>
+    public IReadOnlyList<string> Notes { get; init; } = Array.Empty<string>();
+
     public IReadOnlyList<MsaReportRow> Rows { get; init; } = Array.Empty<MsaReportRow>();
 
     /// <summary>Explicit output folder for the PDFs (report path with fallback already resolved);
@@ -95,6 +101,7 @@ public sealed class MsaReportData
         var rows = run.Rows.Select(r => new MsaReportRow
         {
             Controller = r.Controller,
+            Dmc = run.MsaType == MsaType.LimitSample ? r.Dmc : string.Empty,
             Measurement = r.DisplayName,
             N = r.N,
             Mean = r.Mean,

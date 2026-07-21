@@ -67,7 +67,7 @@
                     <Button Content="Load existing" Command="{Binding LoadExistingCommand}" Margin="0,0,4,0" />
                     <Button Content="Clear marks" Command="{Binding ClearMarksCommand}" Margin="0,0,4,0" />
                     <StackPanel Orientation="Vertical">
-                        <Button Content="Save MSA_module.json" Command="{Binding SaveCommand}" Width="170" />
+                        <Button Content="Save part reference" Command="{Binding SaveCommand}" Width="170" />
                         <TextBlock Text="{Binding SavePathPreview}" Foreground="{DynamicResource TextDimBrush}"
                                    FontSize="11" Margin="0,3,0,0" TextTrimming="CharacterEllipsis" MaxWidth="360" />
                     </StackPanel>
@@ -80,25 +80,65 @@
                 <TextBlock Text="{Binding NotFoundText}" Foreground="White" FontWeight="Bold" />
             </Border>
 
-            <!-- Measurement grid -->
-            <DataGrid Grid.Row="2" ItemsSource="{Binding Rows}">
-                <DataGrid.Columns>
-                    <DataGridTextColumn Header="Measurement" Binding="{Binding DisplayName}" Width="2*" />
-                    <DataGridTextColumn Header="Module" Binding="{Binding Module}" Width="80" />
-                    <DataGridTextColumn Header="Camera" Binding="{Binding CameraName}" Width="*" />
-                    <DataGridTextColumn Header="Value" Binding="{Binding ValueText}" Width="90" />
-                    <DataGridTextColumn Header="Result" Binding="{Binding ResultText}" Width="90" />
-                    <DataGridTemplateColumn Header="Expectation" Width="160">
-                        <DataGridTemplateColumn.CellTemplate>
-                            <DataTemplate>
-                                <ComboBox SelectedItem="{Binding Expectation, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                          ItemsSource="{Binding DataContext.Expectations, RelativeSource={RelativeSource AncestorType=Window}}"
-                                          Margin="2" />
-                            </DataTemplate>
-                        </DataGridTemplateColumn.CellTemplate>
-                    </DataGridTemplateColumn>
-                </DataGrid.Columns>
-            </DataGrid>
+            <!-- Measurement grid (left) + taught-parts list (right) -->
+            <Grid Grid.Row="2">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="320" />
+                </Grid.ColumnDefinitions>
+
+                <DataGrid Grid.Column="0" ItemsSource="{Binding Rows}">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Measurement" Binding="{Binding DisplayName}" Width="2*" />
+                        <DataGridTextColumn Header="Module" Binding="{Binding Module}" Width="80" />
+                        <DataGridTextColumn Header="Camera" Binding="{Binding CameraName}" Width="*" />
+                        <DataGridTextColumn Header="Value" Binding="{Binding ValueText}" Width="90" />
+                        <DataGridTextColumn Header="Result" Binding="{Binding ResultText}" Width="90" />
+                        <DataGridTemplateColumn Header="Expectation" Width="160">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <ComboBox SelectedItem="{Binding Expectation, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              ItemsSource="{Binding DataContext.Expectations, RelativeSource={RelativeSource AncestorType=Window}}"
+                                              Margin="2" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+
+                <!-- Taught parts of the selected module (per-part reference files) -->
+                <Border Grid.Column="1" Style="{StaticResource Card}" Margin="8,0,0,0">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Top" Text="Taught parts (this module)" FontWeight="SemiBold"
+                                   Margin="0,0,0,6" />
+                        <TextBlock DockPanel.Dock="Bottom" FontSize="11" Foreground="{DynamicResource TextDimBrush}"
+                                   TextWrapping="Wrap" Margin="0,6,0,0"
+                                   Text="Open loads a part for re-editing; Delete removes its reference file." />
+                        <DataGrid ItemsSource="{Binding TaughtParts}" AutoGenerateColumns="False"
+                                  IsReadOnly="True" HeadersVisibility="Column">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="DMC" Binding="{Binding Dmc}" Width="*" />
+                                <DataGridTextColumn Header="Taught" Binding="{Binding TaughtAt, StringFormat=yyyy-MM-dd HH:mm}" Width="Auto" />
+                                <DataGridTextColumn Header="#Fail" Binding="{Binding ExpectedFailCount}" Width="Auto" />
+                                <DataGridTemplateColumn Width="Auto">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Orientation="Horizontal">
+                                                <Button Content="Open" Margin="2" Padding="6,1"
+                                                        Command="{Binding DataContext.OpenTaughtPartCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                        CommandParameter="{Binding}" />
+                                                <Button Content="Delete" Margin="2" Padding="6,1"
+                                                        Command="{Binding DataContext.DeleteTaughtPartCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                        CommandParameter="{Binding}" />
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+                </Border>
+            </Grid>
         </Grid>
     </DockPanel>
 </Window>

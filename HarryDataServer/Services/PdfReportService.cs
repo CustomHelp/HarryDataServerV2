@@ -35,19 +35,21 @@ public sealed class PdfReportService : IPdfReportService
 
     public MsaReportPaths ResolvePaths(MsaReportData report)
     {
-        // Prefer the folder the MSA engine already resolved (report path with network fallback, task D).
-        var dir = report.OutputDirectory;
-        if (string.IsNullOrWhiteSpace(dir))
+        // Prefer the run root the MSA engine already resolved (report path with network fallback, task B/D).
+        var runRoot = report.OutputDirectory;
+        if (string.IsNullOrWhiteSpace(runRoot))
         {
             var msa = _config.Config.Msa;
-            dir = MsaResultLayout.EnsureWritableReportDir(
-                      msa.ReportPath, msa.ReportFallbackPath, msa.ResultPath, report.Module, report.RunAt, _log)
-                  ?? MsaResultLayout.ReportModuleDate(MsaResultLayout.DefaultReportFallback, report.Module, report.RunAt);
+            runRoot = MsaResultLayout.EnsureWritableReportDir(
+                          msa.ReportPath, msa.ReportFallbackPath, msa.ResultPath, report.Module, report.BaseId, report.RunAt, _log)
+                      ?? MsaResultLayout.ReportRunRoot(MsaResultLayout.DefaultReportFallback, report.Module, report.BaseId, report.RunAt);
         }
+        // PDFs live in the run root's PDF\ subfolder (RAW\ and IMG\ sit beside it).
+        var pdfDir = Path.Combine(runRoot, MsaResultLayout.PdfSubfolder);
         var baseName = $"{Sanitize(report.Module)}_{Sanitize(report.TestType)}_{Sanitize(report.BaseId)}_{FileNaming.Stamp(report.RunAt)}";
         return new MsaReportPaths(
-            Path.Combine(dir, baseName + "_AllResults.pdf"),
-            Path.Combine(dir, baseName + "_FailuresOnly.pdf"));
+            Path.Combine(pdfDir, baseName + "_AllResults.pdf"),
+            Path.Combine(pdfDir, baseName + "_FailuresOnly.pdf"));
     }
 
     public MsaReportPaths Generate(MsaReportData report)
@@ -140,6 +142,9 @@ public sealed class PdfReportService : IPdfReportService
                     // Cameras that produced no real judgement in the run (task 4).
                     foreach (var warning in report.ControllerWarnings)
                         col.Item().Text(t => t.Span("⚠ " + warning).FontColor(Colors.Orange.Darken2).SemiBold());
+                    // Informational notes (e.g. taught parts missing from the run, task A3).
+                    foreach (var note in report.Notes)
+                        col.Item().Text(t => t.Span("• " + note).FontColor(Colors.Grey.Darken1));
                     col.Item().PaddingTop(3).LineHorizontal(1).LineColor(Colors.Grey.Medium);
                 });
 
@@ -148,21 +153,22 @@ public sealed class PdfReportService : IPdfReportService
                     table.ColumnsDefinition(c =>
                     {
                         c.RelativeColumn(2.2f); // Controller
+                        c.RelativeColumn(2.6f); // DMC (part)
                         c.RelativeColumn(3);    // Measurement
                         c.RelativeColumn(0.7f); // n
-                        c.RelativeColumn(1.3f); // Mean
-                        c.RelativeColumn(1.3f); // StdDev
-                        c.RelativeColumn(1.2f); // Reference
-                        c.RelativeColumn(1.2f); // Tolerance
-                        c.RelativeColumn(2.4f); // Cg/Cgk or %P/T
-                        c.RelativeColumn(0.9f); // Result
-                        c.RelativeColumn(3.5f); // Reason / notes
+                        c.RelativeColumn(1.2f); // Mean
+                        c.RelativeColumn(1.2f); // StdDev
+                        c.RelativeColumn(1.1f); // Reference
+                        c.RelativeColumn(1.1f); // Tolerance
+                        c.RelativeColumn(2.2f); // Cg/Cgk or %P/T
+                        c.RelativeColumn(1.0f); // Result
+                        c.RelativeColumn(3.4f); // Reason / notes
                     });
 
                     table.Header(header =>
                     {
                         foreach (var title in new[]
-                                 { "Controller", "Measurement", "n", "Mean", "StdDev", "Ref (xm)", "Tol (T)",
+                                 { "Controller", "DMC (part)", "Measurement", "n", "Mean", "StdDev", "Ref (xm)", "Tol (T)",
                                    "Cg/Cgk or %P/T", "Result", "Reason / notes" })
                             header.Cell().Background(Colors.Grey.Lighten2).Padding(4).Text(title).SemiBold();
                     });
@@ -171,13 +177,14 @@ public sealed class PdfReportService : IPdfReportService
 
                     if (rows.Count == 0)
                     {
-                        table.Cell().ColumnSpan(10).Padding(6).Text("No measurements.").Italic();
+                        table.Cell().ColumnSpan(11).Padding(6).Text("No measurements.").Italic();
                     }
                     else
                     {
                         foreach (var row in rows)
                         {
                             Cell().Text(row.Controller);
+                            Cell().Text(row.Dmc);
                             Cell().Text(row.Measurement);
                             Cell().Text(row.N.ToString(CultureInfo.InvariantCulture));
                             Cell().Text(Fmt(row.Mean));
@@ -185,9 +192,15 @@ public sealed class PdfReportService : IPdfReportService
                             Cell().Text(Fmt(row.Reference));
                             Cell().Text(Fmt(row.Tolerance));
                             Cell().Text(row.Metric);
+                            // Non-evaluated rows must not read as PASS/FAIL — show n/a (task 2/4).
                             Cell().Text(t =>
-                                t.Span(row.Passed ? "PASS" : "FAIL").SemiBold()
-                                 .FontColor(row.Passed ? Colors.Green.Darken2 : Colors.Red.Darken2));
+                            {
+                                if (!row.Evaluated)
+                                    t.Span("n/a").FontColor(Colors.Grey.Darken1);
+                                else
+                                    t.Span(row.Passed ? "PASS" : "FAIL").SemiBold()
+                                        .FontColor(row.Passed ? Colors.Green.Darken2 : Colors.Red.Darken2);
+                            });
                             Cell().Text(row.Reason);
                         }
                     }

@@ -4,6 +4,7 @@ namespace HarryDataServer.Models;
 public sealed class MsaResultRow
 {
     public string Controller { get; init; } = string.Empty;
+    public string Dmc { get; init; } = string.Empty;
     public string DisplayName { get; init; } = string.Empty;
     public double? Cg { get; init; }
     public double? Cgk { get; init; }
