@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Dependency-free regression test runner for the telegram measurement extraction.
+    Deliberately NOT xUnit/NUnit: the production/commissioning machine has no guaranteed
+    NuGet connectivity, so this project references only the main project and the .NET SDK.
+    Run with:  dotnet run (project HarryDataServer.Tests) -c Debug
+    Exit code 0 = all cases passed; non-zero = a case failed (count of failures).
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>HarryDataServer.Tests</RootNamespace>
+    <AssemblyName>HarryDataServer.Tests</AssemblyName>
+    <LangVersion>latest</LangVersion>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\HarryDataServer\HarryDataServer.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Real captured telegram lines (raw, capture-timestamp field stripped). -->
+    <Content Include="TestData\*.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+</Project>

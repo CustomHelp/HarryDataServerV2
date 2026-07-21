@@ -715,13 +715,20 @@ innodb_file_per_table           = 1
 Location: configurable per camera in Harry.ini (`JsonParameters=` and `JsonSettings=`)
 
 ### Result JSON (`Result_CameraName.json`)
+
+> **`telegram_place` starts at 72, NOT 71.** Token 71 is `Total_Result` (§4, display only); the
+> first R_/V_ measurement pair is at tokens 72/73. A template that numbers the first R_ at 71 is
+> off by one — every R_ then reads `Total_Result`/a V float and every V_ reads an R status, so the
+> DB stores the status in `measurement_value` and NULL in `result_status`. (This exact off-by-one
+> in the live M2X/M5X templates broke both production and MSA until 2026-07-21.)
+
 ```json
 {
   "camera": "M50_ST110_KF1",
   "signal_word": "Results",
   "measurements": [
     {
-      "telegram_place": 71,
+      "telegram_place": 72,
       "variable_name": "R_Anode_Flatness_L",
       "display_name": "Anode_Flatness_L",
       "type": "Result",
@@ -731,7 +738,7 @@ Location: configurable per camera in Harry.ini (`JsonParameters=` and `JsonSetti
       "feature_group": "Anode Measured"
     },
     {
-      "telegram_place": 72,
+      "telegram_place": 73,
       "variable_name": "V_Anode_Flatness_L",
       "display_name": "Anode_Flatness_L",
       "type": "Value",

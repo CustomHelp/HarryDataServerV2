@@ -44,6 +44,26 @@
     },
     {
       "telegram_place": 76,
+      "variable_name": "R_Trimmer_Seated",
+      "display_name": "Trimmer_Seated",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 8,
+      "module_ref": "M2x",
+      "feature_group": "Trimmer sub-assembly"
+    },
+    {
+      "telegram_place": 77,
+      "variable_name": "V_Trimmer_Seated",
+      "display_name": "Trimmer_Seated",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 8,
+      "module_ref": "M2x",
+      "feature_group": "Trimmer sub-assembly"
+    },
+    {
+      "telegram_place": 78,
       "variable_name": "R_Pin_Area_1",
       "display_name": "Pin_Area_1",
       "type": "Result",
@@ -53,7 +73,7 @@
       "feature_group": "Trimmer Pin Area Distance"
     },
     {
-      "telegram_place": 77,
+      "telegram_place": 79,
       "variable_name": "V_Pin_Area_1",
       "display_name": "Pin_Area_1",
       "type": "Value",
@@ -63,7 +83,7 @@
       "feature_group": "Trimmer Pin Area Distance"
     },
     {
-      "telegram_place": 78,
+      "telegram_place": 80,
       "variable_name": "R_Pin_Area_2",
       "display_name": "Pin_Area_2",
       "type": "Result",
@@ -73,7 +93,7 @@
       "feature_group": "Trimmer Pin Area Distance"
     },
     {
-      "telegram_place": 79,
+      "telegram_place": 81,
       "variable_name": "V_Pin_Area_2",
       "display_name": "Pin_Area_2",
       "type": "Value",
@@ -83,7 +103,7 @@
       "feature_group": "Trimmer Pin Area Distance"
     },
     {
-      "telegram_place": 80,
+      "telegram_place": 82,
       "variable_name": "R_Pin_Area_3",
       "display_name": "Pin_Area_3",
       "type": "Result",
@@ -93,7 +113,7 @@
       "feature_group": "Trimmer Pin Area Distance"
     },
     {
-      "telegram_place": 81,
+      "telegram_place": 83,
       "variable_name": "V_Pin_Area_3",
       "display_name": "Pin_Area_3",
       "type": "Value",
@@ -103,7 +123,7 @@
       "feature_group": "Trimmer Pin Area Distance"
     },
     {
-      "telegram_place": 82,
+      "telegram_place": 84,
       "variable_name": "R_Pin_Area_4",
       "display_name": "Pin_Area_4",
       "type": "Result",
@@ -113,7 +133,7 @@
       "feature_group": "Trimmer Pin Area Distance"
     },
     {
-      "telegram_place": 83,
+      "telegram_place": 85,
       "variable_name": "V_Pin_Area_4",
       "display_name": "Pin_Area_4",
       "type": "Value",
@@ -123,7 +143,7 @@
       "feature_group": "Trimmer Pin Area Distance"
     },
     {
-      "telegram_place": 84,
+      "telegram_place": 86,
       "variable_name": "R_Pin_Distance_1",
       "display_name": "Pin_Distance_1",
       "type": "Result",
@@ -133,7 +153,7 @@
       "feature_group": "Trimmer Pin Area Distance"
     },
     {
-      "telegram_place": 85,
+      "telegram_place": 87,
       "variable_name": "V_Pin_Distance_1",
       "display_name": "Pin_Distance_1",
       "type": "Value",
@@ -143,7 +163,7 @@
       "feature_group": "Trimmer Pin Area Distance"
     },
     {
-      "telegram_place": 86,
+      "telegram_place": 88,
       "variable_name": "R_Pin_Distance_2",
       "display_name": "Pin_Distance_2",
       "type": "Result",
@@ -153,7 +173,7 @@
       "feature_group": "Trimmer Pin Area Distance"
     },
     {
-      "telegram_place": 87,
+      "telegram_place": 89,
       "variable_name": "V_Pin_Distance_2",
       "display_name": "Pin_Distance_2",
       "type": "Value",
@@ -163,7 +183,7 @@
       "feature_group": "Trimmer Pin Area Distance"
     },
     {
-      "telegram_place": 88,
+      "telegram_place": 90,
       "variable_name": "R_Pin_Distance_3",
       "display_name": "Pin_Distance_3",
       "type": "Result",
@@ -173,7 +193,7 @@
       "feature_group": "Trimmer Pin Area Distance"
     },
     {
-      "telegram_place": 89,
+      "telegram_place": 91,
       "variable_name": "V_Pin_Distance_3",
       "display_name": "Pin_Distance_3",
       "type": "Value",
@@ -183,7 +203,7 @@
       "feature_group": "Trimmer Pin Area Distance"
     },
     {
-      "telegram_place": 90,
+      "telegram_place": 92,
       "variable_name": "R_Pin_Distance_4",
       "display_name": "Pin_Distance_4",
       "type": "Result",
@@ -193,7 +213,7 @@
       "feature_group": "Trimmer Pin Area Distance"
     },
     {
-      "telegram_place": 91,
+      "telegram_place": 93,
       "variable_name": "V_Pin_Distance_4",
       "display_name": "Pin_Distance_4",
       "type": "Value",
@@ -203,7 +223,7 @@
       "feature_group": "Trimmer Pin Area Distance"
     },
     {
-      "telegram_place": 92,
+      "telegram_place": 94,
       "variable_name": "R_Anode_Area_1",
       "display_name": "Anode_Area_1",
       "type": "Result",
@@ -213,7 +233,7 @@
       "feature_group": "Anode Cosmetic"
     },
     {
-      "telegram_place": 93,
+      "telegram_place": 95,
       "variable_name": "V_Anode_Area_1",
       "display_name": "Anode_Area_1",
       "type": "Value",
@@ -223,7 +243,7 @@
       "feature_group": "Anode Cosmetic"
     },
     {
-      "telegram_place": 94,
+      "telegram_place": 96,
       "variable_name": "R_Anode_Area_2",
       "display_name": "Anode_Area_2",
       "type": "Result",
@@ -233,7 +253,7 @@
       "feature_group": "Anode Cosmetic"
     },
     {
-      "telegram_place": 95,
+      "telegram_place": 97,
       "variable_name": "V_Anode_Area_2",
       "display_name": "Anode_Area_2",
       "type": "Value",
@@ -243,7 +263,7 @@
       "feature_group": "Anode Cosmetic"
     },
     {
-      "telegram_place": 96,
+      "telegram_place": 98,
       "variable_name": "R_Anode_Area_3",
       "display_name": "Anode_Area_3",
       "type": "Result",
@@ -253,7 +273,7 @@
       "feature_group": "Anode Cosmetic"
     },
     {
-      "telegram_place": 97,
+      "telegram_place": 99,
       "variable_name": "V_Anode_Area_3",
       "display_name": "Anode_Area_3",
       "type": "Value",
@@ -263,7 +283,7 @@
       "feature_group": "Anode Cosmetic"
     },
     {
-      "telegram_place": 98,
+      "telegram_place": 100,
       "variable_name": "R_Anode_Area_4",
       "display_name": "Anode_Area_4",
       "type": "Result",
@@ -273,7 +293,7 @@
       "feature_group": "Anode Cosmetic"
     },
     {
-      "telegram_place": 99,
+      "telegram_place": 101,
       "variable_name": "V_Anode_Area_4",
       "display_name": "Anode_Area_4",
       "type": "Value",
@@ -283,7 +303,7 @@
       "feature_group": "Anode Cosmetic"
     },
     {
-      "telegram_place": 100,
+      "telegram_place": 102,
       "variable_name": "R_TrimMount_Cosmetic_Pix",
       "display_name": "TrimMount_Cosmetic_Pix",
       "type": "Result",
@@ -293,7 +313,7 @@
       "feature_group": "Trimmer Mount Cosmetic"
     },
     {
-      "telegram_place": 101,
+      "telegram_place": 103,
       "variable_name": "V_TrimMount_Cosmetic_Pix",
       "display_name": "TrimMount_Cosmetic_Pix",
       "type": "Value",
@@ -303,7 +323,7 @@
       "feature_group": "Trimmer Mount Cosmetic"
     },
     {
-      "telegram_place": 102,
+      "telegram_place": 104,
       "variable_name": "R_TrimMount_Cosmetic_Scar",
       "display_name": "TrimMount_Cosmetic_Scar",
       "type": "Result",
@@ -313,7 +333,7 @@
       "feature_group": "Trimmer Mount Cosmetic"
     },
     {
-      "telegram_place": 103,
+      "telegram_place": 105,
       "variable_name": "V_TrimMount_Cosmetic_Scar",
       "display_name": "TrimMount_Cosmetic_Scar",
       "type": "Value",
@@ -323,7 +343,7 @@
       "feature_group": "Trimmer Mount Cosmetic"
     },
     {
-      "telegram_place": 104,
+      "telegram_place": 106,
       "variable_name": "S_OCR",
       "display_name": "OCR",
       "type": "Value",
@@ -333,7 +353,7 @@
       "feature_group": "NoGroup"
     },
     {
-      "telegram_place": 105,
+      "telegram_place": 107,
       "variable_name": "S_OCR2",
       "display_name": "OCR2",
       "type": "Value",
