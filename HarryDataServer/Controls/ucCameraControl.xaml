@@ -3,16 +3,17 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Border Style="{StaticResource Card}" Margin="6">
         <StackPanel>
-            <!-- Header -->
-            <DockPanel>
+            <!-- Header on a single line (name · ip:port · module) to leave room for more list lines (task D) -->
+            <DockPanel Margin="0,0,0,6">
                 <TextBlock Text="{Binding Module}" DockPanel.Dock="Right" Foreground="{DynamicResource AccentLight}"
-                           FontWeight="Bold" VerticalAlignment="Center" />
-                <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="13"
-                           TextTrimming="CharacterEllipsis" />
+                           FontWeight="Bold" VerticalAlignment="Center" Margin="8,0,0,0" />
+                <TextBlock DockPanel.Dock="Right" Foreground="{DynamicResource TextDimBrush}" FontSize="11"
+                           VerticalAlignment="Center" Margin="8,0,0,0">
+                    <Run Text="{Binding Ip, Mode=OneWay}" /><Run Text=":" /><Run Text="{Binding Port, Mode=OneWay}" />
+                </TextBlock>
+                <TextBlock Text="{Binding Name}" ToolTip="{Binding Name}" FontWeight="Bold" FontSize="13"
+                           TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
             </DockPanel>
-            <TextBlock Margin="0,2,0,6" Foreground="{DynamicResource TextDimBrush}">
-                <Run Text="{Binding Ip, Mode=OneWay}" /><Run Text=":" /><Run Text="{Binding Port, Mode=OneWay}" />
-            </TextBlock>
 
             <!-- Last-received operating mode + independent diagnostic badge -->
             <DockPanel Margin="0,0,0,8">
@@ -65,16 +66,20 @@
                 </TextBlock>
             </DockPanel>
 
-            <!-- Last 3 telegrams (right-click a line to copy its serial) -->
+            <!-- Last telegrams (≥ 4 lines visible; right-click a line to copy its serial) -->
             <TextBlock Text="Last telegrams" Foreground="{DynamicResource TextDimBrush}" FontSize="11" />
-            <ListBox ItemsSource="{Binding RecentTelegrams}" Height="62" Margin="0,2,0,8"
+            <ListBox ItemsSource="{Binding RecentTelegrams}" Height="100" Margin="0,2,0,8"
                      FontFamily="Consolas" FontSize="11" BorderThickness="1"
-                     HorizontalContentAlignment="Stretch">
+                     HorizontalContentAlignment="Stretch"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                 <ListBox.ItemTemplate>
                     <DataTemplate>
                         <!-- Transparent background so the whole row is right-clickable. Each item
-                             gets its own ContextMenu (per-item DataContext = the RecentTelegram). -->
-                        <TextBlock Text="{Binding Text}" Background="Transparent">
+                             gets its own ContextMenu (per-item DataContext = the RecentTelegram).
+                             Trims with an ellipsis and shows the full line as a tooltip (task B/D). -->
+                        <TextBlock Text="{Binding Text}" ToolTip="{Binding Text}" Background="Transparent"
+                                   TextTrimming="CharacterEllipsis">
                             <TextBlock.ContextMenu>
                                 <ContextMenu>
                                     <MenuItem Header="Seriennummer kopieren" Click="OnCopySerial" />

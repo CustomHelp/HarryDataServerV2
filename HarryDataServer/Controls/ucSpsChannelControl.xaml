@@ -1,28 +1,43 @@
 <UserControl x:Class="HarryDataServer.Controls.ucSpsChannelControl"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <Border Style="{StaticResource Card}" Margin="6" Width="340">
+    <UserControl.Resources>
+        <!-- Monospace line that trims with an ellipsis and shows its full text on hover (task B/C). -->
+        <DataTemplate x:Key="TelegramLineTemplate">
+            <TextBlock Text="{Binding}" ToolTip="{Binding}"
+                       FontFamily="Consolas" FontSize="12" TextTrimming="CharacterEllipsis" />
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <Border Style="{StaticResource Card}" Margin="6" Width="680">
         <StackPanel>
             <DockPanel>
-                <Ellipse Width="11" Height="11" Fill="{Binding ConnectedBrush}" DockPanel.Dock="Right" VerticalAlignment="Center" />
-                <TextBlock Text="{Binding Title}" FontWeight="Bold" FontSize="13" TextTrimming="CharacterEllipsis" />
+                <Ellipse Width="13" Height="13" Fill="{Binding ConnectedBrush}" DockPanel.Dock="Right" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding Title}" ToolTip="{Binding Title}" FontWeight="Bold" FontSize="15"
+                           TextTrimming="CharacterEllipsis" />
             </DockPanel>
-            <DockPanel Margin="0,2,0,8">
-                <TextBlock DockPanel.Dock="Right" Foreground="{DynamicResource TextDimBrush}">
+            <DockPanel Margin="0,4,0,10">
+                <TextBlock DockPanel.Dock="Right" Foreground="{DynamicResource TextDimBrush}" FontSize="12">
                     <Run Text="Msgs:" /><Run Text="{Binding Messages, Mode=OneWay}" />
                 </TextBlock>
-                <TextBlock Foreground="{DynamicResource TextDimBrush}">
+                <TextBlock Foreground="{DynamicResource TextDimBrush}" FontSize="12">
                     <Run Text="Port" /><Run Text="{Binding Port, Mode=OneWay}" />
                 </TextBlock>
             </DockPanel>
 
-            <TextBlock Text="Last requests" Foreground="{DynamicResource TextDimBrush}" FontSize="11" />
-            <ListBox ItemsSource="{Binding LastRequests}" Height="44" Margin="0,2,0,6"
-                     FontFamily="Consolas" FontSize="11" />
+            <TextBlock Text="Last requests" Foreground="{DynamicResource TextDimBrush}" FontSize="12" />
+            <ListBox ItemsSource="{Binding LastRequests}" Height="190" Margin="0,3,0,8"
+                     ItemTemplate="{StaticResource TelegramLineTemplate}"
+                     HorizontalContentAlignment="Stretch"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled" />
 
-            <TextBlock Text="Last responses" Foreground="{DynamicResource TextDimBrush}" FontSize="11" />
-            <ListBox ItemsSource="{Binding LastResponses}" Height="44" Margin="0,2,0,0"
-                     FontFamily="Consolas" FontSize="11" />
+            <TextBlock Text="Last responses" Foreground="{DynamicResource TextDimBrush}" FontSize="12" />
+            <ListBox ItemsSource="{Binding LastResponses}" Height="190" Margin="0,3,0,0"
+                     ItemTemplate="{StaticResource TelegramLineTemplate}"
+                     HorizontalContentAlignment="Stretch"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled" />
         </StackPanel>
     </Border>
 </UserControl>

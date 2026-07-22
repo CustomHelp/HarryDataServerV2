@@ -17,7 +17,7 @@ public sealed class CompanionToolViewModel
     /// <summary>Companion app exe names (CLAUDE.md §16), in display order.</summary>
     private static readonly string[] ToolNames =
     {
-        "HarryAnalysis", "HarryGraph", "HarryCounter", "HarryLimitSample", "HarryCollageCreator",
+        "HarryAnalysis", "HarryGraph", "HarryCounter", "HarryLimitSample", "HarryCollageCreator", "HarryPareto",
     };
 
     private readonly ILogService _log;

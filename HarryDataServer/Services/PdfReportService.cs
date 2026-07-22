@@ -6,6 +6,7 @@ using HarryDataServer.Models;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
+using LimitSampleReference = HarryShared.Data.LimitSampleReference;
 
 namespace HarryDataServer.Services;
 
@@ -60,12 +61,12 @@ public sealed class PdfReportService : IPdfReportService
         Directory.CreateDirectory(Path.GetDirectoryName(paths.AllResults)!);
 
         // Fill the reference-file head from config when the report did not carry it (on-demand UI path, task 1).
-        var (refFile, refMtime) = ResolveReferenceInfo(report);
+        var (refFile, refMtime, legacyFile) = ResolveReferenceInfo(report);
 
-        BuildDocument(report, report.Rows, refFile, refMtime).GeneratePdf(paths.AllResults);
+        BuildDocument(report, report.Rows, refFile, refMtime, legacyFile).GeneratePdf(paths.AllResults);
 
         var failures = report.Rows.Where(r => !r.Passed).ToList();
-        BuildDocument(report, failures, refFile, refMtime).GeneratePdf(paths.FailuresOnly);
+        BuildDocument(report, failures, refFile, refMtime, legacyFile).GeneratePdf(paths.FailuresOnly);
 
         _log.Information("MSA PDF reports written for {Module}/{Type} ({Failures} failure(s)): {All} | {Fail}",
             report.Module, report.TestType, failures.Count, paths.AllResults, paths.FailuresOnly);
@@ -74,22 +75,39 @@ public sealed class PdfReportService : IPdfReportService
 
     private static string Fmt(double? v) => v?.ToString("0.###", CultureInfo.InvariantCulture) ?? "—";
 
-    /// <summary>Resolve the reference file path + mtime for the head, filling from config when the
-    /// report did not carry it (e.g. the on-demand UI path builds via <see cref="MsaReportData.FromRun"/>).</summary>
-    private (string File, DateTime? Modified) ResolveReferenceInfo(MsaReportData report)
+    /// <summary>
+    /// Resolve the reference file shown in the head (task A2). For a per-part LimitSample report the
+    /// file actually used is the per-DMC file <c>&lt;ReferencePath&gt;\&lt;Module&gt;\LimitSamples\&lt;DMC&gt;.json</c>
+    /// (deterministic from config, so this is correct for the on-demand UI path too) — the misleading
+    /// module-wide MSA_&lt;module&gt;.json is NEVER used as a silent fallback. The legacy path is returned
+    /// separately and shown only when the run really used it (<see cref="MsaReportData.LegacyReferenceUsed"/>).
+    /// </summary>
+    private (string File, DateTime? Modified, string? LegacyFile) ResolveReferenceInfo(MsaReportData report)
     {
-        var file = report.ReferenceFile;
-        if (string.IsNullOrEmpty(file))
-            file = MsaReferenceLoader.ReferenceFilePath(_config.Config.Msa.ReferencePath, report.Module);
+        var refFolder = _config.Config.Msa.ReferencePath;
+        string? legacyFile = report.LegacyReferenceUsed
+            ? MsaReferenceLoader.ReferenceFilePath(refFolder, report.Module)
+            : null;
 
+        // Per-part LimitSample: the reference is the per-DMC file (found → mtime, missing → NOT FOUND).
+        if (string.Equals(report.TestType, "LimitSample", StringComparison.OrdinalIgnoreCase)
+            && !string.IsNullOrWhiteSpace(report.Dmc))
+        {
+            var perPart = LimitSampleReference.PathFor(refFolder, report.Module, report.Dmc);
+            return (perPart, File.Exists(perPart) ? File.GetLastWriteTime(perPart) : null, legacyFile);
+        }
+
+        // Otherwise use exactly what the report carries (empty → "none found"); no legacy auto-fallback.
+        var file = report.ReferenceFile;
         var mtime = report.ReferenceFileModified;
         if (mtime is null && !string.IsNullOrEmpty(file) && File.Exists(file))
             mtime = File.GetLastWriteTime(file);
-        return (file, mtime);
+        return (file, mtime, legacyFile);
     }
 
     private static IDocument BuildDocument(
-        MsaReportData report, IReadOnlyList<MsaReportRow> rows, string referenceFile, DateTime? referenceModified) =>
+        MsaReportData report, IReadOnlyList<MsaReportRow> rows, string referenceFile, DateTime? referenceModified,
+        string? legacyReferenceFile) =>
         Document.Create(container =>
         {
             container.Page(page =>
@@ -123,11 +141,26 @@ public sealed class PdfReportService : IPdfReportService
                     col.Item().Text(t =>
                     {
                         t.Span("Reference file: ").SemiBold();
-                        t.Span(string.IsNullOrEmpty(referenceFile) ? "(none configured)" : referenceFile);
-                        t.Span(referenceModified is { } m
-                            ? $"  (modified {m:yyyy-MM-dd HH:mm:ss})"
-                            : "  (NOT FOUND)");
+                        if (string.IsNullOrEmpty(referenceFile))
+                        {
+                            t.Span("(none found)");
+                        }
+                        else
+                        {
+                            t.Span(referenceFile);
+                            t.Span(referenceModified is { } m
+                                ? $"  (modified {m:yyyy-MM-dd HH:mm:ss})"
+                                : "  (NOT FOUND)");
+                        }
                     });
+                    // Legacy module-wide reference is shown ONLY when it was really used as a fallback (task A2).
+                    if (!string.IsNullOrEmpty(legacyReferenceFile))
+                        col.Item().Text(t =>
+                        {
+                            t.Span("Legacy fallback reference: ").SemiBold();
+                            t.Span($"{legacyReferenceFile} (used — no per-part reference)")
+                                .FontColor(Colors.Orange.Darken2);
+                        });
                     col.Item().PaddingTop(3).Text(t =>
                     {
                         t.Span("Overall result: ").SemiBold();

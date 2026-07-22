@@ -5,6 +5,10 @@
 > Read it completely before writing any code, creating any file, or making any architectural decision.
 > Update this file when specifications change.
 
+> **STANDING RULE — Help stays current.** On every feature or UI change, update the in-app help
+> content (**both German and English**, `HarryShared/Help/SuiteHelp.cs`) **in the same commit** as
+> the change. The `?`-button / F1 help must always describe the current behaviour.
+
 ---
 
 ## 1. Project Overview

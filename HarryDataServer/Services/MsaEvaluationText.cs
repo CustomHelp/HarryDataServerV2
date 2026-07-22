@@ -20,7 +20,7 @@ public static class MsaEvaluationText
     {
         MsaType.Msa1 => $"Cg ≥ {MsaCalculator.CapabilityThreshold:0.00} and Cgk ≥ {MsaCalculator.CapabilityThreshold:0.00}",
         MsaType.Msa3 => $"%P/T ≤ {MsaCalculator.ToleranceThresholdPct:0} %",
-        MsaType.LimitSample => "every prepared error rejected",
+        MsaType.LimitSample => "every prepared error rejected AND every good feature accepted",
         _ => string.Empty,
     };
 
@@ -111,15 +111,26 @@ public static class MsaEvaluationText
         return (true, string.Empty);
     }
 
-    /// <summary>LimitSample verdict + reason.</summary>
+    /// <summary>LimitSample verdict + reason (BOTH directions, task A4): a prepared error (ShouldFail)
+    /// must be rejected, and a good feature (ShouldPass) must be accepted.</summary>
     public static (bool Passed, string Reason) LimitSampleVerdict(
         bool hasReference, bool shouldFail, bool wasRejected)
     {
         if (!hasReference)
             return (true, "no reference entry for this measurement (expected pass/fail undefined — not evaluated)");
-        if (shouldFail && !wasRejected)
-            return (false, "prepared error was NOT rejected");
-        return (true, string.Empty);
+        return LimitSampleFeature(shouldFail, wasRejected);
+    }
+
+    /// <summary>
+    /// Per-feature LimitSample decision in BOTH directions (task A4): a ShouldFail (prepared error)
+    /// must be rejected (status 0); a ShouldPass (good feature) must be accepted. Shared by the live
+    /// per-part evaluation and its unit tests so the two-way check cannot silently drift.
+    /// </summary>
+    public static (bool Passed, string Reason) LimitSampleFeature(bool shouldFail, bool wasRejected)
+    {
+        if (shouldFail)
+            return wasRejected ? (true, string.Empty) : (false, "prepared error was NOT rejected");
+        return !wasRejected ? (true, string.Empty) : (false, "good feature was rejected");
     }
 
     /// <summary>

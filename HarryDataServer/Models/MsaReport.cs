@@ -100,6 +100,11 @@ public sealed class MsaReportData
     /// <summary>Last-modified time of the reference file, or null if it does not exist.</summary>
     public DateTime? ReferenceFileModified { get; init; }
 
+    /// <summary>True when the legacy module-wide reference (MSA_&lt;module&gt;.json) was actually used as a
+    /// fallback for this run (task A2). Only then is the legacy line shown in the report head; otherwise
+    /// the head shows the per-part reference file that was really used.</summary>
+    public bool LegacyReferenceUsed { get; init; }
+
     /// <summary>Build the report model from a stored run (used by the on-demand UI path). Recomputes
     /// the overall verdict from the stored per-row Evaluated/Passed flags so the UI never shows a
     /// vacuous PASS either. RunAt is taken from the BaseID timestamp so the file name/folder match

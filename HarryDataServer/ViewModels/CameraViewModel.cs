@@ -21,7 +21,9 @@ public sealed record RecentTelegram(string Text, string Serial);
 /// </summary>
 public sealed partial class CameraViewModel : ObservableObject
 {
-    private const int RecentTelegramCount = 3;
+    // At least 4 lines must be visible — some controllers inspect 4 parts per cycle (task D).
+    // Keep a small buffer above 4 so the previous cycle stays scrollable.
+    private const int RecentTelegramCount = 6;
 
     private readonly TcpCameraClient _client;
     private readonly object _gate = new();

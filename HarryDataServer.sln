@@ -19,6 +19,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HarryCollageCreator", "Harr
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HarryDataServer.Tests", "HarryDataServer.Tests\HarryDataServer.Tests.csproj", "{3C244297-FF62-4E21-83EA-3C0F90C86348}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HarryPareto", "HarryPareto\HarryPareto.csproj", "{B1E7C3A2-6F4D-4E8B-9C21-7A5D3E9F0C11}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -125,6 +127,18 @@ Global
 		{3C244297-FF62-4E21-83EA-3C0F90C86348}.Release|x64.Build.0 = Release|Any CPU
 		{3C244297-FF62-4E21-83EA-3C0F90C86348}.Release|x86.ActiveCfg = Release|Any CPU
 		{3C244297-FF62-4E21-83EA-3C0F90C86348}.Release|x86.Build.0 = Release|Any CPU
+		{B1E7C3A2-6F4D-4E8B-9C21-7A5D3E9F0C11}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B1E7C3A2-6F4D-4E8B-9C21-7A5D3E9F0C11}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B1E7C3A2-6F4D-4E8B-9C21-7A5D3E9F0C11}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{B1E7C3A2-6F4D-4E8B-9C21-7A5D3E9F0C11}.Debug|x64.Build.0 = Debug|Any CPU
+		{B1E7C3A2-6F4D-4E8B-9C21-7A5D3E9F0C11}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{B1E7C3A2-6F4D-4E8B-9C21-7A5D3E9F0C11}.Debug|x86.Build.0 = Debug|Any CPU
+		{B1E7C3A2-6F4D-4E8B-9C21-7A5D3E9F0C11}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B1E7C3A2-6F4D-4E8B-9C21-7A5D3E9F0C11}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B1E7C3A2-6F4D-4E8B-9C21-7A5D3E9F0C11}.Release|x64.ActiveCfg = Release|Any CPU
+		{B1E7C3A2-6F4D-4E8B-9C21-7A5D3E9F0C11}.Release|x64.Build.0 = Release|Any CPU
+		{B1E7C3A2-6F4D-4E8B-9C21-7A5D3E9F0C11}.Release|x86.ActiveCfg = Release|Any CPU
+		{B1E7C3A2-6F4D-4E8B-9C21-7A5D3E9F0C11}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

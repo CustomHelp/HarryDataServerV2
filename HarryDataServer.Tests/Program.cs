@@ -49,6 +49,10 @@ internal static class Program
         PerPartPdfName_ContainsBaseIdAndDmc();
         PartAggregation_WorstOfParts();
         MirrorModules_ShareReferences();
+        LimitSample_BothDirections();
+        LimitSample_Criterion_MentionsBothDirections();
+        LimitSample_PartWithoutReference_IsInvalid();
+        LimitSample_PartialRun_IsInvalidNotPass();
 
         Console.WriteLine();
         if (_failures == 0)
@@ -371,6 +375,58 @@ internal static class Program
         {
             try { Directory.Delete(tmp, recursive: true); } catch { /* best effort */ }
         }
+    }
+
+    private static void LimitSample_BothDirections()
+    {
+        Console.WriteLine("[Case S] LimitSample evaluated in BOTH directions (task A4)");
+        // Prepared error (ShouldFail) MUST be rejected.
+        AssertTrue("ShouldFail + rejected → pass", MsaEvaluationText.LimitSampleFeature(shouldFail: true, wasRejected: true).Passed);
+        AssertTrue("ShouldFail + accepted → FAIL", !MsaEvaluationText.LimitSampleFeature(shouldFail: true, wasRejected: false).Passed);
+        // Good feature (ShouldPass) MUST be accepted.
+        AssertTrue("ShouldPass + accepted → pass", MsaEvaluationText.LimitSampleFeature(shouldFail: false, wasRejected: false).Passed);
+        AssertTrue("ShouldPass + rejected → FAIL", !MsaEvaluationText.LimitSampleFeature(shouldFail: false, wasRejected: true).Passed);
+        var reason = MsaEvaluationText.LimitSampleFeature(shouldFail: false, wasRejected: true).Reason;
+        AssertTrue("good-feature rejection has a reason", reason.Contains("good feature", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static void LimitSample_Criterion_MentionsBothDirections()
+    {
+        Console.WriteLine("[Case T] LimitSample criterion text names both directions (task A4)");
+        var c = MsaEvaluationText.Criterion(MsaType.LimitSample);
+        AssertTrue("mentions rejected", c.Contains("rejected", StringComparison.OrdinalIgnoreCase));
+        AssertTrue("mentions accepted", c.Contains("accepted", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static void LimitSample_PartWithoutReference_IsInvalid()
+    {
+        Console.WriteLine("[Case U] LimitSample part with no reference file → INVALID (task A3)");
+        // A part that produced no reference gets a single synthetic InvalidatesPart row.
+        var noRef = new[] { new MsaMeasurementResult { DisplayName = "(part not referenced)", Dmc = "D1",
+            Evaluated = false, Passed = false, InvalidatesPart = true } };
+        AssertEqual("no-reference part → INVALID", MsaVerdict.Invalid,
+            MsaEvaluationText.PartVerdict(MsaType.LimitSample, noRef));
+    }
+
+    private static void LimitSample_PartialRun_IsInvalidNotPass()
+    {
+        Console.WriteLine("[Case V] LimitSample full run with unreferenced parts → INVALID, never a partial PASS (task A1)");
+        // Reproduces the reported bug at the verdict level: one part has a reference and its prepared
+        // error was rejected (would be PASS alone — the premature 1-part evaluation), the other three
+        // parts have no reference. The COMPLETE run must be INVALID (worst-of-parts), not OK.
+        var good = MsaEvaluationText.PartVerdict(MsaType.LimitSample,
+            new[] { Res(true, true, expectedReject: true) });
+        AssertEqual("the single good part alone would be PASS", MsaVerdict.Pass, good);
+
+        var parts = new[]
+        {
+            ("good", good),
+            ("noref1", MsaVerdict.Invalid),
+            ("noref2", MsaVerdict.Invalid),
+            ("noref3", MsaVerdict.Invalid),
+        };
+        AssertEqual("complete run with unreferenced parts → INVALID", MsaVerdict.Invalid,
+            MsaEvaluationText.OverallFromParts(parts).Verdict);
     }
 
     /// <summary>Minimal IConfigService stub for the PDF-name test (never reads config when OutputDirectory is set).</summary>

@@ -7,13 +7,14 @@ using HarryDataServer.Services;
 namespace HarryDataServer.ViewModels;
 
 /// <summary>
-/// View model for one SPS channel (one ucSpsChannelControl per instance). Records the
-/// last 2 received requests and last 2 sent responses (fed by the server's background
-/// activity event) and the live connection state / message counter.
+/// View model for one PLC channel (one ucSpsChannelControl per instance). Records the
+/// last <see cref="Keep"/> received requests and sent responses (fed by the server's
+/// background activity event) and the live connection state / message counter.
 /// </summary>
 public sealed partial class SpsChannelViewModel : ObservableObject
 {
-    private const int Keep = 2;
+    /// <summary>Ring size of the request/response history shown per channel card (task C2).</summary>
+    private const int Keep = 20;
 
     private readonly ISpsServer _sps;
     private readonly SpsChannel _channel;
@@ -85,5 +86,7 @@ public sealed partial class SpsChannelViewModel : ObservableObject
             target.Add(snapshot[i]);
     }
 
-    private static string Shorten(string s) => s.Length <= 48 ? s : s[..48] + "…";
+    // Keep the line essentially full (the UI trims with an ellipsis and shows the full text as a
+    // tooltip); only cap absurdly long telegrams so the collection stays light.
+    private static string Shorten(string s) => s.Length <= 400 ? s : s[..400] + "…";
 }

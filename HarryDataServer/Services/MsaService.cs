@@ -31,6 +31,16 @@ public sealed class MsaService : IMsaService
     /// the default 1 s interval this is ~60 s for the rows to be committed by the flush loop.</summary>
     private const int MaxGatherAttempts = 60;
 
+    /// <summary>Consecutive stable ticks (row count unchanged) with an EMPTY write queue that mark a
+    /// run as COMPLETE before it is evaluated (task A1). An OK must never come from a partial/premature
+    /// evaluation, so the gather loop waits for the whole run's rows to have landed and settled.</summary>
+    private const int SettleTicks = 3;
+
+    /// <summary>Fallback stability window when the shared write queue never drains (another module's
+    /// MSA is running concurrently): accept the run as settled after this many stable ticks even if the
+    /// queue is not empty, so a concurrent run cannot block this one forever.</summary>
+    private const int SettleTicksBusy = 8;
+
     private readonly ICameraService _cameras;
     private readonly IDatabaseService _database;
     private readonly MeasurementDefinitionCache _cache;
@@ -448,25 +458,61 @@ ORDER BY evaluated_at, base_id, id;";
             // not in the DB yet (they are committed on MsaService's own SaveInterval tick, slightly
             // after the run completes): retry internally until they land, then push, instead of
             // clearing the entry and waiting for a re-request.
+            //
+            // task A1 — evaluate ONLY the COMPLETE run: the Request can arrive while the last part's
+            // telegrams are still in flight / queued, so the first non-zero snapshot may hold only the
+            // early parts (this produced a premature 1-part PASS/OK). We therefore wait until the run
+            // has SETTLED — the DB row count for this BaseID has not grown for SettleTicks consecutive
+            // ticks with the write queue drained (or SettleTicksBusy ticks if the shared queue never
+            // empties because another module is running). Until then the PLC keeps its "Wait".
             List<MsaRow> rows = new();
+            var stableTicks = 0;
+            var lastCount = -1;
             for (var attempt = 1; ; attempt++)
             {
                 rows = await GatherAsync(conn, module, baseId, ct).ConfigureAwait(false);
-                if (rows.Count > 0)
+
+                if (rows.Count == 0)
+                {
+                    if (attempt >= MaxGatherAttempts)
+                    {
+                        const string msg = "no measurements received for this run";
+                        _evaluations[baseId] = $"Error;{msg}";
+                        _log.Warning("MSA {Module} BaseID {Base}: {Msg} after {N} attempts → Error (pushed).",
+                            module, baseId, msg, attempt);
+                        await _sps.PushMsaResultAsync(module, baseId, $"Error;{msg}", CancellationToken.None).ConfigureAwait(false);
+                        return;
+                    }
+
+                    _log.Information("MSA {Module} BaseID {Base}: no measurements in DB yet ({Pending} queued); retry {N}/{Max} in {Sec}s (still Wait).",
+                        module, baseId, _queue.Count, attempt, MaxGatherAttempts, _flushInterval.TotalSeconds);
+                    stableTicks = 0;
+                    lastCount = -1;
+                    await Task.Delay(_flushInterval, ct).ConfigureAwait(false);
+                    continue;
+                }
+
+                // Data present — wait for it to settle so an OK can only reflect the WHOLE run (task A1).
+                if (rows.Count == lastCount)
+                    stableTicks++;
+                else
+                    stableTicks = 0;
+                lastCount = rows.Count;
+
+                var settled = (_queue.IsEmpty && stableTicks >= SettleTicks) || stableTicks >= SettleTicksBusy;
+                if (settled)
                     break;
 
                 if (attempt >= MaxGatherAttempts)
                 {
-                    const string msg = "no measurements received for this run";
-                    _evaluations[baseId] = $"Error;{msg}";
-                    _log.Warning("MSA {Module} BaseID {Base}: {Msg} after {N} attempts → Error (pushed).",
-                        module, baseId, msg, attempt);
-                    await _sps.PushMsaResultAsync(module, baseId, $"Error;{msg}", CancellationToken.None).ConfigureAwait(false);
-                    return;
+                    _log.Warning("MSA {Module} BaseID {Base}: run did not fully settle after {N} attempts; " +
+                        "evaluating the {Rows} row(s) present ({Pending} still queued).",
+                        module, baseId, attempt, rows.Count, _queue.Count);
+                    break;
                 }
 
-                _log.Information("MSA {Module} BaseID {Base}: no measurements in DB yet ({Pending} queued); retry {N}/{Max} in {Sec}s (still Wait).",
-                    module, baseId, _queue.Count, attempt, MaxGatherAttempts, _flushInterval.TotalSeconds);
+                _log.Debug("MSA {Module} BaseID {Base}: waiting for the run to settle — {Rows} row(s), stable {Stable}/{Need}, {Pending} queued; tick {N}/{Max} (still Wait).",
+                    module, baseId, rows.Count, stableTicks, _queue.IsEmpty ? SettleTicks : SettleTicksBusy, _queue.Count, attempt, MaxGatherAttempts);
                 await Task.Delay(_flushInterval, ct).ConfigureAwait(false);
             }
 
@@ -487,17 +533,18 @@ ORDER BY evaluated_at, base_id, id;";
             MsaVerdict verdict;
             string verdictReason;
             var notes = new List<string>();
+            var legacyReferenceUsed = false;
 
             if (msaType == MsaType.LimitSample)
             {
                 // Per-part evaluation (task A): each DMC is checked against its own reference file.
-                (results, verdict, verdictReason, notes) =
+                (results, verdict, verdictReason, notes, legacyReferenceUsed) =
                     EvaluateLimitSample(rows, module, msaCfg.ReferencePath, judged, reference);
             }
             else if (msaType == MsaType.Msa1)
             {
                 // Per-part evaluation with best-match reference assignment (task C).
-                (results, verdict, verdictReason, notes) =
+                (results, verdict, verdictReason, notes, legacyReferenceUsed) =
                     await EvaluateMsa1Async(conn, rows, module, msaCfg.ReferencePath, reference, ct).ConfigureAwait(false);
             }
             else
@@ -542,7 +589,7 @@ ORDER BY evaluated_at, base_id, id;";
             var reportDir = MsaResultLayout.EnsureWritableReportDir(
                 msaCfg.ReportPath, msaCfg.ReportFallbackPath, msaCfg.ResultPath, module, baseId, runAt, _log);
             var report = BuildReport(baseId, module, msaType, rows, results, verdict, verdictReason,
-                controllerWarnings, notes, runAt, msaCfg.ReferencePath, reportDir);
+                controllerWarnings, notes, runAt, msaCfg.ReferencePath, reportDir, legacyReferenceUsed);
 
             // Existing per-run measurement summary CSV stays under ResultPath (unchanged).
             ExportCsv(baseId, module, msaType, results);
@@ -690,7 +737,7 @@ ORDER BY evaluated_at, base_id, id;";
     /// legacy module-wide <c>limit_sample_expected</c> (MSA_&lt;module&gt;.json) with a WARNING when no
     /// per-part files exist at all (backward compatibility, task A6).
     /// </summary>
-    private (List<MsaMeasurementResult> Results, MsaVerdict Verdict, string Reason, List<string> Notes)
+    private (List<MsaMeasurementResult> Results, MsaVerdict Verdict, string Reason, List<string> Notes, bool LegacyUsed)
         EvaluateLimitSample(List<MsaRow> rows, string module, string referenceFolder,
             HashSet<string> judged, MsaReferenceFile? legacy)
     {
@@ -771,15 +818,15 @@ ORDER BY evaluated_at, base_id, id;";
                 }
 
                 var wasRejected = frows.Any(r => r.ResultStatus == 0);
-                var passed = shouldFail ? wasRejected : !wasRejected;
+                // Both directions (task A4): ShouldFail must be rejected, ShouldPass must be accepted.
+                var (featurePassed, featureReason) = MsaEvaluationText.LimitSampleFeature(shouldFail, wasRejected);
                 results.Add(new MsaMeasurementResult
                 {
                     DisplayName = feature, Controller = ctrl, Dmc = dmc,
                     Expected = shouldFail ? "reject" : "accept",
                     Actual = wasRejected ? "rejected" : "accepted",
-                    Evaluated = true, ExpectedReject = shouldFail, Passed = passed,
-                    Reason = passed ? string.Empty
-                        : (shouldFail ? "prepared error was NOT rejected" : "good feature was rejected"),
+                    Evaluated = true, ExpectedReject = shouldFail, Passed = featurePassed,
+                    Reason = featureReason,
                     Criterion = criterion, N = frows.Count,
                 });
             }
@@ -807,7 +854,7 @@ ORDER BY evaluated_at, base_id, id;";
             (verdict, reason) = MsaEvaluationText.OverallFromParts(parts);
         }
 
-        return (results, verdict, reason, notes);
+        return (results, verdict, reason, notes, useLegacy);
     }
 
     /// <summary>
@@ -875,7 +922,7 @@ ORDER BY md.display_name;";
     /// reference → n/a (task C3). No plausible match → Cg-only + note (task C5). DEMO_ templates are
     /// ignored. Falls back to the legacy module-wide <c>references</c> block when no MSA1 files exist.
     /// </summary>
-    private async Task<(List<MsaMeasurementResult> Results, MsaVerdict Verdict, string Reason, List<string> Notes)>
+    private async Task<(List<MsaMeasurementResult> Results, MsaVerdict Verdict, string Reason, List<string> Notes, bool LegacyUsed)>
         EvaluateMsa1Async(MySqlConnection conn, List<MsaRow> rows, string module, string referenceFolder,
             MsaReferenceFile? legacy, CancellationToken ct)
     {
@@ -901,9 +948,11 @@ ORDER BY md.display_name;";
                 Path.GetFileName(r.SourceFile),
                 r.Values))
             .ToList();
+        var legacyUsed = false;
         if (candidates.Count == 0 && legacy is { References.Count: > 0 })
         {
             candidates.Add(new Msa1Matcher.Candidate($"MSA_{module}.json (legacy)", $"MSA_{module}.json", legacy.References));
+            legacyUsed = true;
             _log.Warning("MSA1 {Module}: no MSA1 reference files — using legacy references block (old format).", module);
         }
 
@@ -999,7 +1048,7 @@ ORDER BY md.display_name;";
             .Select(g => (g.Key, MsaEvaluationText.PartVerdict(MsaType.Msa1, g.ToList())))
             .ToList();
         var (verdict, reason2) = MsaEvaluationText.OverallFromParts(parts);
-        return (results, verdict, reason2, notes);
+        return (results, verdict, reason2, notes, legacyUsed);
     }
 
     private sealed record MsaRow(
@@ -1086,6 +1135,18 @@ ORDER BY s.recorded_at DESC;";
         MySqlConnection conn, string baseId, MsaType msaType,
         List<MsaMeasurementResult> results, CancellationToken ct)
     {
+        // Merge multiple evaluations of the SAME run (task A1): a re-evaluation (e.g. after a restart
+        // or a later re-Request) must REPLACE the previous rows for this BaseID, never append stale
+        // partial results next to the complete ones. Delete + insert in one transaction so the UI
+        // (which groups msa_results by base_id) can never see a mix of two evaluations.
+        await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
+
+        await using (var del = new MySqlCommand("DELETE FROM msa_results WHERE base_id = @base;", conn) { Transaction = tx })
+        {
+            del.Parameters.AddWithValue("@base", baseId);
+            await del.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        }
+
         const string sql = @"
 INSERT INTO msa_results
   (controller_name, dmc, base_id, msa_type, msa_version, definition_id, display_name,
@@ -1100,7 +1161,7 @@ VALUES
 
         foreach (var r in results)
         {
-            await using var cmd = new MySqlCommand(sql, conn);
+            await using var cmd = new MySqlCommand(sql, conn) { Transaction = tx };
             // controller/dmc are per result now (a module run spans several cameras, e.g. KF1+KF3).
             cmd.Parameters.AddWithValue("@ctrl", r.Controller);
             cmd.Parameters.AddWithValue("@dmc", r.Dmc);
@@ -1127,6 +1188,8 @@ VALUES
             cmd.Parameters.AddWithValue("@passed", r.Passed ? 1 : 0);
             await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
         }
+
+        await tx.CommitAsync(ct).ConfigureAwait(false);
     }
 
     private void ExportCsv(string baseId, string module, MsaType msaType, List<MsaMeasurementResult> results)
@@ -1315,9 +1378,13 @@ ORDER BY m.controller_name, m.dmc, m.loop_number, md.display_name;";
         string baseId, string module, MsaType msaType, List<MsaRow> rows,
         List<MsaMeasurementResult> results, MsaVerdict verdict, string verdictReason,
         IReadOnlyList<string> controllerWarnings, IReadOnlyList<string> notes,
-        DateTime runAt, string referencePath, string? outputDir)
+        DateTime runAt, string referencePath, string? outputDir, bool legacyReferenceUsed)
     {
-        var referenceFile = MsaReferenceLoader.ReferenceFilePath(referencePath, module);
+        // task A2 — do NOT hard-wire the legacy MSA_<module>.json here (it made the head show
+        // "MSA_M50.json (NOT FOUND)" even when per-part references were used). LimitSample resolves
+        // its per-part file in PdfReportService; only when the legacy fallback was really used do we
+        // carry the legacy path so the head can show a truthful "Legacy fallback" line.
+        var referenceFile = legacyReferenceUsed ? MsaReferenceLoader.ReferenceFilePath(referencePath, module) : string.Empty;
         DateTime? referenceModified = !string.IsNullOrEmpty(referenceFile) && File.Exists(referenceFile)
             ? File.GetLastWriteTime(referenceFile) : null;
 
@@ -1342,6 +1409,7 @@ ORDER BY m.controller_name, m.dmc, m.loop_number, md.display_name;";
             Criterion = MsaEvaluationText.Criterion(msaType),
             ReferenceFile = referenceFile,
             ReferenceFileModified = referenceModified,
+            LegacyReferenceUsed = legacyReferenceUsed,
             Rows = results.Select(r => ToReportRow(r, msaType)).ToList(),
         };
     }
@@ -1406,6 +1474,7 @@ ORDER BY m.controller_name, m.dmc, m.loop_number, md.display_name;";
                 Criterion = runReport.Criterion,
                 ReferenceFile = runReport.ReferenceFile,
                 ReferenceFileModified = runReport.ReferenceFileModified,
+                LegacyReferenceUsed = runReport.LegacyReferenceUsed,
                 PartCount = 1,
                 LoopCount = runReport.LoopCount,
                 FromTime = runReport.FromTime,

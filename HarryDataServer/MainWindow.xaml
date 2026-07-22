@@ -89,7 +89,7 @@
                 </DockPanel>
             </TabItem>
 
-            <TabItem Header="SPS">
+            <TabItem Header="PLC">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <ItemsControl ItemsSource="{Binding SpsChannels}" Margin="6">
                         <ItemsControl.ItemsPanel>
