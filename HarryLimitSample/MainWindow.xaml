@@ -67,6 +67,9 @@
                     </TextBox>
                     <Button Content="Search" Command="{Binding SearchCommand}" Margin="8,0,16,0" Width="80" />
 
+                    <TextBlock Text="{Binding ScanHint}" Foreground="{Binding ScanHintBrush}" VerticalAlignment="Center"
+                               FontWeight="SemiBold" TextWrapping="Wrap" MaxWidth="420" Margin="0,0,16,0" />
+
                     <TextBlock Text="Module:" VerticalAlignment="Center" Margin="0,0,6,0" />
                     <ComboBox Width="120" ItemsSource="{Binding Modules}" SelectedItem="{Binding SelectedModule}"
                               VerticalAlignment="Center" Margin="0,0,16,0" />

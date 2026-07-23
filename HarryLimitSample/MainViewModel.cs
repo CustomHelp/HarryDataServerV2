@@ -149,11 +149,50 @@ public partial class MainViewModel : ObservableObject
 
     [ObservableProperty] private string? _selectedModule;
 
+    /// <summary>Hint shown next to the scan box: whether the scanned part is already taught (Save would
+    /// overwrite it), known via the identical mirror module, or new.</summary>
+    [ObservableProperty] private string _scanHint = string.Empty;
+    [ObservableProperty] private Brush _scanHintBrush = Brushes.Gray;
+
     partial void OnSelectedModuleChanged(string? value)
     {
         ApplyModuleFilter();
         OnPropertyChanged(nameof(SavePathPreview));
         RefreshTaughtParts();
+        UpdateScanHint();
+    }
+
+    /// <summary>Tell the operator if the loaded DMC already has a LimitSample reference — so a Save
+    /// knowingly overwrites (exact module+DMC file) — or is known only via the baugleich mirror, or new.</summary>
+    private void UpdateScanHint()
+    {
+        if (string.IsNullOrWhiteSpace(_currentDmc))
+        {
+            ScanHint = string.Empty;
+            return;
+        }
+
+        var module = ResolveTargetModule();
+        if (module is not null &&
+            LimitSampleReference.Load(_config.MsaReferencePath, module, _currentDmc) is { } exact)
+        {
+            ScanHint = $"⚠ Already taught in {module} (taught {exact.TaughtAt:yyyy-MM-dd HH:mm}, " +
+                       $"{exact.ExpectedRejectCount} prepared error(s)) — Save overwrites it.";
+            ScanHintBrush = Brushes.DarkOrange;
+            return;
+        }
+
+        var mirror = TaughtParts.FirstOrDefault(t => string.Equals(t.Dmc, _currentDmc, StringComparison.OrdinalIgnoreCase));
+        if (mirror is not null)
+        {
+            ScanHint = $"ℹ Known from module {mirror.Module} (taught {mirror.TaughtAt:yyyy-MM-dd HH:mm}) — " +
+                       $"Save creates a separate {module ?? "?"} file.";
+            ScanHintBrush = Brushes.SteelBlue;
+            return;
+        }
+
+        ScanHint = "✓ New part — not taught yet.";
+        ScanHintBrush = Brushes.SeaGreen;
     }
 
     private void ApplyModuleFilter()
@@ -178,6 +217,7 @@ public partial class MainViewModel : ObservableObject
 
         StatusMessage = $"Searching for '{scan}' …";
         NotFound = false;
+        ScanHint = string.Empty; // cleared until the part is resolved (stale hint on a not-found scan)
         _allRows.Clear();
         Rows.Clear();
         // Modules stays the fixed known list (filled at startup); a search only changes the selection.
@@ -473,6 +513,7 @@ public partial class MainViewModel : ObservableObject
             SelectedModule = part.Module;   // triggers ApplyModuleFilter + RefreshTaughtParts
         }
         OnPropertyChanged(nameof(SavePathPreview));
+        UpdateScanHint();
         StatusMessage = loadedFromDb
             ? $"Loaded taught part {part.Dmc} — {Rows.Count} measurement(s) shown ({reference.ExpectedRejectCount} should-fail). Change any mark (incl. Ignore) and Save."
             : $"Loaded taught part {part.Dmc} (saved marks only — part not in DB): {reference.Expected.Count} entries.";
