@@ -13,6 +13,10 @@ public sealed record DefectPart(
     int DefId, string Controller, string DisplayName, string ModuleRef, string Module,
     string Serial, int Occurrences, string? OriginModule);
 
+/// <summary>Affected + inspected parts for one measurement definition in one time slice of the window
+/// (intra-window trend). Rate per slice = affected / inspected.</summary>
+public sealed record SliceBucket(int DefId, int Slice, int Affected, int Inspected);
+
 /// <summary>
 /// One origin cell (task A): affected vs. inspected parts for a defect feature, broken down by the
 /// origin module (M10/M11, M20/M21, …) and nest read from <c>dmcserial</c>. Both figures come from the
@@ -255,6 +259,63 @@ ORDER BY origin_module, nest;";
             list.Add(new OriginCell(
                 r.IsDBNull(0) ? "?" : r.GetString(0),
                 r.IsDBNull(1) ? "?" : r.GetString(1),
+                r.IsDBNull(2) ? 0 : Convert.ToInt32(r.GetValue(2)),
+                r.IsDBNull(3) ? 0 : Convert.ToInt32(r.GetValue(3))));
+        }
+        return list;
+    }
+
+    /// <summary>
+    /// Per-(definition, time-slice) affected + inspected counts for the intra-window trend. The window
+    /// is split into <paramref name="sliceCount"/> equal slices (by <c>measured_at</c>); each row is one
+    /// (definition, slice) with distinct affected (status 0) and distinct inspected (status 0/1) parts.
+    /// One GROUP BY query per refresh; the <c>measured_at</c> range uses the index. Combined over both
+    /// measurement tables. The VM aggregates these per bar and derives the trend arrow + sparkline.
+    /// </summary>
+    public async Task<List<SliceBucket>> GetSliceBucketsAsync(
+        DateTime from, DateTime to, string? controller, int sliceCount, CancellationToken ct = default)
+    {
+        var n = Math.Max(2, sliceCount);
+        var totalSec = Math.Max(n, (long)(to - from).TotalSeconds);
+        var sliceSec = Math.Max(1, totalSec / n);
+
+        var hasCtrl = !string.IsNullOrEmpty(controller);
+        var join = hasCtrl
+            ? " JOIN measurement_definitions d ON d.id = x.definition_id JOIN cameras c ON c.id = d.camera_id"
+            : string.Empty;
+        var where = hasCtrl ? " WHERE c.camera_name = @ctrl" : string.Empty;
+
+        var sql = $@"
+SELECT x.definition_id, x.slice,
+       COUNT(DISTINCT CASE WHEN x.rs = 0 THEN x.serial END) AS affected,
+       COUNT(DISTINCT x.serial)                             AS inspected
+FROM (
+    SELECT definition_id, serial_number AS serial, result_status AS rs,
+           LEAST(@n - 1, GREATEST(0, TIMESTAMPDIFF(SECOND, @from, measured_at) DIV @slice)) AS slice
+    FROM measurements_serial
+    WHERE run_type = 0 AND result_status IN (0, 1) AND measured_at >= @from AND measured_at < @to
+    UNION ALL
+    SELECT definition_id, serial_trimmer AS serial, result_status AS rs,
+           LEAST(@n - 1, GREATEST(0, TIMESTAMPDIFF(SECOND, @from, measured_at) DIV @slice)) AS slice
+    FROM measurements_serial_trimmer
+    WHERE run_type = 0 AND result_status IN (0, 1) AND measured_at >= @from AND measured_at < @to
+) x{join}{where}
+GROUP BY x.definition_id, x.slice;";
+
+        var list = new List<SliceBucket>();
+        await using var conn = await OpenAsync(ct).ConfigureAwait(false);
+        await using var cmd = new MySqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@from", from);
+        cmd.Parameters.AddWithValue("@to", to);
+        cmd.Parameters.AddWithValue("@n", n);
+        cmd.Parameters.AddWithValue("@slice", sliceSec);
+        if (hasCtrl) cmd.Parameters.AddWithValue("@ctrl", controller);
+        await using var r = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        while (await r.ReadAsync(ct).ConfigureAwait(false))
+        {
+            list.Add(new SliceBucket(
+                r.GetInt32(0),
+                Convert.ToInt32(r.GetValue(1)),
                 r.IsDBNull(2) ? 0 : Convert.ToInt32(r.GetValue(2)),
                 r.IsDBNull(3) ? 0 : Convert.ToInt32(r.GetValue(3))));
         }

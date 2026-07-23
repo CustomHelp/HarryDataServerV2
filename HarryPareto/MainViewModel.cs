@@ -31,6 +31,12 @@ public sealed class ParetoBarItem
 
     public required string TrendGlyph { get; init; }
     public required Brush TrendBrush { get; init; }
+    /// <summary>Arrow tooltip: the slice-rate trajectory, e.g. "first third 3.1 % → last third 5.8 %".</summary>
+    public required string TrendTip { get; init; }
+
+    /// <summary>Per-slice defect rates for the mini sparkline (a value &lt; 0 marks an empty slice).</summary>
+    public required IReadOnlyList<double> SparklineValues { get; init; }
+    public required Brush SparklineBrush { get; init; }
 
     /// <summary>The measurement definitions this bar aggregates — used for the origin query (task A).</summary>
     public required IReadOnlyList<int> DefinitionIds { get; init; }
@@ -98,6 +104,8 @@ public sealed partial class MainViewModel : ObservableObject
         _settings = ParetoSettings.Load();
         _db = new ParetoDb(_settings);
         RefreshSeconds = _settings.RefreshSeconds;
+        _sliceCount = Math.Max(2, _settings.SliceCount);
+        _showSparklines = _settings.ShowSparklines;
 
         _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(Math.Max(5, RefreshSeconds)) };
         _timer.Tick += async (_, _) => await RefreshAsync();
@@ -249,14 +257,24 @@ public sealed partial class MainViewModel : ObservableObject
         set { if (SetProperty(ref _tvMode, value)) UiScale = value ? 1.5 : 1.0; }
     }
 
-    // Raw current/previous window defect parts, cached so toggles + the module filter re-slice in
-    // memory without a DB round-trip.
+    // Raw current-window defect parts, cached so toggles + the module filter re-slice in memory
+    // without a DB round-trip.
     private List<DefectPart> _defectParts = new();
-    private List<DefectPart> _prevDefectParts = new();
+    // Per-definition per-slice affected/inspected counts for the intra-window trend + sparkline.
+    private Dictionary<int, (int[] Affected, int[] Inspected)> _sliceBuckets = new();
+    private int _sliceCount = 8;
     private Dictionary<string, Brush> _moduleColors = new(StringComparer.OrdinalIgnoreCase);
     private int _inspected;
     private DateTime _winFrom;
     private DateTime _winTo;
+
+    private bool _showSparklines = true;
+    /// <summary>Show the per-row slice-rate sparkline (task 4; persisted, default on).</summary>
+    public bool ShowSparklines
+    {
+        get => _showSparklines;
+        set { if (SetProperty(ref _showSparklines, value)) { _settings.ShowSparklines = value; _settings.Save(); } }
+    }
 
     // --- Startup -----------------------------------------------------------
 
@@ -311,15 +329,15 @@ public sealed partial class MainViewModel : ObservableObject
         {
             var now = DateTime.Now;
             var (from, to) = WindowRange(now);
-            var span = to - from;
-            var prevFrom = from - span;
             var ctrl = SelectedController == "(all)" ? null : SelectedController;
             _winFrom = from;
             _winTo = to;
 
             var kpi = await _db.GetKpiAsync(from, to, ctrl).ConfigureAwait(true);
             _defectParts = await _db.GetDefectPartsAsync(from, to, ctrl).ConfigureAwait(true);
-            _prevDefectParts = await _db.GetDefectPartsAsync(prevFrom, from, ctrl).ConfigureAwait(true);
+            // Intra-window trend: bucket the window into N slices (task: replaces the previous-window compare).
+            var buckets = await _db.GetSliceBucketsAsync(from, to, ctrl, _sliceCount).ConfigureAwait(true);
+            _sliceBuckets = BuildBucketMap(buckets, _sliceCount);
             var status2 = await _db.GetStatus2Async(from, to, ctrl).ConfigureAwait(true);
 
             // Shift comparison: current shift vs previous shift bad-rate.
@@ -470,15 +488,20 @@ public sealed partial class MainViewModel : ObservableObject
             .Take(TopN)
             .ToList();
         var max = top.Count > 0 ? top.Max(g => g.Serials.Count) : 0;
-        var prevGroups = AggregateGroups(_prevDefectParts); // same keying → comparable
 
         foreach (var g in top)
         {
             var affected = g.Serials.Count;
             var pct = _inspected > 0 ? 100.0 * affected / _inspected : 0.0;
-            prevGroups.TryGetValue(g.Key, out var pg);
-            var prevAffected = pg?.Serials.Count ?? 0;
-            var (glyph, brush) = Trend(affected, prevAffected);
+
+            // Intra-window trend: sum this bar's definitions' per-slice affected/inspected, then compare
+            // the last third to the first third of the window (task 1/2/3).
+            var aff = new int[_sliceCount];
+            var ins = new int[_sliceCount];
+            foreach (var defId in g.DefIds)
+                if (_sliceBuckets.TryGetValue(defId, out var arr))
+                    for (var i = 0; i < _sliceCount; i++) { aff[i] += arr.Affected[i]; ins[i] += arr.Inspected[i]; }
+            var (glyph, brush, trendTip, spark) = TrendFromSlices(aff, ins, _sliceCount, _settings.TrendNeutralBandPct);
 
             var moduleColor = ColorFor(g.ModuleRef);
             var cams = g.ByCamera.OrderBy(c => c.Key, StringComparer.OrdinalIgnoreCase).ToList();
@@ -497,7 +520,7 @@ public sealed partial class MainViewModel : ObservableObject
             Bars.Add(new ParetoBarItem
             {
                 Label = $"{g.CameraKey} · {DisplayFeature(g)}",
-                ToolTipText = BuildTooltip(g, affected, prevAffected, cams),
+                ToolTipText = BuildTooltip(g, affected, cams),
                 ModuleRef = g.ModuleRef,
                 AffectedParts = affected,
                 Occurrences = g.Occurrences,
@@ -506,6 +529,9 @@ public sealed partial class MainViewModel : ObservableObject
                 RemainderWeight = Math.Max(0, max - affected),
                 TrendGlyph = glyph,
                 TrendBrush = brush,
+                TrendTip = trendTip,
+                SparklineValues = spark,
+                SparklineBrush = moduleColor,
                 DefinitionIds = g.DefIds.ToList(),
                 CanShowOrigin = HasOriginColumns(g.ModuleRef),
             });
@@ -522,12 +548,12 @@ public sealed partial class MainViewModel : ObservableObject
         return $"{g.FeatureName} (S{sensors[0]}–S{sensors[^1]})";
     }
 
-    private string BuildTooltip(AggGroup g, int affected, int prevAffected, List<KeyValuePair<string, HashSet<string>>> cams)
+    private string BuildTooltip(AggGroup g, int affected, List<KeyValuePair<string, HashSet<string>>> cams)
     {
         var sb = new StringBuilder();
         sb.Append(g.CameraKey).Append(" · ").AppendLine(DisplayFeature(g));
         sb.Append("Module ref: ").AppendLine(g.ModuleRef);
-        sb.Append("Affected parts: ").Append(affected).Append("  (previous window ").Append(prevAffected).AppendLine(")");
+        sb.Append("Affected parts: ").Append(affected).AppendLine();
         sb.Append("Occurrences: ").Append(g.Occurrences).AppendLine();
 
         if (cams.Count > 1 || !SeparateByCamera)
@@ -710,12 +736,61 @@ public sealed partial class MainViewModel : ObservableObject
 
     // --- Small helpers -----------------------------------------------------
 
-    private static (string Glyph, Brush Brush) Trend(int current, int previous)
+    /// <summary>Group the flat slice buckets into per-definition arrays (length N) of affected/inspected.</summary>
+    private static Dictionary<int, (int[] Affected, int[] Inspected)> BuildBucketMap(List<SliceBucket> buckets, int n)
     {
-        // More affected parts is worse → up-arrow red, down-arrow green.
-        if (current > previous) return ("▲", Frozen("#EF4444"));
-        if (current < previous) return ("▼", Frozen("#22C55E"));
-        return ("■", Frozen("#9CA3AF"));
+        var map = new Dictionary<int, (int[] Affected, int[] Inspected)>();
+        foreach (var b in buckets)
+        {
+            if (!map.TryGetValue(b.DefId, out var arr))
+            {
+                arr = (new int[n], new int[n]);
+                map[b.DefId] = arr;
+            }
+            if (b.Slice >= 0 && b.Slice < n)
+            {
+                arr.Affected[b.Slice] = b.Affected;
+                arr.Inspected[b.Slice] = b.Inspected;
+            }
+        }
+        return map;
+    }
+
+    /// <summary>
+    /// Intra-window trend arrow + tooltip + sparkline from the per-slice affected/inspected counts
+    /// (task 1–4). Rate per slice = affected/inspected; slices with no inspected parts (standstill) are
+    /// excluded. The arrow compares the average rate of the last third of the window to the first third:
+    /// rising beyond ±<paramref name="neutralPct"/> % (relative) → red up, falling → green down, else
+    /// neutral grey. The sparkline array carries the per-slice rate (a value &lt; 0 marks an empty slice).
+    /// </summary>
+    private static (string Glyph, Brush Brush, string Tip, IReadOnlyList<double> Spark) TrendFromSlices(
+        int[] aff, int[] ins, int n, double neutralPct)
+    {
+        var rate = new double?[n];
+        var spark = new double[n];
+        for (var i = 0; i < n; i++)
+        {
+            if (ins[i] > 0) { rate[i] = 100.0 * aff[i] / ins[i]; spark[i] = rate[i]!.Value; }
+            else { rate[i] = null; spark[i] = -1.0; }
+        }
+
+        var third = Math.Max(1, n / 3);
+        var first = new List<double>();
+        var last = new List<double>();
+        for (var i = 0; i < third; i++) if (rate[i] is { } rf) first.Add(rf);
+        for (var i = n - third; i < n; i++) if (rate[i] is { } rl) last.Add(rl);
+
+        if (first.Count == 0 || last.Count == 0)
+            return ("■", Frozen("#9CA3AF"), "trend: not enough data in the window", spark);
+
+        var f = first.Average();
+        var l = last.Average();
+        var change = f > 0 ? (l - f) / f * 100.0 : (l > 0 ? double.PositiveInfinity : 0.0);
+        var tip = $"first third {f.ToString("0.0", CultureInfo.InvariantCulture)} % → last third {l.ToString("0.0", CultureInfo.InvariantCulture)} %";
+
+        if (change > neutralPct) return ("▲", Frozen("#EF4444"), tip, spark);
+        if (change < -neutralPct) return ("▼", Frozen("#22C55E"), tip, spark);
+        return ("■", Frozen("#9CA3AF"), tip, spark);
     }
 
     /// <summary>Bar length as a percentage of the largest bar (0..100), for the module ProgressBars.</summary>
@@ -794,6 +869,8 @@ public sealed partial class MainViewModel : ObservableObject
             _settings.Save();
             _db = new ParetoDb(_settings);
             RefreshSeconds = _settings.RefreshSeconds;
+            _sliceCount = Math.Max(2, _settings.SliceCount);
+            ShowSparklines = _settings.ShowSparklines;
             _ = AfterConnectAsync();
         }
     }

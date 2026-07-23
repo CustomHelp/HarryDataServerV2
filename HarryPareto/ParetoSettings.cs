@@ -30,6 +30,15 @@ public sealed class ParetoSettings
     /// <summary>Auto-refresh interval in seconds (task E3; default 30).</summary>
     public int RefreshSeconds { get; set; } = 30;
 
+    /// <summary>Number of time slices the window is split into for the intra-window trend (default 8).</summary>
+    public int SliceCount { get; set; } = 8;
+
+    /// <summary>Neutral band for the trend arrow in % relative change (|change| below → neutral, default 10).</summary>
+    public double TrendNeutralBandPct { get; set; } = 10.0;
+
+    /// <summary>Show the per-row mini sparkline of the slice rates (default true).</summary>
+    public bool ShowSparklines { get; set; } = true;
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
@@ -97,5 +106,6 @@ public sealed class ParetoSettings
     {
         Ip = Ip, Port = Port, Database = Database, User = User,
         Password = Password, PasswordEnc = PasswordEnc, RefreshSeconds = RefreshSeconds,
+        SliceCount = SliceCount, TrendNeutralBandPct = TrendNeutralBandPct, ShowSparklines = ShowSparklines,
     };
 }

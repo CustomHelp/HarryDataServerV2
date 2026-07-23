@@ -72,8 +72,11 @@
                                   VerticalAlignment="Center" Margin="0,0,6,0"
                                   ToolTip="OFF: merge KF1/KF3 of a station (default). ON: separate per camera." />
                     <ToggleButton Content="Split sensors" IsChecked="{Binding SensorsIndividual}"
-                                  VerticalAlignment="Center" Margin="0,0,16,0"
+                                  VerticalAlignment="Center" Margin="0,0,6,0"
                                   ToolTip="OFF: merge _S1..S5 into one sensor family (default). ON: each sensor individually." />
+                    <ToggleButton Content="Show sparklines" IsChecked="{Binding ShowSparklines}"
+                                  VerticalAlignment="Center" Margin="0,0,16,0"
+                                  ToolTip="Show the per-row mini trend sparkline (slice rates across the window)." />
                     <Button Content="Refresh" Command="{Binding RefreshCommand}" Margin="0,0,6,0" />
                     <Button Content="CSV export" Command="{Binding ExportCsvCommand}" Margin="0,0,6,0" />
                     <Button Content="Reset View" Command="{Binding ResetViewCommand}" Margin="0,0,6,0"
@@ -193,8 +196,9 @@
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="270" />
                                                     <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="170" />
-                                                    <ColumnDefinition Width="26" />
+                                                    <ColumnDefinition Width="150" />
+                                                    <ColumnDefinition Width="58" />
+                                                    <ColumnDefinition Width="24" />
                                                 </Grid.ColumnDefinitions>
                                                 <TextBlock Grid.Column="0" Text="{Binding Label}" VerticalAlignment="Center"
                                                            TextTrimming="CharacterEllipsis" Margin="0,0,8,0" />
@@ -204,8 +208,13 @@
                                                                   TrackBrush="{DynamicResource CardBg}" />
                                                 <TextBlock Grid.Column="2" Text="{Binding CountText}" VerticalAlignment="Center"
                                                            Margin="8,0,0,0" />
-                                                <TextBlock Grid.Column="3" Text="{Binding TrendGlyph}" Foreground="{Binding TrendBrush}"
-                                                           FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center" />
+                                                <local:Sparkline Grid.Column="3" Height="18" VerticalAlignment="Center" Margin="4,0"
+                                                                 Values="{Binding SparklineValues}" BarBrush="{Binding SparklineBrush}"
+                                                                 ToolTip="{Binding TrendTip}"
+                                                                 Visibility="{Binding DataContext.ShowSparklines, RelativeSource={RelativeSource AncestorType=ItemsControl}, Converter={StaticResource BoolToVisible}}" />
+                                                <TextBlock Grid.Column="4" Text="{Binding TrendGlyph}" Foreground="{Binding TrendBrush}"
+                                                           FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center"
+                                                           ToolTip="{Binding TrendTip}" />
                                             </Grid>
                                         </Button>
                                     </DataTemplate>
