@@ -441,21 +441,21 @@ internal static class Program
         // Gut-Teil, alles ok → PASS, labelled "Gut-Referenz".
         var good = MsaEvaluationText.PartVerdictDetailed(MsaType.LimitSample, new[] { Res(true, true, expectedReject: false) });
         AssertEqual("good part → PASS", MsaVerdict.Pass, good.Verdict);
-        AssertTrue("good part labelled Gut-Referenz", good.Reason.Contains("Gut-Referenz"));
+        AssertTrue("good part labelled good reference", good.Reason.Contains("good reference"));
 
         // Gut-Teil mit einem NOK (Falsch-Ausschuss) → FAIL, Merkmal im Grund.
         var falseReject = MsaEvaluationText.PartVerdictDetailed(MsaType.LimitSample,
             new[] { Res(true, true, expectedReject: false), Res(true, false, expectedReject: false) });
         AssertEqual("good part with a NOK → FAIL", MsaVerdict.Fail, falseReject.Verdict);
-        AssertTrue("FAIL reason names the feature", falseReject.Reason.Contains("nicht wie erwartet"));
+        AssertTrue("FAIL reason names the feature", falseReject.Reason.Contains("not as expected"));
 
-        // Lauf nur aus Gut-Mustern (kein erwarteter Fehler geprüft) → INVALID mit Grund (task A2).
+        // Run of only good samples (no expected error checked) → INVALID with a reason (task A2).
         var allGood = MsaReportData.ComputeVerdict(MsaType.LimitSample,
             new[] { LsRow("D1", true, expectedReject: false), LsRow("D2", true, expectedReject: false) }, wholeRun: true);
         AssertEqual("run of only good samples → INVALID", MsaVerdict.Invalid, allGood.Verdict);
-        AssertTrue("INVALID reason = only good samples", allGood.Reason.Contains("nur Gut-Muster"));
+        AssertTrue("INVALID reason = only good samples", allGood.Reason.Contains("only good samples"));
 
-        // Gemischter Lauf (Gut-Teil + geprüfter Fehler erkannt) → PASS.
+        // Mixed run (good part + checked error detected) → PASS.
         var mixed = MsaReportData.ComputeVerdict(MsaType.LimitSample,
             new[] { LsRow("D1", true, expectedReject: true), LsRow("D2", true, expectedReject: false) }, wholeRun: true);
         AssertEqual("mixed run (good + detected reject) → PASS", MsaVerdict.Pass, mixed.Verdict);

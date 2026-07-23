@@ -132,7 +132,7 @@ public partial class MainViewModel : ObservableObject
         get
         {
             if (SelectedEntry is { Found: false })
-                return $"Kein Teil in der Datenbank gefunden zu '{SelectedEntry.Scan}'.";
+                return $"No part found in the database for '{SelectedEntry.Scan}'.";
             if (Part is null)
                 return "No part selected.";
             var p = Part;

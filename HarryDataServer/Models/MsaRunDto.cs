@@ -31,7 +31,7 @@ public sealed class MsaResultRow
     public bool Passed { get; init; }
 
     /// <summary>Tri-state result text for the features grid: "ok" / "nicht ok" / "n.a." (task B2).</summary>
-    public string ResultText => !Evaluated ? "n.a." : Passed ? "ok" : "nicht ok";
+    public string ResultText => !Evaluated ? "n.a." : Passed ? "ok" : "not ok";
 }
 
 /// <summary>

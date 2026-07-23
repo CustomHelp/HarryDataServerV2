@@ -85,6 +85,9 @@ public sealed class MsaService : IMsaService
 
     public int PendingCount => _queue.Count;
 
+    /// <inheritdoc />
+    public event Action<MsaRunCompleted>? RunCompleted;
+
     public Task StartAsync(CancellationToken ct)
     {
         if (_started)
@@ -614,6 +617,10 @@ ORDER BY evaluated_at, base_id, id;";
             _log.Information("MSA {Type} for BaseID {Base}: {Verdict} ({Count} measurement(s), {Eval} evaluated).",
                 msaType, baseId, verdict, results.Count, results.Count(r => r.Evaluated));
 
+            // Notify the UI that a run finished (task A2) — never let a subscriber fault break evaluation.
+            try { RunCompleted?.Invoke(new MsaRunCompleted(module, msaType, baseId)); }
+            catch (Exception evtEx) { _log.Debug("MSA RunCompleted subscriber threw for {Base}: {Msg}", baseId, evtEx.Message); }
+
             // Push the result to the PLC on the same open connection — no re-request needed.
             // (The cached word above also lets a late re-Request still answer, as a safety net.)
             await _sps.PushMsaResultAsync(module, baseId, word, ct).ConfigureAwait(false);
@@ -779,7 +786,7 @@ ORDER BY evaluated_at, base_id, id;";
                 {
                     DisplayName = "(part not referenced)", Controller = defaultCtrl, Dmc = dmc,
                     Evaluated = false, Passed = false, Criterion = criterion, InvalidatesPart = true,
-                    Reason = $"Teil ohne Referenzdatei: {dmc}",
+                    Reason = $"part without reference file: {dmc}",
                 });
                 continue;
             }
@@ -844,7 +851,7 @@ ORDER BY evaluated_at, base_id, id;";
         if (taught.Count == 0 && !useLegacy)
         {
             verdict = MsaVerdict.Invalid;
-            reason = $"kein LimitSample-Referenzteil gefunden in {LimitSampleReference.FolderFor(referenceFolder, module)}";
+            reason = $"no LimitSample reference part found in {LimitSampleReference.FolderFor(referenceFolder, module)}";
         }
         else
         {
@@ -865,7 +872,7 @@ ORDER BY evaluated_at, base_id, id;";
             {
                 // Vacuous-PASS guard (task A2): a PASS that verified no prepared error proves nothing.
                 verdict = MsaVerdict.Invalid;
-                reason = "nur Gut-Muster im Lauf, kein erwarteter Fehler geprüft";
+                reason = "only good samples in the run, no expected error checked";
             }
         }
 

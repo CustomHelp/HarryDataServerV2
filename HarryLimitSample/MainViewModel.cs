@@ -190,7 +190,7 @@ public partial class MainViewModel : ObservableObject
             if (part is null)
             {
                 NotFound = true;
-                NotFoundText = $"Kein Teil in der Datenbank gefunden zu: {scan}";
+                NotFoundText = $"No part found in the database for: {scan}";
                 StatusMessage = $"No part found for '{scan}'.";
                 return;
             }
@@ -303,11 +303,11 @@ public partial class MainViewModel : ObservableObject
 
         if (camerasJudged.Count > 0 && camerasJudged.Values.All(v => !v))
         {
-            StatusMessage = $"Kamera hat nicht bewertet – Einlernen nicht möglich (Modul {module}: nur Status 2/99).";
+            StatusMessage = $"Camera gave no verdict – teach-in not possible (module {module}: only status 2/99).";
             MessageBox.Show(
-                $"Der/die Controller von {module} haben für dieses Teil keine Bewertung (Status 0/1) geliefert – nur Status 2/99.\n\n" +
-                "Einlernen nicht möglich. Bitte Kameraprogramm/-modus prüfen und ein Grenzmuster verwenden, das die Kamera als NOK erkennt.",
-                "Einlernen nicht möglich", MessageBoxButton.OK, MessageBoxImage.Warning);
+                $"The controller(s) of {module} returned no verdict (status 0/1) for this part – only status 2/99.\n\n" +
+                "Teach-in not possible. Check the camera program/mode and use a limit sample the camera detects as NOK.",
+                "Teach-in not possible", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
@@ -321,8 +321,8 @@ public partial class MainViewModel : ObservableObject
         if (string.IsNullOrWhiteSpace(_currentDmc))
         {
             StatusMessage = "Cannot save: the scanned part has no DMC/serial (a per-part reference needs a DMC).";
-            MessageBox.Show("Das geladene Teil hat keinen DMC/keine Seriennummer — eine Per-Teil-Referenz braucht einen DMC.",
-                "Kein DMC", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show("The loaded part has no DMC/serial number — a per-part reference needs a DMC.",
+                "No DMC", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
@@ -361,11 +361,11 @@ public partial class MainViewModel : ObservableObject
             // Task A: a reference with no prepared errors (ShouldFail) is a valid GOOD reference (it must
             // pass everywhere), but a run made up of ONLY such parts is reported INVALID (nothing proven).
             var vacuousNote = fails == 0
-                ? "  ⚠ Keine erwarteten Fehler (ShouldFail) — dies ist eine Gut-Referenz; ein Lauf, der NUR aus Gut-Referenzen besteht, meldet INVALID."
+                ? "  ⚠ No expected failures (ShouldFail) — this is a good reference; a run made up of ONLY good references reports INVALID."
                 : string.Empty;
             var notJudgedNote = notJudged.Count == 0
                 ? string.Empty
-                : $"  ⚠ Nicht bewertet (nur Status 2/99): {string.Join(", ", notJudged.Take(5))}";
+                : $"  ⚠ Not judged (only status 2/99): {string.Join(", ", notJudged.Take(5))}";
             StatusMessage = $"Saved {path} — {reference.Expected.Count} entries ({fails} should-fail).{conflictNote}{vacuousNote}{notJudgedNote}";
             RefreshTaughtParts();
         }

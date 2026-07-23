@@ -29,11 +29,11 @@
                                   Margin="0,0,12,0"
                                   ToolTip="Auto-search when a code arrives from the handheld scanner" />
                     <Button Click="OnChangeConfig" Content="Config…" Padding="8,3" Margin="0,0,12,0"
-                            ToolTip="Config-Pfad ändern… (welche Harry.ini dieses Werkzeug nutzt)" />
+                            ToolTip="Change config path… (which Harry.ini this tool uses)" />
                     <Button x:Name="ThemeToggle" Click="OnThemeToggle" Content="Theme"
                             Padding="8,3" Margin="0,0,12,0" ToolTip="Switch light / dark theme" />
                     <Button Content="?" Command="{Binding ShowHelpCommand}" Padding="10,3" Margin="0,0,12,0"
-                            FontWeight="Bold" ToolTip="Help / Hilfe (F1)" />
+                            FontWeight="Bold" ToolTip="Help (F1)" />
                     <TextBlock Text="{Binding AppVersion}" Foreground="{DynamicResource TextDimBrush}"
                                VerticalAlignment="Center" />
                 </StackPanel>
@@ -134,11 +134,11 @@
                 <!-- Taught parts of the selected module (per-part reference files) -->
                 <Border Grid.Column="1" Style="{StaticResource Card}" Margin="8,0,0,0">
                     <DockPanel>
-                        <TextBlock DockPanel.Dock="Top" Text="Taught parts (this module + baugleich mirror)" FontWeight="SemiBold"
+                        <TextBlock DockPanel.Dock="Top" Text="Taught parts (this module + identical mirror)" FontWeight="SemiBold"
                                    Margin="0,0,0,6" TextWrapping="Wrap" />
                         <TextBlock DockPanel.Dock="Bottom" FontSize="11" Foreground="{DynamicResource TextDimBrush}"
                                    TextWrapping="Wrap" Margin="0,6,0,0"
-                                   Text="Includes the baugleich partner module (M10↔M11, M20↔M21). Open re-loads a part for editing; Delete removes its reference file." />
+                                   Text="Includes the identical partner module (M10↔M11, M20↔M21). Open re-loads a part for editing; Delete removes its reference file." />
                         <DataGrid ItemsSource="{Binding TaughtParts}" AutoGenerateColumns="False"
                                   IsReadOnly="True" HeadersVisibility="Column"
                                   ScrollViewer.HorizontalScrollBarVisibility="Disabled">

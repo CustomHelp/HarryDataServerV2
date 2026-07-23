@@ -39,7 +39,7 @@ public partial class ConnectionDialog : Window
             RefreshSeconds = Result.RefreshSeconds,
         };
 
-        SetStatus(Brushes.Orange, "Verbinde …");
+        SetStatus(Brushes.Orange, "Connecting …");
         IsEnabled = false;
         try
         {
@@ -51,11 +51,11 @@ public partial class ConnectionDialog : Window
                 Close();
                 return;
             }
-            SetStatus(Brushes.OrangeRed, "Verbindung fehlgeschlagen — Daten prüfen.");
+            SetStatus(Brushes.OrangeRed, "Connection failed — check the data.");
         }
         catch (Exception ex)
         {
-            SetStatus(Brushes.OrangeRed, "Fehler: " + ex.Message);
+            SetStatus(Brushes.OrangeRed, "Error: " + ex.Message);
         }
         finally
         {

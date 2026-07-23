@@ -8,9 +8,16 @@ namespace HarryDataServer.Services;
 /// 3–7), computes Cg/Cgk (MSA1), %Tolerance (MSA3) or LimitSample pass/fail,
 /// writes <c>msa_results</c> + an MSA CSV, and answers Wait/OK/NG.
 /// </summary>
+/// <summary>Fired after one run's evaluation has been stored (task A2): the MSA UI refreshes.</summary>
+public sealed record MsaRunCompleted(string Module, MsaType Type, string BaseId);
+
 public interface IMsaService
 {
     int PendingCount { get; }
+
+    /// <summary>Raised (on a background thread) once a run's <c>msa_results</c> are written, so the MSA
+    /// tab can refresh its history and jump to / offer the new run (task A2).</summary>
+    event Action<MsaRunCompleted>? RunCompleted;
 
     /// <summary>
     /// Load the stored MSA runs for a module ("M10".."M50") and type, oldest first,

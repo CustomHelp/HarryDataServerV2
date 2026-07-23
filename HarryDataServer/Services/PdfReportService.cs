@@ -269,17 +269,17 @@ public sealed class PdfReportService : IPdfReportService
 
     private static string ExpText(string e) => e switch
     {
-        "reject" => "Fehler erwartet",
-        "accept" => "Gut erwartet",
+        "reject" => "error expected",
+        "accept" => "good expected",
         _ => string.IsNullOrEmpty(e) ? "—" : e,
     };
 
     private static string ActText(string a) => a switch
     {
-        "rejected" => "abgewiesen",
-        "accepted" => "angenommen",
-        "no measurement" => "keine Messung",
-        "not evaluated" => "nicht bewertet",
+        "rejected" => "rejected",
+        "accepted" => "accepted",
+        "no measurement" => "no measurement",
+        "not evaluated" => "not evaluated",
         _ => string.IsNullOrEmpty(a) ? "—" : a,
     };
 
@@ -309,40 +309,40 @@ public sealed class PdfReportService : IPdfReportService
 
                 page.Header().Column(col =>
                 {
-                    col.Item().Text($"LimitSample-Bericht — {report.Module}").FontSize(15).SemiBold();
+                    col.Item().Text($"LimitSample report — {report.Module}").FontSize(15).SemiBold();
                     col.Item().PaddingTop(2).Text(t =>
                     {
-                        t.Span("Lauf: ").SemiBold();
+                        t.Span("Run: ").SemiBold();
                         t.Span(report.RunAt.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
                         t.Span($"     BaseID: {report.BaseId}");
                     });
                     col.Item().Text(t =>
                     {
-                        t.Span("Teil-DMC: ").SemiBold(); t.Span(string.IsNullOrEmpty(report.Dmc) ? "—" : report.Dmc);
+                        t.Span("Part DMC: ").SemiBold(); t.Span(string.IsNullOrEmpty(report.Dmc) ? "—" : report.Dmc);
                         t.Span($"     Controller: {report.Controller}     Loops: {report.LoopCount}");
                     });
                     col.Item().Text(t =>
                     {
-                        t.Span("Kriterium: ").SemiBold();
+                        t.Span("Criterion: ").SemiBold();
                         t.Span(string.IsNullOrEmpty(report.Criterion) ? "—" : report.Criterion);
                     });
                     col.Item().Text(t =>
                     {
-                        t.Span("Referenzdatei: ").SemiBold();
+                        t.Span("Reference file: ").SemiBold();
                         if (string.IsNullOrEmpty(referenceFile))
-                            t.Span("(keine gefunden)");
+                            t.Span("(none found)");
                         else
                         {
                             t.Span(referenceFile);
-                            t.Span(referenceModified is { } m ? $"  (geändert {m:yyyy-MM-dd HH:mm:ss})" : "  (NICHT GEFUNDEN)");
+                            t.Span(referenceModified is { } m ? $"  (modified {m:yyyy-MM-dd HH:mm:ss})" : "  (NOT FOUND)");
                         }
                     });
                     if (!string.IsNullOrEmpty(legacyReferenceFile))
-                        col.Item().Text(t => t.Span($"Legacy-Referenz: {legacyReferenceFile} (verwendet)").FontColor(Colors.Orange.Darken2));
+                        col.Item().Text(t => t.Span($"Legacy reference: {legacyReferenceFile} (used)").FontColor(Colors.Orange.Darken2));
 
                     col.Item().PaddingTop(3).Text(t =>
                     {
-                        t.Span("Ergebnis: ").SemiBold();
+                        t.Span("Result: ").SemiBold();
                         var (label, color) = report.Verdict switch
                         {
                             MsaVerdict.Pass => ("PASS", Colors.Green.Darken2),
@@ -365,30 +365,30 @@ public sealed class PdfReportService : IPdfReportService
                     // Section 1: prepared errors detected.
                     col.Item().Text(t =>
                     {
-                        t.Span($"Geprüfte Grenzmuster-Fehler: {detected} von {rejectRows.Count} erkannt").SemiBold();
+                        t.Span($"Checked limit-sample errors: {detected} of {rejectRows.Count} detected").SemiBold();
                     });
                     if (rejectRows.Count == 0)
-                        col.Item().PaddingLeft(10).Text("keine erwarteten Fehler in dieser Referenz (Gut-Referenz)").Italic().FontColor(Colors.Grey.Darken1);
+                        col.Item().PaddingLeft(10).Text("no expected errors in this reference (good reference)").Italic().FontColor(Colors.Grey.Darken1);
                     else
                         foreach (var r in rejectRows)
                             col.Item().PaddingLeft(10).Text(t =>
                             {
                                 t.Span("• " + r.Measurement + ": ");
-                                t.Span(r.Passed ? "erkannt" : "NICHT erkannt")
+                                t.Span(r.Passed ? "detected" : "NOT detected")
                                     .SemiBold().FontColor(r.Passed ? Colors.Green.Darken2 : Colors.Red.Darken2);
                             });
 
                     // Section 2: deviations.
-                    col.Item().PaddingTop(8).Text(t => t.Span("Abweichungen").SemiBold());
+                    col.Item().PaddingTop(8).Text(t => t.Span("Deviations").SemiBold());
                     if (deviations.Count == 0)
-                        col.Item().PaddingLeft(10).Text("keine").Italic().FontColor(Colors.Green.Darken2);
+                        col.Item().PaddingLeft(10).Text("none").Italic().FontColor(Colors.Green.Darken2);
                     else
                         foreach (var r in deviations)
                             col.Item().PaddingLeft(10).Text(t =>
                             {
                                 var kind = string.Equals(r.Expected, "reject", StringComparison.OrdinalIgnoreCase)
-                                    ? "erwarteter Fehler NICHT erkannt (Falsch-Gut)"
-                                    : "Gut-Merkmal abgelehnt (Falsch-Ausschuss)";
+                                    ? "expected error NOT detected (false good)"
+                                    : "good feature rejected (false reject)";
                                 t.Span("• " + r.Measurement + " — ").SemiBold();
                                 t.Span(kind).FontColor(Colors.Red.Darken2);
                             });
@@ -406,12 +406,12 @@ public sealed class PdfReportService : IPdfReportService
                         });
                         table.Header(header =>
                         {
-                            foreach (var title in new[] { "Merkmal", "Erwartet", "Ist", "Ergebnis", "Grund / Hinweis" })
+                            foreach (var title in new[] { "Feature", "Expected", "Actual", "Result", "Reason / note" })
                                 header.Cell().Background(Colors.Grey.Lighten2).Padding(4).Text(title).SemiBold();
                         });
                         IContainer Cell() => table.Cell().BorderBottom(0.5f).BorderColor(Colors.Grey.Lighten1).Padding(4);
                         if (tableRows.Count == 0)
-                            table.Cell().ColumnSpan(5).Padding(6).Text("Keine Messungen.").Italic();
+                            table.Cell().ColumnSpan(5).Padding(6).Text("No measurements.").Italic();
                         else
                             foreach (var row in tableRows)
                             {

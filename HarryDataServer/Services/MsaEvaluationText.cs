@@ -185,20 +185,20 @@ public static class MsaEvaluationText
 
         var evaluated = partResults.Where(r => r.Evaluated).ToList();
         if (evaluated.Count == 0)
-            return (MsaVerdict.Invalid, "keine bewertete Messung (Kamera hat nicht bewertet / keine Referenz-Merkmale)");
+            return (MsaVerdict.Invalid, "no evaluated measurement (camera did not judge / no reference features)");
 
         var failed = evaluated.Where(r => !r.Passed).ToList();
         if (failed.Count > 0)
         {
             var names = string.Join(", ", failed
                 .Select(f => f.DisplayName).Where(s => !string.IsNullOrEmpty(s)).Distinct().Take(5));
-            return (MsaVerdict.Fail, names.Length > 0 ? $"nicht wie erwartet: {names}" : "one or more measurements failed");
+            return (MsaVerdict.Fail, names.Length > 0 ? $"not as expected: {names}" : "one or more measurements failed");
         }
 
         // All evaluated features passed. A LimitSample part with no expected reject is a valid GOOD
         // reference (task A1) — labelled, but still a PASS.
         if (type == MsaType.LimitSample && !evaluated.Any(r => r.ExpectedReject))
-            return (MsaVerdict.Pass, "Gut-Referenz (keine erwarteten Fehler)");
+            return (MsaVerdict.Pass, "good reference (no expected errors)");
         return (MsaVerdict.Pass, string.Empty);
     }
 

@@ -106,6 +106,7 @@ public sealed partial class MainViewModel : ObservableObject
         ReconnectCommand = new RelayCommand(OpenConnectionDialog);
         ExportCsvCommand = new RelayCommand(ExportCsv);
         ClearModuleFilterCommand = new RelayCommand(() => SelectedModuleBar = null);
+        ResetViewCommand = new RelayCommand(ResetView);
         ToggleTvCommand = new RelayCommand(() => TvMode = !TvMode);
         ShowHelpCommand = new RelayCommand(ShowHelp);
         ShowOriginCommand = new AsyncRelayCommand<ParetoBarItem>(ShowOriginAsync);
@@ -122,8 +123,8 @@ public sealed partial class MainViewModel : ObservableObject
     public ObservableCollection<OriginRowVm> OriginRows { get; } = new();
 
     public ObservableCollection<string> WindowOptions { get; } =
-        new() { "Schicht", "8 h", "24 h", "7 Tage" };
-    public ObservableCollection<string> Controllers { get; } = new() { "(alle)" };
+        new() { "Shift", "30 min", "1 h", "2 h", "4 h", "8 h", "16 h", "1 day", "2 days", "3 days", "7 days" };
+    public ObservableCollection<string> Controllers { get; } = new() { "(all)" };
 
     // --- Commands ----------------------------------------------------------
 
@@ -131,6 +132,7 @@ public sealed partial class MainViewModel : ObservableObject
     public IRelayCommand ReconnectCommand { get; }
     public IRelayCommand ExportCsvCommand { get; }
     public IRelayCommand ClearModuleFilterCommand { get; }
+    public IRelayCommand ResetViewCommand { get; }
     public IRelayCommand ToggleTvCommand { get; }
     public IRelayCommand ShowHelpCommand { get; }
     public IAsyncRelayCommand<ParetoBarItem> ShowOriginCommand { get; }
@@ -161,19 +163,19 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty] private bool _hasOriginNote;
     [ObservableProperty] private bool _hasOriginMatrix;
 
-    public string AppName => "HarryPareto — Live Top-20 Fehlergründe";
+    public string AppName => "HarryPareto — Live Top-20 defect reasons";
     public string AppVersion => "v" + (GetType().Assembly.GetName().Version?.ToString(3) ?? "2.0.0");
 
     // --- Filters / view toggles (trigger a rebuild) -----------------------
 
-    private string _selectedWindow = "Schicht";
+    private string _selectedWindow = "Shift";
     public string SelectedWindow
     {
         get => _selectedWindow;
         set { if (SetProperty(ref _selectedWindow, value)) _ = RefreshAsync(); }
     }
 
-    private string _selectedController = "(alle)";
+    private string _selectedController = "(all)";
     public string SelectedController
     {
         get => _selectedController;
@@ -205,7 +207,7 @@ public sealed partial class MainViewModel : ObservableObject
             if (SetProperty(ref _selectedModuleBar, value))
             {
                 HasModuleFilter = value is not null;
-                ModuleFilterText = value is null ? string.Empty : $"Modul-Filter: {value.ModuleRef}";
+                ModuleFilterText = value is null ? string.Empty : $"Module filter: {value.ModuleRef}";
                 HasOriginDetail = false;
                 RebuildBars();
             }
@@ -264,8 +266,8 @@ public sealed partial class MainViewModel : ObservableObject
         var ok = await _db.CanConnectAsync().ConfigureAwait(true);
         if (!ok)
         {
-            StatusMessage = "Auto-Connect fehlgeschlagen — bitte Verbindungsdaten prüfen.";
-            SetConnection(false, "Auto-Connect fehlgeschlagen");
+            StatusMessage = "Auto-connect failed — please check the connection data.";
+            SetConnection(false, "Auto-connect failed");
             OpenConnectionDialog();
             return;
         }
@@ -287,14 +289,14 @@ public sealed partial class MainViewModel : ObservableObject
             var names = await _db.GetControllersAsync().ConfigureAwait(true);
             var keep = SelectedController;
             Controllers.Clear();
-            Controllers.Add("(alle)");
+            Controllers.Add("(all)");
             foreach (var n in names) Controllers.Add(n);
-            _selectedController = Controllers.Contains(keep) ? keep : "(alle)";
+            _selectedController = Controllers.Contains(keep) ? keep : "(all)";
             OnPropertyChanged(nameof(SelectedController));
         }
         catch (Exception ex)
         {
-            StatusMessage = "Controller-Liste konnte nicht geladen werden: " + ex.Message;
+            StatusMessage = "Could not load the controller list: " + ex.Message;
         }
     }
 
@@ -311,7 +313,7 @@ public sealed partial class MainViewModel : ObservableObject
             var (from, to) = WindowRange(now);
             var span = to - from;
             var prevFrom = from - span;
-            var ctrl = SelectedController == "(alle)" ? null : SelectedController;
+            var ctrl = SelectedController == "(all)" ? null : SelectedController;
             _winFrom = from;
             _winTo = to;
 
@@ -335,8 +337,8 @@ public sealed partial class MainViewModel : ObservableObject
             WindowText = $"{SelectedWindow}  ({from:dd.MM. HH:mm} – {to:HH:mm})";
             UpdatedText = now.ToString("dd.MM.yyyy HH:mm:ss", CultureInfo.CurrentCulture);
             ShiftComparisonText =
-                $"Schicht {kpiShift.RatePct:0.0} % ({kpiShift.Bad}/{kpiShift.Inspected})   ·   " +
-                $"Vorschicht {kpiPrevShift.RatePct:0.0} % ({kpiPrevShift.Bad}/{kpiPrevShift.Inspected})   ·   " +
+                $"Shift {kpiShift.RatePct:0.0} % ({kpiShift.Bad}/{kpiShift.Inspected})   ·   " +
+                $"Previous shift {kpiPrevShift.RatePct:0.0} % ({kpiPrevShift.Bad}/{kpiPrevShift.Inspected})   ·   " +
                 $"{Delta(kpiShift.RatePct - kpiPrevShift.RatePct)}";
 
             RebuildModuleBars();
@@ -344,13 +346,13 @@ public sealed partial class MainViewModel : ObservableObject
             RebuildWarnings(status2);
             HasOriginDetail = false; // stale after a data refresh
 
-            SetConnection(true, $"verbunden — {_settings.User}@{_settings.Ip}:{_settings.Port}/{_settings.Database}");
-            StatusMessage = $"Aktualisiert {now:HH:mm:ss}.";
+            SetConnection(true, $"connected — {_settings.User}@{_settings.Ip}:{_settings.Port}/{_settings.Database}");
+            StatusMessage = $"Refreshed {now:HH:mm:ss}.";
         }
         catch (Exception ex)
         {
-            SetConnection(false, "Verbindungs-/Abfragefehler");
-            StatusMessage = "Fehler bei der Abfrage: " + ex.Message;
+            SetConnection(false, "Connection / query error");
+            StatusMessage = "Query error: " + ex.Message;
         }
         finally
         {
@@ -359,7 +361,7 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     private static string Delta(double d) =>
-        d > 0.05 ? $"▲ +{d:0.0} %-Pkt" : d < -0.05 ? $"▼ {d:0.0} %-Pkt" : "■ ±0";
+        d > 0.05 ? $"▲ +{d:0.0} %-pts" : d < -0.05 ? $"▼ {d:0.0} %-pts" : "■ ±0";
 
     // --- Aggregation (tasks B + C) -----------------------------------------
 
@@ -442,6 +444,17 @@ public sealed partial class MainViewModel : ObservableObject
         return map;
     }
 
+    /// <summary>Reset View (task C3): drop the bar-click filter + selection and restore the default
+    /// aggregated view immediately (no manual Refresh needed).</summary>
+    private void ResetView()
+    {
+        SeparateByCamera = false;
+        SensorsIndividual = false;
+        SelectedModuleBar = null;
+        HasOriginDetail = false;
+        RebuildBars(); // guarantee a rebuild even when nothing changed above
+    }
+
     private IEnumerable<DefectPart> FilteredParts() =>
         SelectedModuleBar is null
             ? _defectParts
@@ -513,13 +526,13 @@ public sealed partial class MainViewModel : ObservableObject
     {
         var sb = new StringBuilder();
         sb.Append(g.CameraKey).Append(" · ").AppendLine(DisplayFeature(g));
-        sb.Append("Modul-Ref: ").AppendLine(g.ModuleRef);
-        sb.Append("Betroffene Teile: ").Append(affected).Append("  (Vorfenster ").Append(prevAffected).AppendLine(")");
-        sb.Append("Vorkommen: ").Append(g.Occurrences).AppendLine();
+        sb.Append("Module ref: ").AppendLine(g.ModuleRef);
+        sb.Append("Affected parts: ").Append(affected).Append("  (previous window ").Append(prevAffected).AppendLine(")");
+        sb.Append("Occurrences: ").Append(g.Occurrences).AppendLine();
 
         if (cams.Count > 1 || !SeparateByCamera)
         {
-            sb.AppendLine("— je Kamera —");
+            sb.AppendLine("— per camera —");
             foreach (var c in cams)
                 sb.Append("   ").Append(c.Key).Append(": ").Append(c.Value.Count).AppendLine();
         }
@@ -529,14 +542,14 @@ public sealed partial class MainViewModel : ObservableObject
             var sensors = g.BySensor.Where(kv => kv.Key > 0).OrderBy(kv => kv.Key).ToList();
             if (sensors.Count > 0)
             {
-                sb.AppendLine("— je Sensor —");
+                sb.AppendLine("— per sensor —");
                 foreach (var s in sensors)
                     sb.Append("   S").Append(s.Key).Append(": ").Append(s.Value.Count).AppendLine();
             }
         }
 
         if (HasOriginColumns(g.ModuleRef))
-            sb.Append("(Klick: Herkunft Modul/Nest)");
+            sb.Append("(Click: origin module/nest)");
         return sb.ToString().TrimEnd();
     }
 
@@ -593,8 +606,8 @@ public sealed partial class MainViewModel : ObservableObject
         foreach (var c in status2)
         {
             var text = c.Judged == 0
-                ? $"⚠ {c.Controller}: Kamera bewertet nicht — nur Status 2 ({c.NotJudged}× nicht bewertet)"
-                : $"⚠ {c.Controller}: {c.NotJudged}× Status 2 (nicht bewertet), {c.Judged}× bewertet";
+                ? $"⚠ {c.Controller}: camera gives no verdict — only status 2 ({c.NotJudged}× not judged)"
+                : $"⚠ {c.Controller}: {c.NotJudged}× status 2 (not judged), {c.Judged}× judged";
             Status2Warnings.Add(text);
         }
         HasWarnings = Status2Warnings.Count > 0;
@@ -607,7 +620,7 @@ public sealed partial class MainViewModel : ObservableObject
         if (bar is null)
             return;
 
-        OriginTitle = "Herkunft — " + bar.Label;
+        OriginTitle = "Origin — " + bar.Label;
         OriginRows.Clear();
         OriginNests.Clear();
         HasOriginMatrix = false;
@@ -616,7 +629,7 @@ public sealed partial class MainViewModel : ObservableObject
         if (!bar.CanShowOrigin)
         {
             OriginSubtitle = string.Empty;
-            OriginNote = $"Keine Herkunft ableitbar — module_ref = {bar.ModuleRef} (kein Strang-Bezug M10/M11 bzw. M20/M21).";
+            OriginNote = $"No origin can be derived — module_ref = {bar.ModuleRef} (no strand relation M10/M11 or M20/M21).";
             HasOriginNote = true;
             return;
         }
@@ -627,7 +640,7 @@ public sealed partial class MainViewModel : ObservableObject
             if (cells.Count == 0)
             {
                 OriginSubtitle = string.Empty;
-                OriginNote = "Keine abgeschlossenen Teile im Zeitfenster — die Herkunft (Modul/Nest) ist erst nach dem Teile-Austritt bekannt.";
+                OriginNote = "No completed parts in the time window — the origin (module/nest) is only known after part exit.";
                 HasOriginNote = true;
                 return;
             }
@@ -636,13 +649,13 @@ public sealed partial class MainViewModel : ObservableObject
             OriginNote = string.Empty;
             HasOriginNote = false;
             OriginSubtitle =
-                "Konzentration auf ein Modul/Nest → Mechanik/Prozess dort prüfen · " +
-                "Gleichverteilung → eher Material oder Kameraauswertung.";
+                "Concentration on one module/nest → check mechanics/process there · " +
+                "even distribution → more likely material or camera evaluation.";
         }
         catch (Exception ex)
         {
             OriginSubtitle = string.Empty;
-            OriginNote = "Herkunft konnte nicht geladen werden: " + ex.Message;
+            OriginNote = "Could not load origin: " + ex.Message;
             HasOriginNote = true;
         }
     }
@@ -741,10 +754,17 @@ public sealed partial class MainViewModel : ObservableObject
 
     private (DateTime From, DateTime To) WindowRange(DateTime now) => SelectedWindow switch
     {
+        "30 min" => (now.AddMinutes(-30), now),
+        "1 h" => (now.AddHours(-1), now),
+        "2 h" => (now.AddHours(-2), now),
+        "4 h" => (now.AddHours(-4), now),
         "8 h" => (now.AddHours(-8), now),
-        "24 h" => (now.AddHours(-24), now),
-        "7 Tage" => (now.AddDays(-7), now),
-        _ => CurrentShift(now), // "Schicht"
+        "16 h" => (now.AddHours(-16), now),
+        "1 day" => (now.AddDays(-1), now),
+        "2 days" => (now.AddDays(-2), now),
+        "3 days" => (now.AddDays(-3), now),
+        "7 days" => (now.AddDays(-7), now),
+        _ => CurrentShift(now), // "Shift"
     };
 
     /// <summary>Current production shift window using 06:00 / 14:00 / 22:00 boundaries.</summary>
@@ -782,13 +802,13 @@ public sealed partial class MainViewModel : ObservableObject
     {
         if (Bars.Count == 0)
         {
-            StatusMessage = "Nichts zu exportieren.";
+            StatusMessage = "Nothing to export.";
             return;
         }
 
         var dlg = new SaveFileDialog
         {
-            Title = "Pareto exportieren",
+            Title = "Export Pareto",
             Filter = "CSV (;) |*.csv",
             FileName = CsvExport.TimestampedName("HarryPareto"),
         };
@@ -799,7 +819,7 @@ public sealed partial class MainViewModel : ObservableObject
         {
             CsvExport.Write(
                 dlg.FileName,
-                new[] { "Rang", "Station_Merkmal", "ModulRef", "BetroffeneTeile", "Vorkommen", "AnteilProzent", "Trend" },
+                new[] { "Rank", "Station_Feature", "ModuleRef", "AffectedParts", "Occurrences", "SharePercent", "Trend" },
                 Bars.Select((b, i) => new[]
                 {
                     (i + 1).ToString(CultureInfo.InvariantCulture),
@@ -810,11 +830,11 @@ public sealed partial class MainViewModel : ObservableObject
                     (_inspected > 0 ? 100.0 * b.AffectedParts / _inspected : 0.0).ToString("0.0", CultureInfo.InvariantCulture),
                     b.TrendGlyph,
                 }));
-            StatusMessage = "Exportiert: " + dlg.FileName;
+            StatusMessage = "Exported: " + dlg.FileName;
         }
         catch (Exception ex)
         {
-            StatusMessage = "Export fehlgeschlagen: " + ex.Message;
+            StatusMessage = "Export failed: " + ex.Message;
         }
     }
 

@@ -29,13 +29,10 @@
 
                 <!-- Version + status (right) -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                    <CheckBox Content="Telegramme mitschneiden" IsChecked="{Binding CaptureTelegrams}"
-                              VerticalAlignment="Center" Margin="0,0,14,0"
-                              ToolTip="Alle eingehenden Roh-Telegramme in den Capture-Ordner neben der EXE schreiben (Testfunktion)" />
                     <Button x:Name="ThemeToggle" Click="OnThemeToggle" Content="Theme"
                             Padding="8,3" Margin="0,0,14,0" ToolTip="Switch light / dark theme" />
                     <Button Content="?" Command="{Binding ShowHelpCommand}" Padding="10,3" Margin="0,0,14,0"
-                            FontWeight="Bold" ToolTip="Help / Hilfe (F1)" />
+                            FontWeight="Bold" ToolTip="Help (F1)" />
                     <TextBlock Text="{Binding AppVersion}" Foreground="{DynamicResource TextDimBrush}"
                                VerticalAlignment="Center" Margin="0,0,14,0" />
                     <Ellipse Width="12" Height="12" Fill="{Binding SystemStatusBrush}" VerticalAlignment="Center" />
@@ -71,8 +68,8 @@
             <TabItem Header="Cameras">
                 <DockPanel>
                     <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="6,6,6,0">
-                        <Button Content="Settings anfordern" Command="{Binding RequestSettingsCommand}"
-                                ToolTip="Settings-Telegramm von allen verbundenen Kameras anfordern" />
+                        <Button Content="Request Settings" Command="{Binding RequestSettingsCommand}"
+                                ToolTip="Request a settings telegram from all connected cameras" />
                         <TextBlock Text="{Binding SettingsRequestStatus}" VerticalAlignment="Center"
                                    Margin="12,0,0,0" Foreground="{DynamicResource TextDimBrush}" />
                     </StackPanel>

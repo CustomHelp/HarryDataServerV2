@@ -105,7 +105,7 @@ public sealed class HarryConfig
         if (path is null)
             throw new FileNotFoundException(
                 $"Harry.ini not found. Looked at '{ConfigLocator.ActivePath(toolName)}'. " +
-                $"Set HARRY_CONFIG_DIR, place it in {DefaultConfigDir}, or choose it via 'Config-Pfad ändern…'.",
+                $"Set HARRY_CONFIG_DIR, place it in {DefaultConfigDir}, or choose it via 'Change config path…'.",
                 ConfigLocator.ActivePath(toolName));
 
         var data = new FileIniDataParser().ReadFile(path);

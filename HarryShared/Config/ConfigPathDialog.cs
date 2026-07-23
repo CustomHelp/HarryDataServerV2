@@ -20,7 +20,7 @@ public sealed class ConfigPathDialog : Window
 
     public ConfigPathDialog(string toolName, string? currentPath)
     {
-        Title = "Config-Pfad ändern — " + toolName;
+        Title = "Change config path — " + toolName;
         Width = 620;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
@@ -31,14 +31,14 @@ public sealed class ConfigPathDialog : Window
 
         root.Children.Add(new TextBlock
         {
-            Text = "Bitte die Harry.ini für dieses Werkzeug wählen (Datei suchen oder Pfad eingeben). " +
-                   "Die Auswahl wird pro Werkzeug gespeichert.",
+            Text = "Select the Harry.ini for this tool (browse for the file or type a path). " +
+                   "The choice is saved per tool.",
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 12),
         });
 
         var row = new DockPanel { LastChildFill = true, Margin = new Thickness(0, 0, 0, 12) };
-        var browse = new Button { Content = "Durchsuchen…", Padding = new Thickness(12, 4, 12, 4), Margin = new Thickness(8, 0, 0, 0) };
+        var browse = new Button { Content = "Browse…", Padding = new Thickness(12, 4, 12, 4), Margin = new Thickness(8, 0, 0, 0) };
         browse.Click += OnBrowse;
         DockPanel.SetDock(browse, Dock.Right);
         row.Children.Add(browse);
@@ -55,7 +55,7 @@ public sealed class ConfigPathDialog : Window
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
         var ok = new Button { Content = "OK", Width = 90, Margin = new Thickness(0, 0, 8, 0), Padding = new Thickness(0, 4, 0, 4), IsDefault = true };
         ok.Click += OnOk;
-        var cancel = new Button { Content = "Abbrechen", Width = 90, Padding = new Thickness(0, 4, 0, 4), IsCancel = true };
+        var cancel = new Button { Content = "Cancel", Width = 90, Padding = new Thickness(0, 4, 0, 4), IsCancel = true };
         buttons.Children.Add(ok);
         buttons.Children.Add(cancel);
         root.Children.Add(buttons);
@@ -67,8 +67,8 @@ public sealed class ConfigPathDialog : Window
     {
         var dlg = new Microsoft.Win32.OpenFileDialog
         {
-            Title = "Harry.ini wählen",
-            Filter = "Harry.ini|Harry.ini|INI-Dateien (*.ini)|*.ini|Alle Dateien (*.*)|*.*",
+            Title = "Select Harry.ini",
+            Filter = "Harry.ini|Harry.ini|INI files (*.ini)|*.ini|All files (*.*)|*.*",
             CheckFileExists = true,
         };
         if (!string.IsNullOrWhiteSpace(_pathBox.Text))
@@ -90,8 +90,8 @@ public sealed class ConfigPathDialog : Window
         var path = _pathBox.Text?.Trim();
         if (string.IsNullOrEmpty(path) || !File.Exists(path))
         {
-            MessageBox.Show(this, "Diese Datei existiert nicht. Bitte eine vorhandene Harry.ini wählen.",
-                "Ungültiger Pfad", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, "This file does not exist. Please select an existing Harry.ini.",
+                "Invalid path", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
         SelectedPath = path;

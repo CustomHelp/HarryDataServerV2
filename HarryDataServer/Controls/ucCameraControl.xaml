@@ -31,7 +31,7 @@
                             </Style.Triggers>
                         </Style>
                     </Border.Style>
-                    <TextBlock Text="Diagnose" FontSize="11" VerticalAlignment="Center">
+                    <TextBlock Text="Diagnostic" FontSize="11" VerticalAlignment="Center">
                         <TextBlock.Style>
                             <Style TargetType="TextBlock">
                                 <Setter Property="Foreground" Value="{DynamicResource TextDimBrush}" />
@@ -82,7 +82,7 @@
                                    TextTrimming="CharacterEllipsis">
                             <TextBlock.ContextMenu>
                                 <ContextMenu>
-                                    <MenuItem Header="Seriennummer kopieren" Click="OnCopySerial" />
+                                    <MenuItem Header="Copy Serial Number" Click="OnCopySerial" />
                                 </ContextMenu>
                             </TextBlock.ContextMenu>
                         </TextBlock>

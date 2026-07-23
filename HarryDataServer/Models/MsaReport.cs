@@ -155,7 +155,7 @@ public sealed class MsaReportData
 
         // Vacuous-PASS guard (task A2): a LimitSample PASS that verified no prepared error is INVALID.
         if (type == MsaType.LimitSample && verdict == MsaVerdict.Pass && !proxies.Any(p => p.Evaluated && p.ExpectedReject))
-            return (MsaVerdict.Invalid, "nur Gut-Muster im Lauf, kein erwarteter Fehler geprüft");
+            return (MsaVerdict.Invalid, "only good samples in the run, no expected error checked");
         return (verdict, reason);
     }
 

@@ -31,12 +31,12 @@
                     <TextBlock Grid.Column="1" Text="{Binding AppName}" FontSize="18" FontWeight="Bold"
                                VerticalAlignment="Center" />
                     <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                        <ToggleButton Content="TV-Modus" IsChecked="{Binding TvMode}" Margin="0,0,12,0"
-                                      ToolTip="Vollbild-taugliche große Darstellung" />
+                        <ToggleButton Content="TV mode" IsChecked="{Binding TvMode}" Margin="0,0,12,0"
+                                      ToolTip="Large, full-screen-friendly display" />
                         <Button x:Name="ThemeToggle" Click="OnThemeToggle" Content="Theme"
-                                Padding="8,3" Margin="0,0,12,0" ToolTip="Light / Dark umschalten" />
+                                Padding="8,3" Margin="0,0,12,0" ToolTip="Toggle light / dark" />
                         <Button Content="?" Command="{Binding ShowHelpCommand}" Padding="10,3" Margin="0,0,12,0"
-                                FontWeight="Bold" ToolTip="Hilfe / Help (F1)" />
+                                FontWeight="Bold" ToolTip="Help (F1)" />
                         <TextBlock Text="{Binding AppVersion}" Foreground="{DynamicResource TextDimBrush}"
                                    VerticalAlignment="Center" />
                     </StackPanel>
@@ -58,7 +58,7 @@
             <!-- ===== Toolbar ===== -->
             <Border DockPanel.Dock="Top" Style="{StaticResource Card}" Margin="8,8,8,0">
                 <WrapPanel Orientation="Horizontal">
-                    <TextBlock Text="Zeitfenster:" VerticalAlignment="Center" Margin="0,0,6,0" FontWeight="SemiBold" />
+                    <TextBlock Text="Time window:" VerticalAlignment="Center" Margin="0,0,6,0" FontWeight="SemiBold" />
                     <ComboBox Width="120" ItemsSource="{Binding WindowOptions}" SelectedItem="{Binding SelectedWindow}"
                               VerticalAlignment="Center" Margin="0,0,16,0" />
                     <TextBlock Text="Controller:" VerticalAlignment="Center" Margin="0,0,6,0" FontWeight="SemiBold" />
@@ -66,17 +66,19 @@
                               VerticalAlignment="Center" Margin="0,0,16,0" />
                     <TextBlock Text="Auto-Refresh (s):" VerticalAlignment="Center" Margin="0,0,6,0" />
                     <TextBox Width="56" Text="{Binding RefreshSeconds, UpdateSourceTrigger=LostFocus}"
-                             VerticalAlignment="Center" Margin="0,0,6,0" ToolTip="Aktualisierungsintervall in Sekunden (min. 5)" />
+                             VerticalAlignment="Center" Margin="0,0,6,0" ToolTip="Refresh interval in seconds (min. 5)" />
                     <CheckBox Content="Auto" IsChecked="{Binding AutoRefresh}" VerticalAlignment="Center" Margin="0,0,16,0" />
-                    <ToggleButton Content="Nach Kamera trennen" IsChecked="{Binding SeparateByCamera}"
+                    <ToggleButton Content="Split by camera" IsChecked="{Binding SeparateByCamera}"
                                   VerticalAlignment="Center" Margin="0,0,6,0"
-                                  ToolTip="AUS: KF1/KF3 einer Station zusammenfassen (Standard). EIN: je Kamera getrennt." />
-                    <ToggleButton Content="Sensoren einzeln" IsChecked="{Binding SensorsIndividual}"
+                                  ToolTip="OFF: merge KF1/KF3 of a station (default). ON: separate per camera." />
+                    <ToggleButton Content="Split sensors" IsChecked="{Binding SensorsIndividual}"
                                   VerticalAlignment="Center" Margin="0,0,16,0"
-                                  ToolTip="AUS: _S1..S5 zu einer Sensor-Familie zusammenfassen (Standard). EIN: jeden Sensor einzeln." />
-                    <Button Content="Aktualisieren" Command="{Binding RefreshCommand}" Margin="0,0,6,0" />
-                    <Button Content="CSV-Export" Command="{Binding ExportCsvCommand}" Margin="0,0,6,0" />
-                    <Button Content="Verbindung…" Command="{Binding ReconnectCommand}" Margin="0,0,16,0" />
+                                  ToolTip="OFF: merge _S1..S5 into one sensor family (default). ON: each sensor individually." />
+                    <Button Content="Refresh" Command="{Binding RefreshCommand}" Margin="0,0,6,0" />
+                    <Button Content="CSV export" Command="{Binding ExportCsvCommand}" Margin="0,0,6,0" />
+                    <Button Content="Reset View" Command="{Binding ResetViewCommand}" Margin="0,0,6,0"
+                            ToolTip="Clear the bar-click filter and selection and restore the default view" />
+                    <Button Content="Connection…" Command="{Binding ReconnectCommand}" Margin="0,0,16,0" />
                     <Border Background="{DynamicResource Accent}" CornerRadius="3" Padding="8,3"
                             VerticalAlignment="Center" Margin="0,0,6,0"
                             Visibility="{Binding HasModuleFilter, Converter={StaticResource BoolToVisible}}">
@@ -93,23 +95,23 @@
             <Border DockPanel.Dock="Top" Style="{StaticResource Card}" Margin="8,8,8,0">
                 <UniformGrid Rows="1" Columns="5">
                     <StackPanel Margin="4">
-                        <TextBlock Text="Geprüfte Teile" Foreground="{DynamicResource TextDimBrush}" FontSize="12" />
+                        <TextBlock Text="Parts inspected" Foreground="{DynamicResource TextDimBrush}" FontSize="12" />
                         <TextBlock Text="{Binding InspectedText}" FontSize="24" FontWeight="Bold" />
                     </StackPanel>
                     <StackPanel Margin="4">
-                        <TextBlock Text="Schlechtteile" Foreground="{DynamicResource TextDimBrush}" FontSize="12" />
+                        <TextBlock Text="Defective parts" Foreground="{DynamicResource TextDimBrush}" FontSize="12" />
                         <TextBlock Text="{Binding BadText}" FontSize="24" FontWeight="Bold" Foreground="{DynamicResource LedRed}" />
                     </StackPanel>
                     <StackPanel Margin="4">
-                        <TextBlock Text="Quote" Foreground="{DynamicResource TextDimBrush}" FontSize="12" />
+                        <TextBlock Text="Defect rate" Foreground="{DynamicResource TextDimBrush}" FontSize="12" />
                         <TextBlock Text="{Binding RateText}" FontSize="24" FontWeight="Bold" Foreground="{DynamicResource LedOrange}" />
                     </StackPanel>
                     <StackPanel Margin="4">
-                        <TextBlock Text="Zeitfenster" Foreground="{DynamicResource TextDimBrush}" FontSize="12" />
+                        <TextBlock Text="Time window" Foreground="{DynamicResource TextDimBrush}" FontSize="12" />
                         <TextBlock Text="{Binding WindowText}" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap" />
                     </StackPanel>
                     <StackPanel Margin="4">
-                        <TextBlock Text="Zuletzt aktualisiert" Foreground="{DynamicResource TextDimBrush}" FontSize="12" />
+                        <TextBlock Text="Last updated" Foreground="{DynamicResource TextDimBrush}" FontSize="12" />
                         <TextBlock Text="{Binding UpdatedText}" FontSize="14" FontWeight="SemiBold" />
                     </StackPanel>
                 </UniformGrid>
@@ -118,7 +120,7 @@
             <!-- ===== Shift comparison ===== -->
             <Border DockPanel.Dock="Top" Style="{StaticResource Card}" Margin="8,8,8,0">
                 <TextBlock>
-                    <Run Text="Schichtvergleich:  " FontWeight="SemiBold" />
+                    <Run Text="Shift comparison:  " FontWeight="SemiBold" />
                     <Run Text="{Binding ShiftComparisonText, Mode=OneWay}" />
                 </TextBlock>
             </Border>
@@ -127,7 +129,7 @@
             <Border DockPanel.Dock="Top" Style="{StaticResource Card}" Margin="8,8,8,0"
                     Visibility="{Binding HasWarnings, Converter={StaticResource BoolToVisible}}">
                 <StackPanel>
-                    <TextBlock Text="Kameras ohne Bewertung (Status 2)" FontWeight="SemiBold"
+                    <TextBlock Text="Cameras without evaluation (status 2)" FontWeight="SemiBold"
                                Foreground="{DynamicResource LedOrange}" Margin="0,0,0,4" />
                     <ItemsControl ItemsSource="{Binding Status2Warnings}">
                         <ItemsControl.ItemTemplate>
@@ -150,9 +152,9 @@
                 <!-- Top-20 pareto -->
                 <Border Grid.Column="0" Style="{StaticResource Card}">
                     <DockPanel>
-                        <TextBlock DockPanel.Dock="Top" Text="Top 20 Fehlergründe — betroffene Teile"
+                        <TextBlock DockPanel.Dock="Top" Text="Top 20 defect reasons — affected parts"
                                    FontWeight="Bold" FontSize="15" Margin="0,0,0,6" />
-                        <TextBlock DockPanel.Dock="Top" Text="(Balken anklicken = Herkunft Modul/Nest · Stack = je Kamera)"
+                        <TextBlock DockPanel.Dock="Top" Text="(click a bar = origin module/nest · stack = per camera)"
                                    Foreground="{DynamicResource TextDimBrush}" FontSize="11" Margin="0,0,0,6" />
                         <!-- Legend -->
                         <ItemsControl DockPanel.Dock="Top" ItemsSource="{Binding Legend}" Margin="0,0,0,8">
@@ -219,15 +221,16 @@
                 <!-- Module chart (click a bar to filter the list) -->
                 <Border Grid.Column="2" Style="{StaticResource Card}">
                     <DockPanel>
-                        <TextBlock DockPanel.Dock="Top" Text="Fehleranteile je Herkunftsmodul" FontWeight="Bold"
+                        <TextBlock DockPanel.Dock="Top" Text="Defect share by origin module" FontWeight="Bold"
                                    FontSize="15" Margin="0,0,0,6" />
-                        <TextBlock DockPanel.Dock="Top" Text="(M10/M11, M20/M21 aus dmcserial · unbekannt = noch kein Teile-Austritt · anklicken filtert oben)"
+                        <TextBlock DockPanel.Dock="Top" Text="(M10/M11, M20/M21 from dmcserial · unknown = part not yet exited · click filters above)"
                                    Foreground="{DynamicResource TextDimBrush}" FontSize="11" Margin="0,0,0,8"
                                    TextWrapping="Wrap" />
                         <ListBox ItemsSource="{Binding ModuleBars}" SelectedItem="{Binding SelectedModuleBar}"
                                  Background="Transparent" BorderThickness="0"
                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                                 HorizontalContentAlignment="Stretch">
+                                 HorizontalContentAlignment="Stretch"
+                                 PreviewMouseLeftButtonDown="OnModuleBarPreviewClick">
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
                                     <Grid Margin="0,3">
@@ -260,7 +263,7 @@
                             <Grid DockPanel.Dock="Top" Margin="0,0,0,6">
                                 <TextBlock Text="{Binding OriginTitle}" FontWeight="Bold" FontSize="16"
                                            TextTrimming="CharacterEllipsis" HorizontalAlignment="Left" />
-                                <Button Content="✕ Schließen" Command="{Binding CloseOriginCommand}"
+                                <Button Content="✕ Close" Command="{Binding CloseOriginCommand}"
                                         HorizontalAlignment="Right" Padding="10,3" />
                             </Grid>
                             <TextBlock DockPanel.Dock="Top" Text="{Binding OriginSubtitle}" TextWrapping="Wrap"
@@ -274,7 +277,7 @@
                                     <StackPanel>
                                         <!-- Header: nest columns -->
                                         <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                            <TextBlock Text="Herkunftsmodul \ Nest" Width="150" FontWeight="Bold"
+                                            <TextBlock Text="Origin module \ Nest" Width="150" FontWeight="Bold"
                                                        VerticalAlignment="Center" />
                                             <ItemsControl ItemsSource="{Binding OriginNests}">
                                                 <ItemsControl.ItemsPanel>
@@ -326,7 +329,7 @@
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
-                                        <TextBlock Text="Zelle: betroffene / geprüfte Teile · darunter die Fehlerrate. Rot hinterlegt = deutlich überhöhte Rate."
+                                        <TextBlock Text="Cell: affected / inspected parts · defect rate below. Red background = markedly elevated rate."
                                                    Foreground="{DynamicResource TextDimBrush}" FontSize="11" Margin="0,10,0,0"
                                                    TextWrapping="Wrap" />
                                     </StackPanel>

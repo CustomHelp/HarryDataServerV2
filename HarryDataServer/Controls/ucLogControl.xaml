@@ -12,6 +12,10 @@
                 <ToggleButton Content="WARNING" IsChecked="{Binding ShowWarning}" />
                 <ToggleButton Content="ERROR" IsChecked="{Binding ShowError}" />
                 <Button Content="Export" Command="{Binding ExportCommand}" Margin="20,0,0,0" />
+                <!-- Capture toggle lives on the Log page (task B3); bound to the MainViewModel via the Window. -->
+                <CheckBox Content="Capture telegrams" Margin="24,0,0,0" VerticalAlignment="Center"
+                          IsChecked="{Binding DataContext.CaptureTelegrams, RelativeSource={RelativeSource AncestorType=Window}}"
+                          ToolTip="Write every incoming raw telegram to the Capture folder next to the EXE (test/commissioning aid)" />
             </StackPanel>
             <StackPanel Orientation="Horizontal">
                 <TextBlock Text="Source:" VerticalAlignment="Center" Margin="0,0,8,0" Foreground="{DynamicResource TextDimBrush}" />

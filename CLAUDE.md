@@ -9,6 +9,13 @@
 > content (**both German and English**, `HarryShared/Help/SuiteHelp.cs`) **in the same commit** as
 > the change. The `?`-button / F1 help must always describe the current behaviour.
 
+> **STANDING RULE — UI language is ENGLISH-only (since 2026-07-23).** All user-facing text in the
+> server and every companion (buttons, labels, tooltips, context menus, status/log messages, dialogs,
+> verdict/reason strings, PDF reports) is **English**. The `[General] Language` INI key is **kept for
+> back-compat but ignored** — there is no runtime German UI. The **only** bilingual surface is the
+> in-app `?`/F1 help (`HarryShared/Help/SuiteHelp.cs` + `HelpViewModel`), which stays **DE+EN** with a
+> language toggle. New strings must be added in English; keep the help's DE+EN in sync (help rule above).
+
 > **STANDING RULE — Production, builds & deploy (since 2026-07-23).** Production runs from
 > **`F:\003_Deploy\HarryDataServer\App\`** (server: `App\HarryDataServer\HarryDataServer.exe`; each
 > companion in its own `App\<Tool>\` sibling). **Building in the repo is always allowed** (Debug and

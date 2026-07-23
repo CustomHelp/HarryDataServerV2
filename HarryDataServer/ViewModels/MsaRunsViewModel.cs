@@ -88,6 +88,10 @@ public sealed partial class MsaRunsViewModel : ObservableObject
         OpenFailuresOnlyCommand = new RelayCommand(() => OpenReport(failuresOnly: true), () => SelectedPart is not null);
         OpenFolderCommand = new RelayCommand(OpenFolder, () => HasRuns); // whole-run folder (task D1)
         LoadRunCommand = new RelayCommand<MsaRunHistoryVm>(LoadRun);
+        LoadNewestCommand = new RelayCommand(LoadNewest);
+
+        // Event-driven refresh: a finished run of THIS module/type updates the history (task A2).
+        _msa.RunCompleted += OnRunCompleted;
     }
 
     public ObservableCollection<MsaPartRow> Parts { get; } = new();
@@ -101,12 +105,16 @@ public sealed partial class MsaRunsViewModel : ObservableObject
     public IRelayCommand OpenFailuresOnlyCommand { get; }
     public IRelayCommand OpenFolderCommand { get; }
     public IRelayCommand<MsaRunHistoryVm> LoadRunCommand { get; }
+    public IRelayCommand LoadNewestCommand { get; }
 
     [ObservableProperty] private string _runInfo = "No runs loaded.";
     [ObservableProperty] private string _overallText = "—";
     [ObservableProperty] private Brush _overallBrush = Brushes.Gray;
     [ObservableProperty] private string _overallReason = string.Empty;
     [ObservableProperty] private bool _hasRuns;
+
+    /// <summary>A newer run finished while an OLDER run is shown (task A2) — offer it without ripping the view.</summary>
+    [ObservableProperty] private bool _newRunAvailable;
 
     private MsaPartRow? _selectedPart;
     public MsaPartRow? SelectedPart
@@ -138,6 +146,53 @@ public sealed partial class MsaRunsViewModel : ObservableObject
     private void Move(int delta)
     {
         _index = Math.Clamp(_index + delta, 0, Math.Max(0, _runs.Count - 1));
+        UpdateCurrent();
+    }
+
+    /// <summary>A run of this module/type finished (task A2). On the UI thread: refresh the history;
+    /// if the newest run was shown, jump to the new one; otherwise keep the current view and raise the
+    /// "new run available" banner.</summary>
+    private void OnRunCompleted(MsaRunCompleted e)
+    {
+        if (!string.Equals(e.Module, _module, StringComparison.OrdinalIgnoreCase) || e.Type != _type)
+            return;
+        var disp = Application.Current?.Dispatcher;
+        if (disp is null)
+            return;
+        if (disp.CheckAccess())
+            _ = RefreshOnCompletedAsync();
+        else
+            disp.Invoke(() => _ = RefreshOnCompletedAsync());
+    }
+
+    private async Task RefreshOnCompletedAsync()
+    {
+        var wasNewest = _index >= _runs.Count - 1;
+        var currentBaseId = Current?.BaseId;
+        var runs = await _msa.GetRunsAsync(_module, _type).ConfigureAwait(true);
+        _runs = runs.ToList();
+        BuildHistory();
+
+        if (wasNewest)
+        {
+            _index = _runs.Count - 1;
+            UpdateCurrent(); // jumps to and shows the new run (clears the banner)
+        }
+        else
+        {
+            // Keep the operator on the run they were inspecting; just offer the new one.
+            var idx = _runs.FindIndex(r => string.Equals(r.BaseId, currentBaseId, StringComparison.OrdinalIgnoreCase));
+            _index = idx >= 0 ? idx : Math.Clamp(_index, 0, Math.Max(0, _runs.Count - 1));
+            NewRunAvailable = true;
+            PreviousCommand.NotifyCanExecuteChanged();
+            NextCommand.NotifyCanExecuteChanged();
+        }
+    }
+
+    /// <summary>Jump to the newest run and clear the banner (task A2).</summary>
+    private void LoadNewest()
+    {
+        _index = _runs.Count - 1;
         UpdateCurrent();
     }
 
@@ -176,8 +231,8 @@ public sealed partial class MsaRunsViewModel : ObservableObject
         if (_type != MsaType.LimitSample)
             return r.DisplayName;
         var kind = string.Equals(r.Expected, "reject", StringComparison.OrdinalIgnoreCase)
-            ? "erwarteter Fehler nicht erkannt"
-            : "Gut-Teil abgelehnt";
+            ? "expected error not detected"
+            : "good part rejected";
         return $"{r.DisplayName} ({kind})";
     }
 
@@ -212,6 +267,8 @@ public sealed partial class MsaRunsViewModel : ObservableObject
         }
 
         SelectedPart = Parts.Count > 0 ? Parts[0] : null;
+        if (_index >= _runs.Count - 1)
+            NewRunAvailable = false; // showing the newest run → nothing newer to offer
 
         PreviousCommand.NotifyCanExecuteChanged();
         NextCommand.NotifyCanExecuteChanged();
