@@ -7,8 +7,9 @@ namespace HarryDataServer.ViewModels;
 
 /// <summary>
 /// One launchable companion tool on the Tools tab. The executable is discovered relative to the
-/// running DataServer exe (no hardcoded absolute paths): first next to it / in a same-named
-/// sibling subfolder (deployed layout), then in the sibling project's build output
+/// running DataServer exe (no hardcoded absolute paths): first the deployed layout — a sibling
+/// App\&lt;Tool&gt;\&lt;Tool&gt;.exe folder (the server runs from App\HarryDataServer\), or next to the exe /
+/// a same-named subfolder — then the sibling project's build output
 /// (&lt;solutionRoot&gt;\&lt;Tool&gt;\bin\&lt;Config&gt;\&lt;tfm&gt;\&lt;Tool&gt;.exe, the dev layout).
 /// When found the button launches it, otherwise it is disabled with a "not found" hint.
 /// </summary>
@@ -56,6 +57,9 @@ public sealed class CompanionToolViewModel
     {
         var candidates = new List<string>
         {
+            // Deployed layout (F:\003_Deploy\HarryDataServer\App\): the server runs from
+            // App\HarryDataServer\ and every companion lives in its own sibling App\<Tool>\ folder.
+            Path.Combine(baseDir, "..", name, name + ".exe"),
             Path.Combine(baseDir, name + ".exe"),          // deployed: all exes in one folder
             Path.Combine(baseDir, name, name + ".exe"),    // deployed: same-named sibling subfolder
         };
@@ -72,7 +76,8 @@ public sealed class CompanionToolViewModel
                 solutionRoot.FullName, name, "bin", configDir.Name, tfmDir.Name, name + ".exe"));
         }
 
-        return candidates.FirstOrDefault(File.Exists);
+        var hit = candidates.FirstOrDefault(File.Exists);
+        return hit is null ? null : Path.GetFullPath(hit); // collapse any ".." for a clean hint/launch
     }
 
     private void Launch()

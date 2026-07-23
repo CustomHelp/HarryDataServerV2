@@ -18,7 +18,8 @@ public partial class App : Application
         var splash = SplashHost.ShowFast("GRAPH");
         try
         {
-            var config = HarryConfig.Load();
+            var config = HarryConfig.LoadInteractive("HarryGraph");
+            if (config is null) { Shutdown(0); return; } // user cancelled the config picker
             var query = new QueryService(config);
             var vm = new MainViewModel(query, config);
             var window = new MainWindow { DataContext = vm };

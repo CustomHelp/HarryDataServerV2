@@ -50,6 +50,8 @@ public static class SuiteHelp
                     "Hat die Kamera das Teil nicht bewertet (nur Status 2), wird das Einlernen abgelehnt — ein Grenzmuster verwenden, das die Kamera als NOK erkennt."),
                 new("The reference folder comes from Harry.ini, [MSA] ReferencePath — it is shown in the status bar at the bottom.",
                     "Der Referenzordner kommt aus Harry.ini, [MSA] ReferencePath — er wird unten in der Statusleiste angezeigt."),
+                new("'Config-Pfad ändern…' (top bar) selects which Harry.ini — and thus which database — the tool uses; the choice is saved per tool under %APPDATA% and applies after a restart.",
+                    "'Config-Pfad ändern…' (obere Leiste) wählt, welche Harry.ini — und damit welche Datenbank — das Werkzeug nutzt; die Auswahl wird pro Werkzeug unter %APPDATA% gespeichert und gilt nach einem Neustart."),
             }),
         },
         Shortcuts: new List<HelpShortcut>
@@ -87,6 +89,8 @@ public static class SuiteHelp
                     "Export CSV exportiert die Messungen des aktuell gezeigten Teils."),
                 new("Export All writes every part in the history into one CSV. Right-click a history row to remove it; Clear All empties the history.",
                     "Export All schreibt alle Teile der History in eine CSV. Rechtsklick auf eine History-Zeile entfernt sie; Clear All leert die History."),
+                new("'Config-Pfad ändern…' (top bar) selects which Harry.ini — and thus which database — the tool uses; the choice is saved per tool under %APPDATA% and applies after a restart.",
+                    "'Config-Pfad ändern…' (obere Leiste) wählt, welche Harry.ini — und damit welche Datenbank — das Werkzeug nutzt; die Auswahl wird pro Werkzeug unter %APPDATA% gespeichert und gilt nach einem Neustart."),
             }),
         },
         Shortcuts: new List<HelpShortcut>
@@ -120,6 +124,8 @@ public static class SuiteHelp
                     "From / To (Datum + HH:mm:ss) für einen festen Bereich setzen, oder 'Live last N' für die letzten N Punkte pro Serie."),
                 new("Refresh all reloads every graph. You can zoom/pan inside a graph and save or load a graph configuration as JSON.",
                     "Refresh all lädt alle Graphen neu. In einem Graph kann gezoomt/verschoben werden; eine Graph-Konfiguration lässt sich als JSON speichern/laden."),
+                new("'Config-Pfad ändern…' (top bar) selects which Harry.ini — and thus which database — the tool uses; the choice is saved per tool under %APPDATA% and applies after a restart.",
+                    "'Config-Pfad ändern…' (obere Leiste) wählt, welche Harry.ini — und damit welche Datenbank — das Werkzeug nutzt; die Auswahl wird pro Werkzeug unter %APPDATA% gespeichert und gilt nach einem Neustart."),
             }),
         },
         Shortcuts: new List<HelpShortcut>
@@ -149,6 +155,8 @@ public static class SuiteHelp
             {
                 new("Live aggregates the last N finished parts (editable N). A fixed range uses the From/To date + time.",
                     "Live aggregiert die letzten N fertigen Teile (N editierbar). Ein fester Bereich nutzt From/To Datum + Zeit."),
+                new("'Config-Pfad ändern…' (top bar) selects which Harry.ini — and thus which database — the tool uses; the choice is saved per tool under %APPDATA% and applies after a restart.",
+                    "'Config-Pfad ändern…' (obere Leiste) wählt, welche Harry.ini — und damit welche Datenbank — das Werkzeug nutzt; die Auswahl wird pro Werkzeug unter %APPDATA% gespeichert und gilt nach einem Neustart."),
             }),
         },
         Shortcuts: new List<HelpShortcut>
@@ -176,6 +184,8 @@ public static class SuiteHelp
                     "Mit Add images… Bild-Slots hinzufügen; dann jeden Slot auf der Fläche verschieben, zoomen, zuschneiden und spiegeln."),
                 new("Export preview… renders a preview image of the current layout.",
                     "Export preview… erzeugt ein Vorschaubild des aktuellen Layouts."),
+                new("'Config-Pfad ändern…' (top bar) selects which Harry.ini the tool uses (optional here — the tool mainly edits Collage.ini); saved per tool under %APPDATA%, applies after a restart.",
+                    "'Config-Pfad ändern…' (obere Leiste) wählt, welche Harry.ini das Werkzeug nutzt (hier optional — das Werkzeug bearbeitet vor allem Collage.ini); pro Werkzeug unter %APPDATA% gespeichert, gilt nach Neustart."),
             }),
         },
         Shortcuts: new List<HelpShortcut>
@@ -191,13 +201,17 @@ public static class SuiteHelp
             "the number of AFFECTED PARTS (distinct serials with result_status = 0) in the time window, " +
             "with the total occurrences as a second figure. It is read-only, combines the frame and " +
             "trimmer measurement tables (so M20/M21 are included) and does not join dmcserial, so parts " +
-            "that have not finished still count. Status 2 (not evaluated) never counts.",
+            "that have not finished still count. Status 2 (not evaluated) never counts. By default a " +
+            "station's cameras (KF1/KF3) are merged into one bar and _S1.._S5 sensors into one family; " +
+            "clicking a bar opens the origin (module × nest) breakdown.",
         DescriptionDe:
             "HarryPareto zeigt live ein Pareto der Produktions-Fehlergründe. Kennzahl je Merkmal ist die " +
             "Anzahl BETROFFENER TEILE (eindeutige Seriennummern mit result_status = 0) im Zeitfenster, " +
             "dazu die Gesamt-Vorkommen als Zweitzahl. Nur lesend, kombiniert Rahmen- und Trimmer-Tabelle " +
             "(damit M20/M21 enthalten sind) und ohne Join auf dmcserial, sodass auch nicht abgeschlossene " +
-            "Teile mitzählen. Status 2 (nicht bewertet) zählt nie mit.",
+            "Teile mitzählen. Status 2 (nicht bewertet) zählt nie mit. Standardmäßig werden die Kameras " +
+            "einer Station (KF1/KF3) zu einem Balken und _S1..S5-Sensoren zu einer Familie zusammengefasst; " +
+            "ein Klick auf einen Balken öffnet die Herkunft (Modul × Nest).",
         Sections: new List<HelpSection>
         {
             new("Connect", "Verbinden", new List<HelpStep>
@@ -215,15 +229,28 @@ public static class SuiteHelp
                     "Der KPI-Kopf zeigt geprüfte Teile, Schlechtteile, Quote %, Zeitfenster, letzte Aktualisierung und Verbindung."),
                 new("The Top-20 bars are largest first; each shows the affected-part count, its % and the occurrences, a trend arrow versus the previous window, and is coloured by module_ref (see the legend).",
                     "Die Top-20-Balken stehen größter zuerst; jeder zeigt die Anzahl betroffener Teile, deren % und die Vorkommen, einen Trend-Pfeil gegenüber dem Vorfenster, und ist nach module_ref eingefärbt (siehe Legende)."),
-                new("The module chart shows the share per module_ref — click a bar to filter the Top-20 to that module; clear it with the ✕ chip.",
-                    "Das Modul-Chart zeigt den Anteil je module_ref — Balken anklicken filtert die Top-20 auf dieses Modul; über das ✕-Feld zurücksetzen."),
+                new("A bar is a stack with one segment per camera (KF1/KF3, distinguished by shade) and one entry per sensor family — the hover tooltip lists the exact per-camera and per-sensor split so a skew (e.g. a feature only failing on KF3) stays visible.",
+                    "Ein Balken ist ein Stack mit einem Segment je Kamera (KF1/KF3, per Helligkeit unterschieden) und je Sensor-Familie — der Tooltip beim Überfahren zeigt die genaue Aufteilung je Kamera und je Sensor, sodass eine Schieflage (z. B. ein Merkmal, das nur auf KF3 fehlschlägt) sichtbar bleibt."),
+                new("The module chart shows the share per REAL origin module (M1x → M10/M11, M2x → M20/M21, from dmcserial); parts not yet exited form a separate '<ref> (unbekannt)' segment. Click a bar to filter the Top-20 to that origin; clear it with the ✕ chip.",
+                    "Das Modul-Chart zeigt den Anteil je ECHTEM Herkunftsmodul (M1x → M10/M11, M2x → M20/M21, aus dmcserial); noch nicht ausgetretene Teile bilden ein eigenes Segment '<ref> (unbekannt)'. Balken anklicken filtert die Top-20 auf diese Herkunft; über das ✕-Feld zurücksetzen."),
                 new("A warning box lists controllers that only produced status 2 ('camera did not judge'). The shift comparison contrasts the current shift's rate with the previous shift's.",
                     "Ein Warnfeld listet Controller, die nur Status 2 lieferten ('Kamera bewertet nicht'). Der Schichtvergleich stellt die Quote der aktuellen Schicht der Vorschicht gegenüber."),
+            }),
+            new("Origin (click a bar)", "Herkunft (Balken anklicken)", new List<HelpStep>
+            {
+                new("Click a bar to open the origin breakdown: a matrix of origin module (M10 vs M11, M20 vs M21, …) × nest, read from dmcserial for exactly this feature's parts.",
+                    "Balken anklicken öffnet die Herkunft: eine Matrix aus Herkunftsmodul (M10 vs. M11, M20 vs. M21, …) × Nest, aus dmcserial für genau die Teile dieses Merkmals gelesen."),
+                new("Each cell shows affected / inspected parts and the defect RATE (affected ÷ inspected of that module/nest). Cells with a clearly-elevated rate are highlighted red — read the rate, not only the count.",
+                    "Jede Zelle zeigt betroffene / geprüfte Teile und die Fehler-RATE (betroffene ÷ geprüfte dieses Moduls/Nests). Zellen mit deutlich überhöhter Rate sind rot hervorgehoben — die Rate lesen, nicht nur die Anzahl."),
+                new("Concentration on one module/nest → check the mechanics/process there; an even spread → more likely material or camera evaluation. Origin is only known after part exit (dmcserial); features without a strand reference (module_ref NoRef) show a note instead.",
+                    "Konzentration auf ein Modul/Nest → Mechanik/Prozess dort prüfen; Gleichverteilung → eher Material oder Kameraauswertung. Die Herkunft ist erst nach dem Teile-Austritt bekannt (dmcserial); Merkmale ohne Strang-Bezug (module_ref NoRef) zeigen stattdessen einen Hinweis."),
             }),
             new("Filters, refresh, export", "Filter, Aktualisierung, Export", new List<HelpStep>
             {
                 new("Filter by time window (shift / 8 h / 24 h / 7 days) and controller. Auto-refresh runs every N seconds (default 30, editable); on a DB error a hint is shown instead of a crash.",
                     "Nach Zeitfenster (Schicht / 8 h / 24 h / 7 Tage) und Controller filtern. Auto-Refresh läuft alle N Sekunden (Standard 30, editierbar); bei DB-Fehler erscheint ein Hinweis statt eines Absturzes."),
+                new("'Separate by camera' turns off the station merge (shows KF1/KF3 as their own bars); 'Sensors individually' turns off the _S1.._S5 family grouping. Both default to merged.",
+                    "'Nach Kamera trennen' hebt die Stations-Zusammenfassung auf (zeigt KF1/KF3 als eigene Balken); 'Sensoren einzeln' hebt die _S1..S5-Familien-Gruppierung auf. Beide sind standardmäßig zusammengefasst."),
                 new("TV mode enlarges everything for a wall display. CSV-Export writes the current Top-20 to a semicolon CSV.",
                     "Der TV-Modus vergrößert alles für eine Wandanzeige. CSV-Export schreibt die aktuelle Top-20 in eine Semikolon-CSV."),
             }),

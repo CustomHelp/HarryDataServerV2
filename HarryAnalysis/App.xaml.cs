@@ -22,7 +22,8 @@ public partial class App : Application
         var splash = SplashHost.ShowFast("ANALYSIS");
         try
         {
-            var config = HarryConfig.Load();
+            var config = HarryConfig.LoadInteractive("HarryAnalysis");
+            if (config is null) { Shutdown(0); return; } // user cancelled the config picker
             var query = new QueryService(config);
             _scanner = new ScannerCompanionClient(config.ScannerHost, config.ScannerPort);
             var vm = new MainViewModel(query, config, _scanner);

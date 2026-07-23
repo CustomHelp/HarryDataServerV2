@@ -27,6 +27,8 @@
                     <ToggleButton Content="Scanner" IsChecked="{Binding ScannerActive}" Padding="8,3"
                                   Margin="0,0,12,0"
                                   ToolTip="Auto-search when a code arrives from the handheld scanner" />
+                    <Button Click="OnChangeConfig" Content="Config…" Padding="8,3" Margin="0,0,12,0"
+                            ToolTip="Config-Pfad ändern… (welche Harry.ini dieses Werkzeug nutzt)" />
                     <Button x:Name="ThemeToggle" Click="OnThemeToggle" Content="Theme"
                             Padding="8,3" Margin="0,0,12,0" ToolTip="Switch light / dark theme" />
                     <Button Content="?" Command="{Binding ShowHelpCommand}" Padding="10,3" Margin="0,0,12,0"

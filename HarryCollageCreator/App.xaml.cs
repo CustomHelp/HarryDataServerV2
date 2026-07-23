@@ -19,8 +19,8 @@ public partial class App : Application
         try
         {
             HarryConfig? config = null;
-            try { config = HarryConfig.Load(); }
-            catch { /* config optional for this tool */ }
+            try { config = HarryConfig.Load("HarryCollageCreator"); }
+            catch { /* config optional for this tool — no forced picker; use the Config… button */ }
 
             var vm = new MainViewModel(config);
             var window = new MainWindow { DataContext = vm };

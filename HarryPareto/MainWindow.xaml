@@ -1,6 +1,7 @@
 <Window x:Class="HarryPareto.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:HarryPareto"
         Title="HarryPareto" Height="860" Width="1400"
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource WindowBg}">
@@ -67,6 +68,12 @@
                     <TextBox Width="56" Text="{Binding RefreshSeconds, UpdateSourceTrigger=LostFocus}"
                              VerticalAlignment="Center" Margin="0,0,6,0" ToolTip="Aktualisierungsintervall in Sekunden (min. 5)" />
                     <CheckBox Content="Auto" IsChecked="{Binding AutoRefresh}" VerticalAlignment="Center" Margin="0,0,16,0" />
+                    <ToggleButton Content="Nach Kamera trennen" IsChecked="{Binding SeparateByCamera}"
+                                  VerticalAlignment="Center" Margin="0,0,6,0"
+                                  ToolTip="AUS: KF1/KF3 einer Station zusammenfassen (Standard). EIN: je Kamera getrennt." />
+                    <ToggleButton Content="Sensoren einzeln" IsChecked="{Binding SensorsIndividual}"
+                                  VerticalAlignment="Center" Margin="0,0,16,0"
+                                  ToolTip="AUS: _S1..S5 zu einer Sensor-Familie zusammenfassen (Standard). EIN: jeden Sensor einzeln." />
                     <Button Content="Aktualisieren" Command="{Binding RefreshCommand}" Margin="0,0,6,0" />
                     <Button Content="CSV-Export" Command="{Binding ExportCsvCommand}" Margin="0,0,6,0" />
                     <Button Content="Verbindung…" Command="{Binding ReconnectCommand}" Margin="0,0,16,0" />
@@ -145,6 +152,8 @@
                     <DockPanel>
                         <TextBlock DockPanel.Dock="Top" Text="Top 20 Fehlergründe — betroffene Teile"
                                    FontWeight="Bold" FontSize="15" Margin="0,0,0,6" />
+                        <TextBlock DockPanel.Dock="Top" Text="(Balken anklicken = Herkunft Modul/Nest · Stack = je Kamera)"
+                                   Foreground="{DynamicResource TextDimBrush}" FontSize="11" Margin="0,0,0,6" />
                         <!-- Legend -->
                         <ItemsControl DockPanel.Dock="Top" ItemsSource="{Binding Legend}" Margin="0,0,0,8">
                             <ItemsControl.ItemsPanel>
@@ -165,24 +174,38 @@
                             <ItemsControl ItemsSource="{Binding Bars}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <Grid Margin="0,3" ToolTip="{Binding ToolTipText}">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="270" />
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="170" />
-                                                <ColumnDefinition Width="26" />
-                                            </Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="0" Text="{Binding Label}" VerticalAlignment="Center"
-                                                       TextTrimming="CharacterEllipsis" Margin="0,0,8,0" />
-                                            <ProgressBar Grid.Column="1" Height="20" VerticalAlignment="Center"
-                                                         Minimum="0" Maximum="100" Value="{Binding BarFraction, Mode=OneWay}"
-                                                         Foreground="{Binding BarBrush}" Background="{DynamicResource CardBg}"
-                                                         BorderThickness="0" />
-                                            <TextBlock Grid.Column="2" Text="{Binding CountText}" VerticalAlignment="Center"
-                                                       Margin="8,0,0,0" />
-                                            <TextBlock Grid.Column="3" Text="{Binding TrendGlyph}" Foreground="{Binding TrendBrush}"
-                                                       FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center" />
-                                        </Grid>
+                                        <Button Margin="0,2" ToolTip="{Binding ToolTipText}" Cursor="Hand"
+                                                HorizontalContentAlignment="Stretch" Padding="2" Background="Transparent"
+                                                BorderThickness="0"
+                                                Command="{Binding DataContext.ShowOriginCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                CommandParameter="{Binding}">
+                                            <Button.Template>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}"
+                                                            CornerRadius="3">
+                                                        <ContentPresenter />
+                                                    </Border>
+                                                </ControlTemplate>
+                                            </Button.Template>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="270" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="170" />
+                                                    <ColumnDefinition Width="26" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="{Binding Label}" VerticalAlignment="Center"
+                                                           TextTrimming="CharacterEllipsis" Margin="0,0,8,0" />
+                                                <local:SegmentBar Grid.Column="1" Height="20" VerticalAlignment="Center"
+                                                                  Segments="{Binding Segments}"
+                                                                  RemainderWeight="{Binding RemainderWeight}"
+                                                                  TrackBrush="{DynamicResource CardBg}" />
+                                                <TextBlock Grid.Column="2" Text="{Binding CountText}" VerticalAlignment="Center"
+                                                           Margin="8,0,0,0" />
+                                                <TextBlock Grid.Column="3" Text="{Binding TrendGlyph}" Foreground="{Binding TrendBrush}"
+                                                           FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center" />
+                                            </Grid>
+                                        </Button>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
@@ -196,10 +219,11 @@
                 <!-- Module chart (click a bar to filter the list) -->
                 <Border Grid.Column="2" Style="{StaticResource Card}">
                     <DockPanel>
-                        <TextBlock DockPanel.Dock="Top" Text="Fehleranteile je Modul-Ref" FontWeight="Bold"
+                        <TextBlock DockPanel.Dock="Top" Text="Fehleranteile je Herkunftsmodul" FontWeight="Bold"
                                    FontSize="15" Margin="0,0,0,6" />
-                        <TextBlock DockPanel.Dock="Top" Text="(Balken anklicken = oben filtern)"
-                                   Foreground="{DynamicResource TextDimBrush}" FontSize="11" Margin="0,0,0,8" />
+                        <TextBlock DockPanel.Dock="Top" Text="(M10/M11, M20/M21 aus dmcserial · unbekannt = noch kein Teile-Austritt · anklicken filtert oben)"
+                                   Foreground="{DynamicResource TextDimBrush}" FontSize="11" Margin="0,0,0,8"
+                                   TextWrapping="Wrap" />
                         <ListBox ItemsSource="{Binding ModuleBars}" SelectedItem="{Binding SelectedModuleBar}"
                                  Background="Transparent" BorderThickness="0"
                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"
@@ -225,6 +249,91 @@
                             </ListBox.ItemTemplate>
                         </ListBox>
                     </DockPanel>
+                </Border>
+
+                <!-- ===== Origin detail overlay (task A) ===== -->
+                <Border Grid.Column="0" Grid.ColumnSpan="3" Background="#B3000000"
+                        Visibility="{Binding HasOriginDetail, Converter={StaticResource BoolToVisible}}">
+                    <Border Style="{StaticResource Card}" Margin="40" MaxWidth="1100" MaxHeight="640"
+                            VerticalAlignment="Center" HorizontalAlignment="Center">
+                        <DockPanel>
+                            <Grid DockPanel.Dock="Top" Margin="0,0,0,6">
+                                <TextBlock Text="{Binding OriginTitle}" FontWeight="Bold" FontSize="16"
+                                           TextTrimming="CharacterEllipsis" HorizontalAlignment="Left" />
+                                <Button Content="✕ Schließen" Command="{Binding CloseOriginCommand}"
+                                        HorizontalAlignment="Right" Padding="10,3" />
+                            </Grid>
+                            <TextBlock DockPanel.Dock="Top" Text="{Binding OriginSubtitle}" TextWrapping="Wrap"
+                                       Foreground="{DynamicResource TextDimBrush}" FontSize="12" Margin="0,0,0,10" />
+                            <TextBlock DockPanel.Dock="Top" Text="{Binding OriginNote}" TextWrapping="Wrap"
+                                       Foreground="{DynamicResource LedOrange}" Margin="0,0,0,8"
+                                       Visibility="{Binding HasOriginNote, Converter={StaticResource BoolToVisible}}" />
+
+                            <Grid Visibility="{Binding HasOriginMatrix, Converter={StaticResource BoolToVisible}}">
+                                <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                                    <StackPanel>
+                                        <!-- Header: nest columns -->
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                                            <TextBlock Text="Herkunftsmodul \ Nest" Width="150" FontWeight="Bold"
+                                                       VerticalAlignment="Center" />
+                                            <ItemsControl ItemsSource="{Binding OriginNests}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock Text="{Binding}" Width="92" FontWeight="Bold"
+                                                                   TextAlignment="Center" VerticalAlignment="Center"
+                                                                   Margin="1,0" />
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                        <!-- One row per origin module -->
+                                        <ItemsControl ItemsSource="{Binding OriginRows}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <StackPanel Orientation="Horizontal" Margin="0,1">
+                                                        <TextBlock Text="{Binding Module}" Width="150" FontWeight="SemiBold"
+                                                                   VerticalAlignment="Center" />
+                                                        <ItemsControl ItemsSource="{Binding Cells}">
+                                                            <ItemsControl.ItemsPanel>
+                                                                <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                                                            </ItemsControl.ItemsPanel>
+                                                            <ItemsControl.ItemTemplate>
+                                                                <DataTemplate>
+                                                                    <Border Width="92" Margin="1" CornerRadius="3" Padding="4,3"
+                                                                            Background="{DynamicResource CardBg}">
+                                                                        <Border.Style>
+                                                                            <Style TargetType="Border">
+                                                                                <Style.Triggers>
+                                                                                    <DataTrigger Binding="{Binding IsElevated}" Value="True">
+                                                                                        <Setter Property="Background" Value="#66EF4444" />
+                                                                                    </DataTrigger>
+                                                                                </Style.Triggers>
+                                                                            </Style>
+                                                                        </Border.Style>
+                                                                        <StackPanel>
+                                                                            <TextBlock Text="{Binding Text}" TextAlignment="Center" FontWeight="SemiBold" />
+                                                                            <TextBlock Text="{Binding RateText}" TextAlignment="Center"
+                                                                                       Foreground="{DynamicResource TextDimBrush}" FontSize="11" />
+                                                                        </StackPanel>
+                                                                    </Border>
+                                                                </DataTemplate>
+                                                            </ItemsControl.ItemTemplate>
+                                                        </ItemsControl>
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                        <TextBlock Text="Zelle: betroffene / geprüfte Teile · darunter die Fehlerrate. Rot hinterlegt = deutlich überhöhte Rate."
+                                                   Foreground="{DynamicResource TextDimBrush}" FontSize="11" Margin="0,10,0,0"
+                                                   TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </ScrollViewer>
+                            </Grid>
+                        </DockPanel>
+                    </Border>
                 </Border>
             </Grid>
         </DockPanel>

@@ -1,5 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
+using System.Text;
+using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -11,7 +13,8 @@ using Microsoft.Win32;
 
 namespace HarryPareto;
 
-/// <summary>One horizontal Pareto bar (a defect feature) drawn in pure XAML (task E3/E4).</summary>
+/// <summary>One horizontal Pareto bar (a defect feature). The bar is drawn by <see cref="SegmentBar"/>
+/// as a stack of per-camera segments (task B), so a KF1/KF3 skew stays visible.</summary>
 public sealed class ParetoBarItem
 {
     public required string Label { get; init; }
@@ -20,11 +23,19 @@ public sealed class ParetoBarItem
     public int AffectedParts { get; init; }
     public int Occurrences { get; init; }
     public required string CountText { get; init; }
-    public required Brush BarBrush { get; init; }
-    /// <summary>Bar length as a percentage 0..100 of the largest bar (drives a themed ProgressBar).</summary>
-    public double BarFraction { get; init; }
+
+    /// <summary>Per-camera coloured segments filling the bar (task B); one segment in the split view.</summary>
+    public required IReadOnlyList<BarSegment> Segments { get; init; }
+    /// <summary>Empty tail weight so every bar shares one scale (weights relative to the largest bar).</summary>
+    public double RemainderWeight { get; init; }
+
     public required string TrendGlyph { get; init; }
     public required Brush TrendBrush { get; init; }
+
+    /// <summary>The measurement definitions this bar aggregates — used for the origin query (task A).</summary>
+    public required IReadOnlyList<int> DefinitionIds { get; init; }
+    /// <summary>True when module_ref maps to origin columns in dmcserial (M1x/M2x/M3x) — task A.</summary>
+    public bool CanShowOrigin { get; init; }
 }
 
 /// <summary>One bar of the per-module share chart (click filters the Pareto list).</summary>
@@ -40,22 +51,42 @@ public sealed class ModuleBarItem
 /// <summary>Legend entry mapping a module_ref to its bar colour.</summary>
 public sealed record LegendItem(string ModuleRef, Brush Brush);
 
+/// <summary>One nest cell of the origin matrix (task A): affected/inspected + rate for a module×nest.</summary>
+public sealed class OriginCellVm
+{
+    public required string Text { get; init; }       // "3/40" (affected/inspected)
+    public required string RateText { get; init; }   // "7.5 %"
+    public bool IsEmpty { get; init; }
+    public bool IsElevated { get; init; }            // clearly-above-average rate → highlight
+}
+
+/// <summary>One origin-module row of the matrix, its cells aligned to <see cref="MainViewModel.OriginNests"/>.</summary>
+public sealed class OriginRowVm
+{
+    public required string Module { get; init; }
+    public required IReadOnlyList<OriginCellVm> Cells { get; init; }
+}
+
 /// <summary>
-/// Live Top-20 Pareto of production defect reasons. Loads read-only aggregates from
-/// <see cref="ParetoDb"/>, refreshes on a timer, and exposes everything the pure-XAML view binds to
-/// (KPI head, bars, module chart, legend, status-2 warnings, shift comparison). DB errors surface as
-/// a status message + red connection lamp — never a crash (task E3).
+/// Live Top-20 Pareto of production defect reasons. Loads read-only defect data from
+/// <see cref="ParetoDb"/>, refreshes on a timer, and aggregates it in memory into the bound view:
+/// bars aggregated per station across cameras (task B) and per sensor family (task C, both default
+/// ON), a per-module share chart, the shift comparison, and — on a bar click — the origin matrix
+/// (module × nest, with rate, task A). DB errors surface as a status message + red lamp, never a
+/// crash.
 /// </summary>
 public sealed partial class MainViewModel : ObservableObject
 {
     private const int TopN = 20;
 
-    // Categorical palette (readable in dark and light); assigned per module_ref (task E3 colour+legend).
+    // Categorical palette (readable in dark and light); assigned per module_ref (colour + legend).
     private static readonly string[] Palette =
     {
         "#4E79A7", "#F28E2B", "#59A14F", "#E15759", "#76B7B2",
         "#EDC948", "#B07AA1", "#FF9DA7", "#9C755F", "#BAB0AC",
     };
+
+    private static readonly Regex SensorSuffix = new(@"_S(\d+)$", RegexOptions.Compiled);
 
     private ParetoSettings _settings;
     private ParetoDb _db;
@@ -77,6 +108,8 @@ public sealed partial class MainViewModel : ObservableObject
         ClearModuleFilterCommand = new RelayCommand(() => SelectedModuleBar = null);
         ToggleTvCommand = new RelayCommand(() => TvMode = !TvMode);
         ShowHelpCommand = new RelayCommand(ShowHelp);
+        ShowOriginCommand = new AsyncRelayCommand<ParetoBarItem>(ShowOriginAsync);
+        CloseOriginCommand = new RelayCommand(() => HasOriginDetail = false);
     }
 
     // --- Bound collections -------------------------------------------------
@@ -85,6 +118,8 @@ public sealed partial class MainViewModel : ObservableObject
     public ObservableCollection<ModuleBarItem> ModuleBars { get; } = new();
     public ObservableCollection<LegendItem> Legend { get; } = new();
     public ObservableCollection<string> Status2Warnings { get; } = new();
+    public ObservableCollection<string> OriginNests { get; } = new();
+    public ObservableCollection<OriginRowVm> OriginRows { get; } = new();
 
     public ObservableCollection<string> WindowOptions { get; } =
         new() { "Schicht", "8 h", "24 h", "7 Tage" };
@@ -98,6 +133,8 @@ public sealed partial class MainViewModel : ObservableObject
     public IRelayCommand ClearModuleFilterCommand { get; }
     public IRelayCommand ToggleTvCommand { get; }
     public IRelayCommand ShowHelpCommand { get; }
+    public IAsyncRelayCommand<ParetoBarItem> ShowOriginCommand { get; }
+    public IRelayCommand CloseOriginCommand { get; }
 
     // --- KPI head ----------------------------------------------------------
 
@@ -115,10 +152,19 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty] private bool _hasModuleFilter;
     [ObservableProperty] private double _uiScale = 1.0;
 
+    // --- Origin detail panel (task A) --------------------------------------
+
+    [ObservableProperty] private bool _hasOriginDetail;
+    [ObservableProperty] private string _originTitle = string.Empty;
+    [ObservableProperty] private string _originSubtitle = string.Empty;
+    [ObservableProperty] private string _originNote = string.Empty;
+    [ObservableProperty] private bool _hasOriginNote;
+    [ObservableProperty] private bool _hasOriginMatrix;
+
     public string AppName => "HarryPareto — Live Top-20 Fehlergründe";
     public string AppVersion => "v" + (GetType().Assembly.GetName().Version?.ToString(3) ?? "2.0.0");
 
-    // --- Filters (trigger a reload) ---------------------------------------
+    // --- Filters / view toggles (trigger a rebuild) -----------------------
 
     private string _selectedWindow = "Schicht";
     public string SelectedWindow
@@ -134,6 +180,22 @@ public sealed partial class MainViewModel : ObservableObject
         set { if (SetProperty(ref _selectedController, value)) _ = RefreshAsync(); }
     }
 
+    // Task B: aggregate KF1/KF3 of the same station by default; toggle ON to separate by camera.
+    private bool _separateByCamera;
+    public bool SeparateByCamera
+    {
+        get => _separateByCamera;
+        set { if (SetProperty(ref _separateByCamera, value)) { HasOriginDetail = false; RebuildBars(); } }
+    }
+
+    // Task C: group _S1.._S5 into a sensor family by default; toggle ON to see sensors individually.
+    private bool _sensorsIndividual;
+    public bool SensorsIndividual
+    {
+        get => _sensorsIndividual;
+        set { if (SetProperty(ref _sensorsIndividual, value)) { HasOriginDetail = false; RebuildBars(); } }
+    }
+
     private ModuleBarItem? _selectedModuleBar;
     public ModuleBarItem? SelectedModuleBar
     {
@@ -144,6 +206,7 @@ public sealed partial class MainViewModel : ObservableObject
             {
                 HasModuleFilter = value is not null;
                 ModuleFilterText = value is null ? string.Empty : $"Modul-Filter: {value.ModuleRef}";
+                HasOriginDetail = false;
                 RebuildBars();
             }
         }
@@ -184,11 +247,14 @@ public sealed partial class MainViewModel : ObservableObject
         set { if (SetProperty(ref _tvMode, value)) UiScale = value ? 1.5 : 1.0; }
     }
 
-    // Raw current-window aggregate cached so a module-filter click re-slices without a DB round-trip.
-    private List<ParetoAgg> _agg = new();
-    private Dictionary<int, int> _prevByDef = new();
+    // Raw current/previous window defect parts, cached so toggles + the module filter re-slice in
+    // memory without a DB round-trip.
+    private List<DefectPart> _defectParts = new();
+    private List<DefectPart> _prevDefectParts = new();
     private Dictionary<string, Brush> _moduleColors = new(StringComparer.OrdinalIgnoreCase);
     private int _inspected;
+    private DateTime _winFrom;
+    private DateTime _winTo;
 
     // --- Startup -----------------------------------------------------------
 
@@ -246,20 +312,21 @@ public sealed partial class MainViewModel : ObservableObject
             var span = to - from;
             var prevFrom = from - span;
             var ctrl = SelectedController == "(alle)" ? null : SelectedController;
+            _winFrom = from;
+            _winTo = to;
 
             var kpi = await _db.GetKpiAsync(from, to, ctrl).ConfigureAwait(true);
-            _agg = await _db.GetAggAsync(from, to, ctrl).ConfigureAwait(true);
-            var prev = await _db.GetAggAsync(prevFrom, from, ctrl).ConfigureAwait(true);
+            _defectParts = await _db.GetDefectPartsAsync(from, to, ctrl).ConfigureAwait(true);
+            _prevDefectParts = await _db.GetDefectPartsAsync(prevFrom, from, ctrl).ConfigureAwait(true);
             var status2 = await _db.GetStatus2Async(from, to, ctrl).ConfigureAwait(true);
 
-            // Shift comparison (task E3): current shift vs previous shift bad-rate.
+            // Shift comparison: current shift vs previous shift bad-rate.
             var (csFrom, csTo) = CurrentShift(now);
             var psFrom = csFrom - (csTo - csFrom);
             var kpiShift = await _db.GetKpiAsync(csFrom, csTo, ctrl).ConfigureAwait(true);
             var kpiPrevShift = await _db.GetKpiAsync(psFrom, csFrom, ctrl).ConfigureAwait(true);
 
             _inspected = kpi.Inspected;
-            _prevByDef = prev.ToDictionary(p => p.DefId, p => p.AffectedParts);
             RebuildModuleColors();
 
             InspectedText = kpi.Inspected.ToString("N0", CultureInfo.CurrentCulture);
@@ -275,6 +342,7 @@ public sealed partial class MainViewModel : ObservableObject
             RebuildModuleBars();
             RebuildBars();
             RebuildWarnings(status2);
+            HasOriginDetail = false; // stale after a data refresh
 
             SetConnection(true, $"verbunden — {_settings.User}@{_settings.Ip}:{_settings.Port}/{_settings.Database}");
             StatusMessage = $"Aktualisiert {now:HH:mm:ss}.";
@@ -293,9 +361,188 @@ public sealed partial class MainViewModel : ObservableObject
     private static string Delta(double d) =>
         d > 0.05 ? $"▲ +{d:0.0} %-Pkt" : d < -0.05 ? $"▼ {d:0.0} %-Pkt" : "■ ±0";
 
+    // --- Aggregation (tasks B + C) -----------------------------------------
+
+    /// <summary>One aggregated Pareto group under the current camera/sensor toggles.</summary>
+    private sealed class AggGroup
+    {
+        public required string CameraKey { get; init; }   // station (default) or controller
+        public required string FeatureName { get; init; } // sensor family (default) or display_name
+        public required string ModuleRef { get; init; }
+        public string Key => CameraKey + "" + FeatureName;
+        public HashSet<string> Serials { get; } = new();                       // distinct affected parts
+        public int Occurrences { get; set; }
+        public HashSet<int> DefIds { get; } = new();
+        public Dictionary<string, HashSet<string>> ByCamera { get; } = new(StringComparer.OrdinalIgnoreCase);
+        public Dictionary<int, HashSet<string>> BySensor { get; } = new(); // sensor number (0 = none) → serials
+    }
+
+    private static (string Base, int? Sensor) SplitSensor(string displayName)
+    {
+        var m = SensorSuffix.Match(displayName);
+        return m.Success
+            ? (displayName[..m.Index], int.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture))
+            : (displayName, null);
+    }
+
+    private static string Station(string controller)
+    {
+        var i = controller.IndexOf("_KF", StringComparison.OrdinalIgnoreCase);
+        return i > 0 ? controller[..i] : controller;
+    }
+
+    private static bool HasOriginColumns(string moduleRef) =>
+        moduleRef.Trim().ToUpperInvariant() is "M1X" or "M2X" or "M3X";
+
+    /// <summary>
+    /// The real origin-module label for the module chart (task 1b): <c>M1x</c>→<c>M10</c>/<c>M11</c>,
+    /// <c>M2x</c>→<c>M20</c>/<c>M21</c>, <c>M3x</c>→<c>M3x</c> value; a part not yet exited (no origin)
+    /// becomes its own "&lt;ref&gt; (unbekannt)" bucket; NoRef and the like keep their module_ref.
+    /// </summary>
+    private static string OriginLabelFor(DefectPart p)
+    {
+        if (HasOriginColumns(p.ModuleRef))
+        {
+            var o = p.OriginModule?.Trim();
+            if (string.IsNullOrEmpty(o))
+                return $"{p.ModuleRef} (unbekannt)";
+            return Regex.IsMatch(o, @"^\d+$") ? "M" + o : o;
+        }
+        return p.ModuleRef;
+    }
+
+    private Dictionary<string, AggGroup> AggregateGroups(IEnumerable<DefectPart> parts)
+    {
+        var map = new Dictionary<string, AggGroup>();
+        foreach (var p in parts)
+        {
+            var (baseName, sensor) = SplitSensor(p.DisplayName);
+            var feature = SensorsIndividual ? p.DisplayName : baseName;
+            var camKey = SeparateByCamera ? p.Controller : Station(p.Controller);
+            var key = camKey + "" + feature;
+            if (!map.TryGetValue(key, out var g))
+            {
+                g = new AggGroup { CameraKey = camKey, FeatureName = feature, ModuleRef = p.ModuleRef };
+                map[key] = g;
+            }
+
+            g.Serials.Add(p.Serial);
+            g.Occurrences += p.Occurrences;
+            g.DefIds.Add(p.DefId);
+
+            if (!g.ByCamera.TryGetValue(p.Controller, out var camSet))
+                g.ByCamera[p.Controller] = camSet = new HashSet<string>();
+            camSet.Add(p.Serial);
+
+            var sIdx = sensor ?? 0;
+            if (!g.BySensor.TryGetValue(sIdx, out var senSet))
+                g.BySensor[sIdx] = senSet = new HashSet<string>();
+            senSet.Add(p.Serial);
+        }
+        return map;
+    }
+
+    private IEnumerable<DefectPart> FilteredParts() =>
+        SelectedModuleBar is null
+            ? _defectParts
+            : _defectParts.Where(p => string.Equals(OriginLabelFor(p), SelectedModuleBar.ModuleRef, StringComparison.OrdinalIgnoreCase));
+
+    private void RebuildBars()
+    {
+        Bars.Clear();
+        var groups = AggregateGroups(FilteredParts());
+        var top = groups.Values
+            .OrderByDescending(g => g.Serials.Count)
+            .ThenByDescending(g => g.Occurrences)
+            .Take(TopN)
+            .ToList();
+        var max = top.Count > 0 ? top.Max(g => g.Serials.Count) : 0;
+        var prevGroups = AggregateGroups(_prevDefectParts); // same keying → comparable
+
+        foreach (var g in top)
+        {
+            var affected = g.Serials.Count;
+            var pct = _inspected > 0 ? 100.0 * affected / _inspected : 0.0;
+            prevGroups.TryGetValue(g.Key, out var pg);
+            var prevAffected = pg?.Serials.Count ?? 0;
+            var (glyph, brush) = Trend(affected, prevAffected);
+
+            var moduleColor = ColorFor(g.ModuleRef);
+            var cams = g.ByCamera.OrderBy(c => c.Key, StringComparer.OrdinalIgnoreCase).ToList();
+            var sumCam = cams.Sum(c => c.Value.Count);
+            var segments = new List<BarSegment>();
+            for (var i = 0; i < cams.Count; i++)
+            {
+                // Split the filled part (length = distinct affected) by each camera's share, shaded so
+                // KF1/KF3 stay distinguishable (task B). Overlapping parts just weight both slices.
+                var weight = sumCam > 0 ? (double)affected * cams[i].Value.Count / sumCam : affected;
+                segments.Add(new BarSegment { Weight = weight, Brush = Shade(moduleColor, i, cams.Count) });
+            }
+            if (segments.Count == 0)
+                segments.Add(new BarSegment { Weight = Math.Max(affected, 1), Brush = moduleColor });
+
+            Bars.Add(new ParetoBarItem
+            {
+                Label = $"{g.CameraKey} · {DisplayFeature(g)}",
+                ToolTipText = BuildTooltip(g, affected, prevAffected, cams),
+                ModuleRef = g.ModuleRef,
+                AffectedParts = affected,
+                Occurrences = g.Occurrences,
+                CountText = $"{affected}  ({pct:0.0} %)  ·  {g.Occurrences}×",
+                Segments = segments,
+                RemainderWeight = Math.Max(0, max - affected),
+                TrendGlyph = glyph,
+                TrendBrush = brush,
+                DefinitionIds = g.DefIds.ToList(),
+                CanShowOrigin = HasOriginColumns(g.ModuleRef),
+            });
+        }
+    }
+
+    private string DisplayFeature(AggGroup g)
+    {
+        if (SensorsIndividual)
+            return g.FeatureName;
+        var sensors = g.BySensor.Keys.Where(k => k > 0).OrderBy(k => k).ToList();
+        if (sensors.Count == 0) return g.FeatureName;
+        if (sensors.Count == 1) return $"{g.FeatureName} (S{sensors[0]})";
+        return $"{g.FeatureName} (S{sensors[0]}–S{sensors[^1]})";
+    }
+
+    private string BuildTooltip(AggGroup g, int affected, int prevAffected, List<KeyValuePair<string, HashSet<string>>> cams)
+    {
+        var sb = new StringBuilder();
+        sb.Append(g.CameraKey).Append(" · ").AppendLine(DisplayFeature(g));
+        sb.Append("Modul-Ref: ").AppendLine(g.ModuleRef);
+        sb.Append("Betroffene Teile: ").Append(affected).Append("  (Vorfenster ").Append(prevAffected).AppendLine(")");
+        sb.Append("Vorkommen: ").Append(g.Occurrences).AppendLine();
+
+        if (cams.Count > 1 || !SeparateByCamera)
+        {
+            sb.AppendLine("— je Kamera —");
+            foreach (var c in cams)
+                sb.Append("   ").Append(c.Key).Append(": ").Append(c.Value.Count).AppendLine();
+        }
+
+        if (!SensorsIndividual)
+        {
+            var sensors = g.BySensor.Where(kv => kv.Key > 0).OrderBy(kv => kv.Key).ToList();
+            if (sensors.Count > 0)
+            {
+                sb.AppendLine("— je Sensor —");
+                foreach (var s in sensors)
+                    sb.Append("   S").Append(s.Key).Append(": ").Append(s.Value.Count).AppendLine();
+            }
+        }
+
+        if (HasOriginColumns(g.ModuleRef))
+            sb.Append("(Klick: Herkunft Modul/Nest)");
+        return sb.ToString().TrimEnd();
+    }
+
     private void RebuildModuleColors()
     {
-        var modules = _agg.Select(a => a.ModuleRef).Distinct(StringComparer.OrdinalIgnoreCase)
+        var modules = _defectParts.Select(a => a.ModuleRef).Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(m => m, StringComparer.OrdinalIgnoreCase).ToList();
         _moduleColors = new Dictionary<string, Brush>(StringComparer.OrdinalIgnoreCase);
         for (var i = 0; i < modules.Count; i++)
@@ -307,20 +554,30 @@ public sealed partial class MainViewModel : ObservableObject
 
     private void RebuildModuleBars()
     {
+        // Task 1b: share per REAL origin module (M10/M11, M20/M21, …) via dmcserial, with a separate
+        // "<ref> (unbekannt)" segment for parts not yet exited. Coloured by the parent module_ref so it
+        // matches the Top-20 bars + the legend; the click filter (below) filters on this same label.
         ModuleBars.Clear();
-        var byModule = _agg.GroupBy(a => a.ModuleRef, StringComparer.OrdinalIgnoreCase)
-            .Select(g => (Module: g.Key, Affected: g.Sum(a => a.AffectedParts)))
-            .OrderByDescending(x => x.Affected)
+        var byOrigin = _defectParts
+            .GroupBy(OriginLabelFor)
+            .Select(grp => new
+            {
+                Label = grp.Key,
+                ParentRef = grp.First().ModuleRef,
+                Affected = grp.Select(p => p.Serial).Distinct().Count(),
+            })
+            .OrderBy(x => x.ParentRef, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.Label, StringComparer.OrdinalIgnoreCase)
             .ToList();
-        var max = byModule.Count > 0 ? byModule.Max(x => x.Affected) : 0;
-        foreach (var m in byModule)
+        var max = byOrigin.Count > 0 ? byOrigin.Max(x => x.Affected) : 0;
+        foreach (var m in byOrigin)
         {
             ModuleBars.Add(new ModuleBarItem
             {
-                ModuleRef = m.Module,
+                ModuleRef = m.Label,
                 AffectedParts = m.Affected,
                 CountText = m.Affected.ToString("N0", CultureInfo.CurrentCulture),
-                BarBrush = ColorFor(m.Module),
+                BarBrush = ColorFor(m.ParentRef),
                 BarFraction = Fraction(m.Affected, max),
             });
         }
@@ -328,41 +585,6 @@ public sealed partial class MainViewModel : ObservableObject
         Legend.Clear();
         foreach (var kv in _moduleColors.OrderBy(k => k.Key, StringComparer.OrdinalIgnoreCase))
             Legend.Add(new LegendItem(kv.Key, kv.Value));
-    }
-
-    private void RebuildBars()
-    {
-        Bars.Clear();
-        var filtered = SelectedModuleBar is null
-            ? _agg
-            : _agg.Where(a => string.Equals(a.ModuleRef, SelectedModuleBar.ModuleRef, StringComparison.OrdinalIgnoreCase)).ToList();
-
-        var top = filtered.OrderByDescending(a => a.AffectedParts).ThenByDescending(a => a.Occurrences)
-            .Take(TopN).ToList();
-        var max = top.Count > 0 ? top.Max(a => a.AffectedParts) : 0;
-
-        foreach (var a in top)
-        {
-            var pct = _inspected > 0 ? 100.0 * a.AffectedParts / _inspected : 0.0;
-            _prevByDef.TryGetValue(a.DefId, out var prevAffected);
-            var (glyph, brush) = Trend(a.AffectedParts, prevAffected);
-
-            Bars.Add(new ParetoBarItem
-            {
-                Label = $"{a.Controller} · {a.DisplayName}",
-                ToolTipText = $"{a.Controller} · {a.DisplayName}\nModul-Ref: {a.ModuleRef}\n" +
-                              $"Betroffene Teile: {a.AffectedParts}\nVorkommen: {a.Occurrences}\n" +
-                              $"Vorfenster: {prevAffected}",
-                ModuleRef = a.ModuleRef,
-                AffectedParts = a.AffectedParts,
-                Occurrences = a.Occurrences,
-                CountText = $"{a.AffectedParts}  ({pct:0.0} %)  ·  {a.Occurrences}×",
-                BarBrush = ColorFor(a.ModuleRef),
-                BarFraction = Fraction(a.AffectedParts, max),
-                TrendGlyph = glyph,
-                TrendBrush = brush,
-            });
-        }
     }
 
     private void RebuildWarnings(IReadOnlyList<ControllerJudge> status2)
@@ -378,6 +600,103 @@ public sealed partial class MainViewModel : ObservableObject
         HasWarnings = Status2Warnings.Count > 0;
     }
 
+    // --- Origin matrix (task A) --------------------------------------------
+
+    private async Task ShowOriginAsync(ParetoBarItem? bar)
+    {
+        if (bar is null)
+            return;
+
+        OriginTitle = "Herkunft — " + bar.Label;
+        OriginRows.Clear();
+        OriginNests.Clear();
+        HasOriginMatrix = false;
+        HasOriginDetail = true;
+
+        if (!bar.CanShowOrigin)
+        {
+            OriginSubtitle = string.Empty;
+            OriginNote = $"Keine Herkunft ableitbar — module_ref = {bar.ModuleRef} (kein Strang-Bezug M10/M11 bzw. M20/M21).";
+            HasOriginNote = true;
+            return;
+        }
+
+        try
+        {
+            var cells = await _db.GetOriginAsync(_winFrom, _winTo, bar.DefinitionIds, bar.ModuleRef).ConfigureAwait(true);
+            if (cells.Count == 0)
+            {
+                OriginSubtitle = string.Empty;
+                OriginNote = "Keine abgeschlossenen Teile im Zeitfenster — die Herkunft (Modul/Nest) ist erst nach dem Teile-Austritt bekannt.";
+                HasOriginNote = true;
+                return;
+            }
+
+            BuildOriginMatrix(cells);
+            OriginNote = string.Empty;
+            HasOriginNote = false;
+            OriginSubtitle =
+                "Konzentration auf ein Modul/Nest → Mechanik/Prozess dort prüfen · " +
+                "Gleichverteilung → eher Material oder Kameraauswertung.";
+        }
+        catch (Exception ex)
+        {
+            OriginSubtitle = string.Empty;
+            OriginNote = "Herkunft konnte nicht geladen werden: " + ex.Message;
+            HasOriginNote = true;
+        }
+    }
+
+    private void BuildOriginMatrix(IReadOnlyList<OriginCell> cells)
+    {
+        var nests = cells.Select(c => c.Nest).Distinct()
+            .OrderBy(n => int.TryParse(n, out var v) ? v : int.MaxValue)
+            .ThenBy(n => n, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var modules = cells.Select(c => c.OriginModule).Distinct()
+            .OrderBy(m => m, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var byCell = cells.ToDictionary(c => (c.OriginModule, c.Nest));
+
+        // Elevated = clearly above the feature's overall rate, with enough samples to be trustworthy.
+        var totAff = cells.Sum(c => c.Affected);
+        var totIns = cells.Sum(c => c.Inspected);
+        var overall = totIns > 0 ? 100.0 * totAff / totIns : 0.0;
+        var threshold = Math.Max(overall * 1.5, overall + 2.0);
+
+        foreach (var n in nests)
+            OriginNests.Add("Nest " + n);
+
+        foreach (var module in modules)
+        {
+            var rowCells = new List<OriginCellVm>();
+            foreach (var n in nests)
+            {
+                if (byCell.TryGetValue((module, n), out var cell) && cell.Inspected > 0)
+                {
+                    var elevated = cell.Inspected >= 5 && cell.RatePct > 0 && cell.RatePct >= threshold;
+                    rowCells.Add(new OriginCellVm
+                    {
+                        Text = $"{cell.Affected}/{cell.Inspected}",
+                        RateText = cell.RatePct.ToString("0.0", CultureInfo.CurrentCulture) + " %",
+                        IsEmpty = false,
+                        IsElevated = elevated,
+                    });
+                }
+                else
+                {
+                    rowCells.Add(new OriginCellVm { Text = "—", RateText = string.Empty, IsEmpty = true });
+                }
+            }
+
+            OriginRows.Add(new OriginRowVm { Module = module, Cells = rowCells });
+        }
+
+        HasOriginMatrix = OriginRows.Count > 0;
+    }
+
+    // --- Small helpers -----------------------------------------------------
+
     private static (string Glyph, Brush Brush) Trend(int current, int previous)
     {
         // More affected parts is worse → up-arrow red, down-arrow green.
@@ -386,8 +705,24 @@ public sealed partial class MainViewModel : ObservableObject
         return ("■", Frozen("#9CA3AF"));
     }
 
-    /// <summary>Bar length as a percentage of the largest bar (0..100), for the ProgressBar fill.</summary>
+    /// <summary>Bar length as a percentage of the largest bar (0..100), for the module ProgressBars.</summary>
     private static double Fraction(int value, int max) => max <= 0 ? 0.0 : 100.0 * value / max;
+
+    /// <summary>Lighten a base colour by camera index so a station's KF1/KF3 segments stay distinct.</summary>
+    private static Brush Shade(Brush baseBrush, int index, int count)
+    {
+        if (baseBrush is not SolidColorBrush sb || count <= 1 || index == 0)
+            return baseBrush;
+        var t = (double)index / (count - 1) * 0.55;
+        var c = sb.Color;
+        var mixed = Color.FromRgb(
+            (byte)(c.R + (255 - c.R) * t),
+            (byte)(c.G + (255 - c.G) * t),
+            (byte)(c.B + (255 - c.B) * t));
+        var b = new SolidColorBrush(mixed);
+        b.Freeze();
+        return b;
+    }
 
     private static SolidColorBrush Frozen(string hex)
     {
@@ -464,7 +799,7 @@ public sealed partial class MainViewModel : ObservableObject
         {
             CsvExport.Write(
                 dlg.FileName,
-                new[] { "Rang", "Controller_Merkmal", "ModulRef", "BetroffeneTeile", "Vorkommen", "AnteilProzent", "Trend" },
+                new[] { "Rang", "Station_Merkmal", "ModulRef", "BetroffeneTeile", "Vorkommen", "AnteilProzent", "Trend" },
                 Bars.Select((b, i) => new[]
                 {
                     (i + 1).ToString(CultureInfo.InvariantCulture),

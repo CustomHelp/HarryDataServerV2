@@ -34,6 +34,14 @@ public partial class MainWindow : Window
 
     private void OnPanelsChanged(object? sender, NotifyCollectionChangedEventArgs e) => LayoutPanels();
 
+    private void OnChangeConfig(object sender, RoutedEventArgs e)
+    {
+        if (HarryShared.Config.HarryConfig.ShowChangeDialog("HarryGraph"))
+            MessageBox.Show(this,
+                "Config-Pfad gespeichert. Bitte das Werkzeug neu starten, damit die neue Harry.ini/Datenbank aktiv wird.",
+                "Neustart nötig", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
     private void OnThemeToggle(object sender, RoutedEventArgs e)
     {
         ThemeManager.Toggle();

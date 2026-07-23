@@ -9,6 +9,16 @@
 > content (**both German and English**, `HarryShared/Help/SuiteHelp.cs`) **in the same commit** as
 > the change. The `?`-button / F1 help must always describe the current behaviour.
 
+> **STANDING RULE — Production, builds & deploy (since 2026-07-23).** Production runs from
+> **`F:\003_Deploy\HarryDataServer\App\`** (server: `App\HarryDataServer\HarryDataServer.exe`; each
+> companion in its own `App\<Tool>\` sibling). **Building in the repo is always allowed** (Debug and
+> Release) — it does not touch production. **Only `tools\deploy.cmd` needs announcement + explicit GO
+> + a plant stop**, because it overwrites the live `App\` folder. **Never start a second instance
+> against the live plant** — it would double-bind the PLC ports **6000–6006**, the Keyence camera
+> connections and the MySQL writer (`SettData`). Companion tools and read-only DB access (`GetData`)
+> are safe to run anytime. **`D:\` is the DVD drive — never write there;** use `F:\` for logs
+> (`F:\004_Logs`), MSA fallback (`F:\003_Deploy\MSA_Reports_Fallback`) and deploy.
+
 ---
 
 ## 1. Project Overview
@@ -1340,13 +1350,24 @@ server; per-tool on the companions). Default is Dark when nothing is saved.
 dotnet build HarryDataServer.sln --configuration Release
 ```
 
-### Deploy
-1. Copy `Release` output to server
-2. Place config in the central folder `F:\002_Configs`: `Harry.ini`, `Collage.ini`,
-   and the `Templates\` subfolder with the JSON files (template paths are relative).
-3. (Optional) Set `HARRY_CONFIG_DIR` to override the config folder location.
-4. Application creates DB and all tables on first startup
-5. Customer changes DB passwords after successful test
+### Deploy (production on the line)
+Production runs from **`F:\003_Deploy\HarryDataServer\App\`**, populated by **`tools\deploy.cmd`**
+(needs announcement + GO + a plant stop — see the standing rule at the top). Layout: one folder per
+project — `App\HarryDataServer\`, `App\HarryAnalysis\`, … `App\HarryPareto\`. The previous deploy is
+kept in `App_prev\` for rollback; `App\version.txt` records date + git hash.
+
+1. Stop the server and all companions (nothing may hold the PLC ports / DB).
+2. Build the solution in Release (`dotnet build -c Release`).
+3. Run `tools\deploy.cmd` (snapshots App→App_prev, robocopies each project's `bin\Release\net8.0-windows\`).
+4. Point the desktop shortcut at `App\HarryDataServer\HarryDataServer.exe` and start from there.
+5. Config stays in `F:\002_Configs` (`Harry.ini`, `Collage.ini`, `Templates\`); `HARRY_CONFIG_DIR`
+   can override the folder. The Tools tab finds companions under the sibling `App\<Tool>\` folder.
+6. The full step-by-step stop-window procedure is in **`tools\DEPLOY_FENSTER.md`**.
+
+### Deploy (customer companion tools — off-line, off the line)
+`tools\package_customer.cmd` builds a self-contained ZIP per companion into
+`F:\100_Installer\CompanionTools\` with a stripped customer `Harry.ini` (read-only DB placeholder,
+network paths only, **no `F:` and no write user**) and a README. See the script header for details.
 
 ### Git Repository
 `https://github.com/CustomHelp/HarryDataServerV2`

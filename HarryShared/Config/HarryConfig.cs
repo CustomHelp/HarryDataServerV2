@@ -94,38 +94,65 @@ public sealed class HarryConfig
         return Path.IsPathRooted(value) ? value : Path.GetFullPath(Path.Combine(ConfigDir, value));
     }
 
-    /// <summary>Load Harry.ini from the resolved path (env → F:\002_Configs → exe dir → legacy).</summary>
-    public static HarryConfig Load()
+    /// <summary>
+    /// Load Harry.ini using the shared search order (env → per-tool override → F:\002_Configs → exe →
+    /// legacy). Non-interactive: throws when nothing is found. Pass <paramref name="toolName"/> so a
+    /// per-tool <c>%APPDATA%\&lt;Tool&gt;\config.json</c> override is honoured (see <see cref="ConfigLocator"/>).
+    /// </summary>
+    public static HarryConfig Load(string? toolName = null)
     {
-        var path = ResolveIniPath();
-        if (!File.Exists(path))
+        var path = ConfigLocator.Resolve(toolName);
+        if (path is null)
             throw new FileNotFoundException(
-                $"Harry.ini not found. Looked at '{path}'. Set HARRY_CONFIG_DIR or place it in {DefaultConfigDir}.",
-                path);
+                $"Harry.ini not found. Looked at '{ConfigLocator.ActivePath(toolName)}'. " +
+                $"Set HARRY_CONFIG_DIR, place it in {DefaultConfigDir}, or choose it via 'Config-Pfad ändern…'.",
+                ConfigLocator.ActivePath(toolName));
 
         var data = new FileIniDataParser().ReadFile(path);
         return new HarryConfig(path, data);
     }
 
-    private static string ResolveIniPath()
+    /// <summary>
+    /// Load like <see cref="Load(string)"/>, but when no config is found show <see cref="ConfigPathDialog"/>
+    /// so the operator can pick one; the pick is persisted per tool. Returns null when the user cancels
+    /// (the caller should then shut down cleanly). On the production machine F:\002_Configs\Harry.ini
+    /// resolves first, so the dialog never appears there — behaviour is unchanged on the line.
+    /// </summary>
+    public static HarryConfig? LoadInteractive(string toolName)
     {
-        var candidates = new List<string>();
-
-        var envDir = Environment.GetEnvironmentVariable("HARRY_CONFIG_DIR");
-        if (!string.IsNullOrWhiteSpace(envDir))
-            candidates.Add(Path.Combine(envDir, "Harry.ini"));
-
-        candidates.Add(Path.Combine(DefaultConfigDir, "Harry.ini"));
-        candidates.Add(Path.Combine(AppContext.BaseDirectory, "Harry.ini"));
-        candidates.Add(@"D:\HarryDataServer\Harry.ini");
-
-        foreach (var candidate in candidates)
+        var path = ConfigLocator.Resolve(toolName);
+        if (path is null)
         {
-            if (File.Exists(candidate))
-                return candidate;
+            var dlg = new ConfigPathDialog(toolName, ConfigLocator.ActivePath(toolName));
+            if (dlg.ShowDialog() == true && dlg.SelectedPath is not null)
+            {
+                ConfigLocator.SaveOverride(toolName, dlg.SelectedPath);
+                path = dlg.SelectedPath;
+            }
+            else
+            {
+                return null; // cancelled
+            }
         }
 
-        return candidates[0];
+        var data = new FileIniDataParser().ReadFile(path);
+        return new HarryConfig(path, data);
+    }
+
+    /// <summary>
+    /// Show the "Config-Pfad ändern…" dialog and, if the operator picks a valid Harry.ini, persist it as
+    /// the per-tool override. Returns true when the pinned path changed (the caller prompts for a restart,
+    /// since config is read once at startup). Safe to call from any window's top-bar button.
+    /// </summary>
+    public static bool ShowChangeDialog(string toolName)
+    {
+        var dlg = new ConfigPathDialog(toolName, ConfigLocator.ActivePath(toolName));
+        if (dlg.ShowDialog() == true && dlg.SelectedPath is not null)
+        {
+            ConfigLocator.SaveOverride(toolName, dlg.SelectedPath);
+            return true;
+        }
+        return false;
     }
 
     private static string Str(KeyDataCollection? keys, string key, string fallback)
