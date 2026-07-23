@@ -110,6 +110,56 @@ public static class MsaResultLayout
         }
     }
 
+    /// <summary>The MSA summary-CSV run root <c>&lt;root&gt;\YYYY\MM\DD\&lt;BaseID&gt;</c> (date from the BaseID).</summary>
+    public static string CsvRunRoot(string root, string baseId)
+    {
+        var date = BaseId.TryGetTimestamp(baseId, out var dt) ? dt : DateTime.Now;
+        return Path.Combine(root, date.ToString("yyyy"), date.ToString("MM"), date.ToString("dd"), Sanitize(baseId));
+    }
+
+    /// <summary>
+    /// Resolve AND create a writable folder for the MSA summary CSV (task E). Primary root is
+    /// <c>[CSV] CSV_MSAPath</c> (e.g. Y:\01_CSV_Evaluation); if unset or unwritable it falls back to
+    /// <c>[MSA] ReportFallbackPath</c> (or <see cref="DefaultReportFallback"/>) with a WARNING — SAME
+    /// as the report-dir logic. It NEVER writes under <c>[MSA] ReferencePath</c> (kept pure config).
+    /// Returns the created dir, or null only if even the fallback fails.
+    /// </summary>
+    public static string? EnsureWritableCsvDir(
+        string csvMsaPath, string reportFallbackPath, string baseId, ILogService log)
+    {
+        var fallbackRoot = !string.IsNullOrWhiteSpace(reportFallbackPath) ? reportFallbackPath : DefaultReportFallback;
+        var primaryRoot = !string.IsNullOrWhiteSpace(csvMsaPath) ? csvMsaPath : fallbackRoot;
+
+        var primaryDir = CsvRunRoot(primaryRoot, baseId);
+        try
+        {
+            Directory.CreateDirectory(primaryDir);
+            return primaryDir;
+        }
+        catch (Exception ex)
+        {
+            var fallbackDir = CsvRunRoot(fallbackRoot, baseId);
+            if (string.Equals(Path.GetFullPath(primaryDir), Path.GetFullPath(fallbackDir), StringComparison.OrdinalIgnoreCase))
+            {
+                log.Error(ex, "MSA CSV directory {Dir} could not be created (no fallback available).", primaryDir);
+                return null;
+            }
+
+            log.Warning("MSA CSV path {Primary} not writable ({Message}); falling back to local {Fallback}.",
+                primaryDir, ex.Message, fallbackDir);
+            try
+            {
+                Directory.CreateDirectory(fallbackDir);
+                return fallbackDir;
+            }
+            catch (Exception ex2)
+            {
+                log.Error(ex2, "MSA CSV fallback directory {Dir} could not be created either.", fallbackDir);
+                return null;
+            }
+        }
+    }
+
     private static string Sanitize(string value)
     {
         if (string.IsNullOrWhiteSpace(value))

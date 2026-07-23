@@ -113,6 +113,7 @@ public sealed class IniConfigManager
         return new CsvConfig
         {
             BasePath = Str(s, "CSV_BasePath", string.Empty),
+            MsaPath = Str(s, "CSV_MSAPath", string.Empty),
             DiagnosticPath = Str(s, "CSV_DiagnosticPath", string.Empty),
             DataSetsPerFile = Int(s, "DataSetsPerFile", 10000),
             Save = Bool(s, "CSV_Save", true),

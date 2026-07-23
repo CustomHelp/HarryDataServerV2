@@ -161,22 +161,45 @@ public static class MsaEvaluationText
     }
 
     /// <summary>
-    /// Verdict of ONE part (task A/B): INVALID if a row invalidates the part, if nothing was
-    /// evaluated, or — LimitSample — if no prepared error was checked; FAIL if any evaluated row
-    /// failed; else PASS.
+    /// Verdict of ONE part (task A/B). INVALID only if a row invalidates the part (no reference) or
+    /// nothing was evaluated; FAIL if any evaluated row failed; else PASS. A LimitSample part with NO
+    /// prepared error (a pure GOOD reference) is a valid PASS (task A1) — the "no prepared error"
+    /// protection is a RUN-level vacuous-PASS guard, not a per-part INVALID.
     /// </summary>
     public static MsaVerdict PartVerdict(MsaType type, IReadOnlyList<MsaMeasurementResult> partResults)
+        => PartVerdictDetailed(type, partResults).Verdict;
+
+    /// <summary>
+    /// Per-part verdict + a plain-text label/reason (task A1/A3). For a good-reference LimitSample part
+    /// (all evaluated features pass, none was an expected reject) the label is
+    /// "Gut-Referenz (keine erwarteten Fehler)"; on FAIL the reason names the offending feature(s)
+    /// (a false reject / undetected prepared error); on INVALID it carries the part's own reason.
+    /// </summary>
+    public static (MsaVerdict Verdict, string Reason) PartVerdictDetailed(
+        MsaType type, IReadOnlyList<MsaMeasurementResult> partResults)
     {
-        if (partResults.Any(r => r.InvalidatesPart))
-            return MsaVerdict.Invalid;
+        var invalidRow = partResults.FirstOrDefault(r => r.InvalidatesPart);
+        if (invalidRow is not null)
+            return (MsaVerdict.Invalid,
+                string.IsNullOrWhiteSpace(invalidRow.Reason) ? "no reference for this part" : invalidRow.Reason);
 
         var evaluated = partResults.Where(r => r.Evaluated).ToList();
         if (evaluated.Count == 0)
-            return MsaVerdict.Invalid;
-        if (type == MsaType.LimitSample && !evaluated.Any(r => r.ExpectedReject))
-            return MsaVerdict.Invalid;
+            return (MsaVerdict.Invalid, "keine bewertete Messung (Kamera hat nicht bewertet / keine Referenz-Merkmale)");
 
-        return evaluated.Any(r => !r.Passed) ? MsaVerdict.Fail : MsaVerdict.Pass;
+        var failed = evaluated.Where(r => !r.Passed).ToList();
+        if (failed.Count > 0)
+        {
+            var names = string.Join(", ", failed
+                .Select(f => f.DisplayName).Where(s => !string.IsNullOrEmpty(s)).Distinct().Take(5));
+            return (MsaVerdict.Fail, names.Length > 0 ? $"nicht wie erwartet: {names}" : "one or more measurements failed");
+        }
+
+        // All evaluated features passed. A LimitSample part with no expected reject is a valid GOOD
+        // reference (task A1) — labelled, but still a PASS.
+        if (type == MsaType.LimitSample && !evaluated.Any(r => r.ExpectedReject))
+            return (MsaVerdict.Pass, "Gut-Referenz (keine erwarteten Fehler)");
+        return (MsaVerdict.Pass, string.Empty);
     }
 
     /// <summary>

@@ -53,6 +53,7 @@ internal static class Program
         LimitSample_Criterion_MentionsBothDirections();
         LimitSample_PartWithoutReference_IsInvalid();
         LimitSample_PartialRun_IsInvalidNotPass();
+        LimitSample_GoodReferenceAllowed();
 
         Console.WriteLine();
         if (_failures == 0)
@@ -427,6 +428,42 @@ internal static class Program
         };
         AssertEqual("complete run with unreferenced parts → INVALID", MsaVerdict.Invalid,
             MsaEvaluationText.OverallFromParts(parts).Verdict);
+    }
+
+    private static MsaResultRow LsRow(string dmc, bool passed, bool expectedReject, bool evaluated = true) =>
+        new() { DisplayName = "x", Controller = "c", Dmc = dmc, Evaluated = evaluated, Passed = passed,
+                Expected = expectedReject ? "reject" : "accept" };
+
+    private static void LimitSample_GoodReferenceAllowed()
+    {
+        Console.WriteLine("[Case W] LimitSample allows GOOD reference parts (task A)");
+
+        // Gut-Teil, alles ok → PASS, labelled "Gut-Referenz".
+        var good = MsaEvaluationText.PartVerdictDetailed(MsaType.LimitSample, new[] { Res(true, true, expectedReject: false) });
+        AssertEqual("good part → PASS", MsaVerdict.Pass, good.Verdict);
+        AssertTrue("good part labelled Gut-Referenz", good.Reason.Contains("Gut-Referenz"));
+
+        // Gut-Teil mit einem NOK (Falsch-Ausschuss) → FAIL, Merkmal im Grund.
+        var falseReject = MsaEvaluationText.PartVerdictDetailed(MsaType.LimitSample,
+            new[] { Res(true, true, expectedReject: false), Res(true, false, expectedReject: false) });
+        AssertEqual("good part with a NOK → FAIL", MsaVerdict.Fail, falseReject.Verdict);
+        AssertTrue("FAIL reason names the feature", falseReject.Reason.Contains("nicht wie erwartet"));
+
+        // Lauf nur aus Gut-Mustern (kein erwarteter Fehler geprüft) → INVALID mit Grund (task A2).
+        var allGood = MsaReportData.ComputeVerdict(MsaType.LimitSample,
+            new[] { LsRow("D1", true, expectedReject: false), LsRow("D2", true, expectedReject: false) }, wholeRun: true);
+        AssertEqual("run of only good samples → INVALID", MsaVerdict.Invalid, allGood.Verdict);
+        AssertTrue("INVALID reason = only good samples", allGood.Reason.Contains("nur Gut-Muster"));
+
+        // Gemischter Lauf (Gut-Teil + geprüfter Fehler erkannt) → PASS.
+        var mixed = MsaReportData.ComputeVerdict(MsaType.LimitSample,
+            new[] { LsRow("D1", true, expectedReject: true), LsRow("D2", true, expectedReject: false) }, wholeRun: true);
+        AssertEqual("mixed run (good + detected reject) → PASS", MsaVerdict.Pass, mixed.Verdict);
+
+        // Ein Falsch-Ausschuss in einem reinen Gut-Lauf → FAIL, nicht INVALID (die Abweichung ist real).
+        var goodRunWithNok = MsaReportData.ComputeVerdict(MsaType.LimitSample,
+            new[] { LsRow("D1", false, expectedReject: false) }, wholeRun: true);
+        AssertEqual("all-good run with a false reject → FAIL (not INVALID)", MsaVerdict.Fail, goodRunWithNok.Verdict);
     }
 
     /// <summary>Minimal IConfigService stub for the PDF-name test (never reads config when OutputDirectory is set).</summary>

@@ -591,7 +591,7 @@ ORDER BY evaluated_at, base_id, id;";
             var report = BuildReport(baseId, module, msaType, rows, results, verdict, verdictReason,
                 controllerWarnings, notes, runAt, msaCfg.ReferencePath, reportDir, legacyReferenceUsed);
 
-            // Existing per-run measurement summary CSV stays under ResultPath (unchanged).
+            // Per-run measurement summary CSV → [CSV] CSV_MSAPath (Y:), never the config folder (task E).
             ExportCsv(baseId, module, msaType, results);
             // Report PDFs + RAW export + run images into the run folder's subfolders (task B/C).
             // MSA3 is one study report; LimitSample/MSA1 get one PDF pair PER PART (task B4).
@@ -779,7 +779,7 @@ ORDER BY evaluated_at, base_id, id;";
                 {
                     DisplayName = "(part not referenced)", Controller = defaultCtrl, Dmc = dmc,
                     Evaluated = false, Passed = false, Criterion = criterion, InvalidatesPart = true,
-                    Reason = $"no LimitSample reference for DMC {dmc}",
+                    Reason = $"Teil ohne Referenzdatei: {dmc}",
                 });
                 continue;
             }
@@ -844,14 +844,29 @@ ORDER BY evaluated_at, base_id, id;";
         if (taught.Count == 0 && !useLegacy)
         {
             verdict = MsaVerdict.Invalid;
-            reason = $"no LimitSample references found in {LimitSampleReference.FolderFor(referenceFolder, module)}";
+            reason = $"kein LimitSample-Referenzteil gefunden in {LimitSampleReference.FolderFor(referenceFolder, module)}";
         }
         else
         {
             var parts = results.GroupBy(r => r.Dmc, StringComparer.OrdinalIgnoreCase)
-                .Select(g => (g.Key, MsaEvaluationText.PartVerdict(MsaType.LimitSample, g.ToList())))
+                .Select(g => (Dmc: g.Key, Detail: MsaEvaluationText.PartVerdictDetailed(MsaType.LimitSample, g.ToList())))
                 .ToList();
-            (verdict, reason) = MsaEvaluationText.OverallFromParts(parts);
+            (verdict, reason) = MsaEvaluationText.OverallFromParts(parts.Select(p => (p.Dmc, p.Detail.Verdict)).ToList());
+
+            if (verdict == MsaVerdict.Invalid)
+            {
+                // Name the concrete cause(s) (task A3), e.g. "Teil ohne Referenzdatei: <DMC>".
+                var bad = parts.Where(p => p.Detail.Verdict == MsaVerdict.Invalid)
+                    .Select(p => p.Detail.Reason).Where(s => !string.IsNullOrWhiteSpace(s)).Distinct().Take(3).ToList();
+                if (bad.Count > 0)
+                    reason = string.Join("; ", bad);
+            }
+            else if (verdict == MsaVerdict.Pass && !results.Any(r => r.Evaluated && r.ExpectedReject))
+            {
+                // Vacuous-PASS guard (task A2): a PASS that verified no prepared error proves nothing.
+                verdict = MsaVerdict.Invalid;
+                reason = "nur Gut-Muster im Lauf, kein erwarteter Fehler geprüft";
+            }
         }
 
         return (results, verdict, reason, notes, useLegacy);
@@ -1200,10 +1215,17 @@ VALUES
 
         try
         {
-            // The MSA summary CSV goes into the run's CSV subfolder (the date is already in the path,
-            // so the writer does not add its own YYYY\MM\DD level).
-            var msa = _config.Config.Msa;
-            var csvDir = MsaResultLayout.CsvDir(msa.ResultPath, msa.ReferencePath, baseId);
+            // Task E: the MSA summary CSV goes under [CSV] CSV_MSAPath (e.g. Y:\01_CSV_Evaluation),
+            // NOT under [MSA] ReferencePath (which stays pure configuration). The date+BaseID are already
+            // in the path, so the writer does not add its own YYYY\MM\DD level.
+            if (string.IsNullOrWhiteSpace(csv.MsaPath))
+                _log.Warning("MSA CSV: [CSV] CSV_MSAPath is not set — writing to the local fallback. " +
+                             "Set it (e.g. Y:\\01_CSV_Evaluation) to collect MSA CSVs centrally.");
+            var csvDir = MsaResultLayout.EnsureWritableCsvDir(csv.MsaPath, _config.Config.Msa.ReportFallbackPath, baseId, _log);
+            if (csvDir is null)
+                return;
+            _log.Debug("MSA CSV for BaseID {Base} → {Dir} (the old MSA_References\\MSA_Results tree is no longer written — safe to archive/delete).",
+                baseId, csvDir);
             using var writer = new CsvFileWriter(csvDir, int.MaxValue, dateSubfolders: false, _log);
             // Filename label: module + type (CsvFileWriter prepends the DDMMYY_HHMMSS stamp, SOW §5.1.2).
             writer.Configure(
@@ -1449,13 +1471,7 @@ ORDER BY m.controller_name, m.dmc, m.loop_number, md.display_name;";
         foreach (var g in results.GroupBy(r => r.Dmc, StringComparer.OrdinalIgnoreCase))
         {
             var partRows = g.ToList();
-            var verdict = MsaEvaluationText.PartVerdict(msaType, partRows);
-            var reason = verdict switch
-            {
-                MsaVerdict.Pass => string.Empty,
-                MsaVerdict.Fail => "one or more measurements failed",
-                _ => "part not evaluable (no reference / camera did not judge)",
-            };
+            var (verdict, reason) = MsaEvaluationText.PartVerdictDetailed(msaType, partRows);
             var matched = partRows.Select(r => r.MatchedReference).FirstOrDefault(s => !string.IsNullOrEmpty(s)) ?? string.Empty;
 
             var partReport = new MsaReportData

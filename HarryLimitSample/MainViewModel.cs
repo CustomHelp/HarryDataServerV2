@@ -31,6 +31,10 @@ public partial class MainViewModel : ObservableObject
     /// <summary>DMC of the currently loaded/scanned part — the key of the per-part reference file.</summary>
     private string _currentDmc = string.Empty;
 
+    /// <summary>MSA/LimitSample BaseID the loaded part last ran under (task C) — stamped into the
+    /// reference as source_base_id when saving. Empty when the part has no MSA run on record.</summary>
+    private string _currentBaseId = string.Empty;
+
     /// <summary>Modules that can hold references — pre-filled so a module can be picked (and
     /// "Load existing" / the taught-parts list used) WITHOUT scanning a part first.</summary>
     private static readonly string[] KnownModules = { "M10", "M11", "M20", "M21", "M50" };
@@ -194,6 +198,8 @@ public partial class MainViewModel : ObservableObject
             _currentDmc = !string.IsNullOrWhiteSpace(part.Dmc) ? part.Dmc!
                         : !string.IsNullOrWhiteSpace(part.SerialNumber) ? part.SerialNumber
                         : scan;
+            // Task C: remember which MSA/LimitSample run this part came from (for source_base_id).
+            _currentBaseId = await _query.GetLatestMsaBaseIdAsync(_currentDmc);
 
             var measurements = await _query.GetPartMeasurementsAsync(part);
             foreach (var m in measurements)
@@ -328,6 +334,7 @@ public partial class MainViewModel : ObservableObject
                 Dmc = _currentDmc,
                 Module = module,
                 TaughtAt = DateTime.Now,
+                SourceBaseId = _currentBaseId, // task C
                 Controllers = marked.Select(r => r.CameraName)
                     .Where(s => !string.IsNullOrWhiteSpace(s))
                     .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -351,9 +358,10 @@ public partial class MainViewModel : ObservableObject
             var conflictNote = conflicts.Count == 0
                 ? string.Empty
                 : $"  ⚠ {conflicts.Count} duplicate name(s) had mixed marks → ShouldFail: {string.Join(", ", conflicts.Take(5))}";
-            // Task 3: a reference with no prepared errors (ShouldFail) can never prove a rejection — warn.
+            // Task A: a reference with no prepared errors (ShouldFail) is a valid GOOD reference (it must
+            // pass everywhere), but a run made up of ONLY such parts is reported INVALID (nothing proven).
             var vacuousNote = fails == 0
-                ? "  ⚠ Keine erwarteten Fehler (ShouldFail) — die Referenz prüft nichts; die MSA-Auswertung meldet dann INVALID."
+                ? "  ⚠ Keine erwarteten Fehler (ShouldFail) — dies ist eine Gut-Referenz; ein Lauf, der NUR aus Gut-Referenzen besteht, meldet INVALID."
                 : string.Empty;
             var notJudgedNote = notJudged.Count == 0
                 ? string.Empty
@@ -405,6 +413,10 @@ public partial class MainViewModel : ObservableObject
         }
 
         _currentDmc = reference.Dmc;
+        // Preserve the taught run's BaseID (task C); look it up if the old file had none.
+        _currentBaseId = string.IsNullOrWhiteSpace(reference.SourceBaseId)
+            ? await _query.GetLatestMsaBaseIdAsync(reference.Dmc)
+            : reference.SourceBaseId;
         _allRows.Clear();
 
         // Re-query the whole part so every measurement is shown (incl. Ignore); overlay saved marks.

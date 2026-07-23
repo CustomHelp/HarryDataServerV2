@@ -27,6 +27,49 @@
                 <TextBlock Text="{Binding VerdictText}" Foreground="White" FontWeight="SemiBold" />
             </Border>
         </DataTemplate>
+
+        <!-- Flat, full-width clickable row (deviation history) -->
+        <Style x:Key="RowButton" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Padding" Value="4,2" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}" CornerRadius="3">
+                            <ContentPresenter />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Deviation-history row template (shared by all three tabs) -->
+        <DataTemplate x:Key="HistoryRow">
+            <Button Style="{StaticResource RowButton}" Margin="0,1"
+                    Command="{Binding DataContext.LoadRunCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                    CommandParameter="{Binding}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="130" />
+                        <ColumnDefinition Width="150" />
+                        <ColumnDefinition Width="80" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="{Binding DateText}" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1" Text="{Binding BaseId}" VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextDimBrush}" />
+                    <Border Grid.Column="2" CornerRadius="3" Padding="6,0" HorizontalAlignment="Left"
+                            VerticalAlignment="Center" Background="{Binding VerdictBrush}">
+                        <TextBlock Text="{Binding VerdictText}" Foreground="White" FontSize="10" FontWeight="SemiBold" />
+                    </Border>
+                    <TextBlock Grid.Column="3" Text="{Binding DeviationsText}" VerticalAlignment="Center"
+                               Margin="6,0,0,0" TextTrimming="CharacterEllipsis" />
+                </Grid>
+            </Button>
+        </DataTemplate>
     </UserControl.Resources>
 
     <TabControl ItemsSource="{Binding Modules}" Margin="4">
@@ -44,35 +87,47 @@
                         <Grid Margin="8" DataContext="{Binding Msa1}">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
                                 <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
-                            <DockPanel Grid.Row="0" Margin="0,0,0,8">
+
+                            <DockPanel Grid.Row="0" Margin="0,0,0,4">
                                 <Button Content="◀ Prev" Command="{Binding PreviousCommand}" DockPanel.Dock="Left" Margin="0,0,6,0" />
                                 <Button Content="Next ▶" Command="{Binding NextCommand}" DockPanel.Dock="Left" Margin="0,0,12,0" />
                                 <Border DockPanel.Dock="Left" Background="{Binding OverallBrush}" CornerRadius="4" Padding="10,3" VerticalAlignment="Center">
                                     <TextBlock Text="{Binding OverallText}" Foreground="White" FontWeight="Bold" />
                                 </Border>
-                                <Button Content="Open Folder" Command="{Binding OpenFolderCommand}" DockPanel.Dock="Right" />
-                                <Button Content="Open PDF (nur Fehler)" Command="{Binding OpenFailuresOnlyCommand}" DockPanel.Dock="Right" Margin="0,0,6,0" />
-                                <Button Content="Open PDF Complete" Command="{Binding OpenAllResultsCommand}" DockPanel.Dock="Right" Margin="0,0,6,0" />
+                                <Button Content="Ordner öffnen (Lauf)" Command="{Binding OpenFolderCommand}" DockPanel.Dock="Right" Margin="6,0,0,0" />
                                 <Button Content="↻" Command="{Binding RefreshCommand}" DockPanel.Dock="Right" Margin="0,0,6,0" />
                                 <TextBlock Text="{Binding RunInfo}" VerticalAlignment="Center" Margin="12,0,8,0"
                                            Foreground="{DynamicResource TextDimBrush}" TextTrimming="CharacterEllipsis" />
                             </DockPanel>
-                            <Grid Grid.Row="1">
+                            <TextBlock Grid.Row="1" Text="{Binding OverallReason}" Margin="0,0,0,8"
+                                       Foreground="{DynamicResource LedOrange}" TextWrapping="Wrap" />
+
+                            <Grid Grid.Row="2">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="360" />
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
-                                <DataGrid Grid.Column="0" ItemsSource="{Binding Parts}" SelectedItem="{Binding SelectedPart}"
-                                          AutoGenerateColumns="False" IsReadOnly="True" Margin="0,0,8,0">
-                                    <DataGrid.Columns>
-                                        <DataGridTextColumn Header="Part (DMC)" Binding="{Binding DmcText}" Width="*" />
-                                        <DataGridTemplateColumn Header="Verdict" CellTemplate="{StaticResource PartVerdictCell}" Width="90" />
-                                        <DataGridTextColumn Header="ok" Binding="{Binding CountText}" Width="70" />
-                                        <DataGridTextColumn Header="Reference" Binding="{Binding MatchedReference}" Width="Auto" />
-                                    </DataGrid.Columns>
-                                </DataGrid>
+                                <DockPanel Grid.Column="0" Margin="0,0,8,0">
+                                    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,6,0,0">
+                                        <Button Content="PDF komplett (Teil)" Command="{Binding OpenAllResultsCommand}" Margin="0,0,6,0"
+                                                ToolTipService.ShowOnDisabled="True" ToolTip="PDF des GEWÄHLTEN Teils — bitte ein Teil auswählen" />
+                                        <Button Content="PDF nur Fehler (Teil)" Command="{Binding OpenFailuresOnlyCommand}"
+                                                ToolTipService.ShowOnDisabled="True" ToolTip="Fehler-PDF des GEWÄHLTEN Teils — bitte ein Teil auswählen" />
+                                    </StackPanel>
+                                    <DataGrid ItemsSource="{Binding Parts}" SelectedItem="{Binding SelectedPart}"
+                                              AutoGenerateColumns="False" IsReadOnly="True">
+                                        <DataGrid.Columns>
+                                            <DataGridTextColumn Header="Part (DMC)" Binding="{Binding DmcText}" Width="*" />
+                                            <DataGridTemplateColumn Header="Verdict" CellTemplate="{StaticResource PartVerdictCell}" Width="90" />
+                                            <DataGridTextColumn Header="ok" Binding="{Binding CountText}" Width="70" />
+                                            <DataGridTextColumn Header="Reference" Binding="{Binding MatchedReference}" Width="Auto" />
+                                        </DataGrid.Columns>
+                                    </DataGrid>
+                                </DockPanel>
                                 <DataGrid Grid.Column="1" ItemsSource="{Binding Features}" AutoGenerateColumns="False" IsReadOnly="True">
                                     <DataGrid.Columns>
                                         <DataGridTextColumn Header="Measurement" Binding="{Binding DisplayName}" Width="2*" />
@@ -83,6 +138,14 @@
                                     </DataGrid.Columns>
                                 </DataGrid>
                             </Grid>
+
+                            <DockPanel Grid.Row="3" Margin="0,8,0,0">
+                                <TextBlock DockPanel.Dock="Top" Text="Abweichungs-Historie (Klick lädt den Lauf)"
+                                           FontWeight="SemiBold" Margin="0,0,0,4" />
+                                <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="150">
+                                    <ItemsControl ItemsSource="{Binding History}" ItemTemplate="{StaticResource HistoryRow}" />
+                                </ScrollViewer>
+                            </DockPanel>
                         </Grid>
                     </TabItem>
 
@@ -90,34 +153,46 @@
                         <Grid Margin="8" DataContext="{Binding Msa3}">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
                                 <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
-                            <DockPanel Grid.Row="0" Margin="0,0,0,8">
+
+                            <DockPanel Grid.Row="0" Margin="0,0,0,4">
                                 <Button Content="◀ Prev" Command="{Binding PreviousCommand}" DockPanel.Dock="Left" Margin="0,0,6,0" />
                                 <Button Content="Next ▶" Command="{Binding NextCommand}" DockPanel.Dock="Left" Margin="0,0,12,0" />
                                 <Border DockPanel.Dock="Left" Background="{Binding OverallBrush}" CornerRadius="4" Padding="10,3" VerticalAlignment="Center">
                                     <TextBlock Text="{Binding OverallText}" Foreground="White" FontWeight="Bold" />
                                 </Border>
-                                <Button Content="Open Folder" Command="{Binding OpenFolderCommand}" DockPanel.Dock="Right" />
-                                <Button Content="Open PDF (nur Fehler)" Command="{Binding OpenFailuresOnlyCommand}" DockPanel.Dock="Right" Margin="0,0,6,0" />
-                                <Button Content="Open PDF Complete" Command="{Binding OpenAllResultsCommand}" DockPanel.Dock="Right" Margin="0,0,6,0" />
+                                <Button Content="Ordner öffnen (Lauf)" Command="{Binding OpenFolderCommand}" DockPanel.Dock="Right" Margin="6,0,0,0" />
                                 <Button Content="↻" Command="{Binding RefreshCommand}" DockPanel.Dock="Right" Margin="0,0,6,0" />
                                 <TextBlock Text="{Binding RunInfo}" VerticalAlignment="Center" Margin="12,0,8,0"
                                            Foreground="{DynamicResource TextDimBrush}" TextTrimming="CharacterEllipsis" />
                             </DockPanel>
-                            <Grid Grid.Row="1">
+                            <TextBlock Grid.Row="1" Text="{Binding OverallReason}" Margin="0,0,0,8"
+                                       Foreground="{DynamicResource LedOrange}" TextWrapping="Wrap" />
+
+                            <Grid Grid.Row="2">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="360" />
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
-                                <DataGrid Grid.Column="0" ItemsSource="{Binding Parts}" SelectedItem="{Binding SelectedPart}"
-                                          AutoGenerateColumns="False" IsReadOnly="True" Margin="0,0,8,0">
-                                    <DataGrid.Columns>
-                                        <DataGridTextColumn Header="Part (DMC)" Binding="{Binding DmcText}" Width="*" />
-                                        <DataGridTemplateColumn Header="Verdict" CellTemplate="{StaticResource PartVerdictCell}" Width="90" />
-                                        <DataGridTextColumn Header="ok" Binding="{Binding CountText}" Width="70" />
-                                    </DataGrid.Columns>
-                                </DataGrid>
+                                <DockPanel Grid.Column="0" Margin="0,0,8,0">
+                                    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,6,0,0">
+                                        <Button Content="PDF komplett (Teil)" Command="{Binding OpenAllResultsCommand}" Margin="0,0,6,0"
+                                                ToolTipService.ShowOnDisabled="True" ToolTip="PDF des GEWÄHLTEN Teils — bitte ein Teil auswählen" />
+                                        <Button Content="PDF nur Fehler (Teil)" Command="{Binding OpenFailuresOnlyCommand}"
+                                                ToolTipService.ShowOnDisabled="True" ToolTip="Fehler-PDF des GEWÄHLTEN Teils — bitte ein Teil auswählen" />
+                                    </StackPanel>
+                                    <DataGrid ItemsSource="{Binding Parts}" SelectedItem="{Binding SelectedPart}"
+                                              AutoGenerateColumns="False" IsReadOnly="True">
+                                        <DataGrid.Columns>
+                                            <DataGridTextColumn Header="Part (DMC)" Binding="{Binding DmcText}" Width="*" />
+                                            <DataGridTemplateColumn Header="Verdict" CellTemplate="{StaticResource PartVerdictCell}" Width="90" />
+                                            <DataGridTextColumn Header="ok" Binding="{Binding CountText}" Width="70" />
+                                        </DataGrid.Columns>
+                                    </DataGrid>
+                                </DockPanel>
                                 <DataGrid Grid.Column="1" ItemsSource="{Binding Features}" AutoGenerateColumns="False" IsReadOnly="True">
                                     <DataGrid.Columns>
                                         <DataGridTextColumn Header="Measurement" Binding="{Binding DisplayName}" Width="2*" />
@@ -127,6 +202,14 @@
                                     </DataGrid.Columns>
                                 </DataGrid>
                             </Grid>
+
+                            <DockPanel Grid.Row="3" Margin="0,8,0,0">
+                                <TextBlock DockPanel.Dock="Top" Text="Abweichungs-Historie (Klick lädt den Lauf)"
+                                           FontWeight="SemiBold" Margin="0,0,0,4" />
+                                <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="150">
+                                    <ItemsControl ItemsSource="{Binding History}" ItemTemplate="{StaticResource HistoryRow}" />
+                                </ScrollViewer>
+                            </DockPanel>
                         </Grid>
                     </TabItem>
 
@@ -134,34 +217,46 @@
                         <Grid Margin="8" DataContext="{Binding LimitSample}">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
                                 <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
-                            <DockPanel Grid.Row="0" Margin="0,0,0,8">
+
+                            <DockPanel Grid.Row="0" Margin="0,0,0,4">
                                 <Button Content="◀ Prev" Command="{Binding PreviousCommand}" DockPanel.Dock="Left" Margin="0,0,6,0" />
                                 <Button Content="Next ▶" Command="{Binding NextCommand}" DockPanel.Dock="Left" Margin="0,0,12,0" />
                                 <Border DockPanel.Dock="Left" Background="{Binding OverallBrush}" CornerRadius="4" Padding="10,3" VerticalAlignment="Center">
                                     <TextBlock Text="{Binding OverallText}" Foreground="White" FontWeight="Bold" />
                                 </Border>
-                                <Button Content="Open Folder" Command="{Binding OpenFolderCommand}" DockPanel.Dock="Right" />
-                                <Button Content="Open PDF (nur Fehler)" Command="{Binding OpenFailuresOnlyCommand}" DockPanel.Dock="Right" Margin="0,0,6,0" />
-                                <Button Content="Open PDF Complete" Command="{Binding OpenAllResultsCommand}" DockPanel.Dock="Right" Margin="0,0,6,0" />
+                                <Button Content="Ordner öffnen (Lauf)" Command="{Binding OpenFolderCommand}" DockPanel.Dock="Right" Margin="6,0,0,0" />
                                 <Button Content="↻" Command="{Binding RefreshCommand}" DockPanel.Dock="Right" Margin="0,0,6,0" />
                                 <TextBlock Text="{Binding RunInfo}" VerticalAlignment="Center" Margin="12,0,8,0"
                                            Foreground="{DynamicResource TextDimBrush}" TextTrimming="CharacterEllipsis" />
                             </DockPanel>
-                            <Grid Grid.Row="1">
+                            <TextBlock Grid.Row="1" Text="{Binding OverallReason}" Margin="0,0,0,8"
+                                       Foreground="{DynamicResource LedOrange}" TextWrapping="Wrap" />
+
+                            <Grid Grid.Row="2">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="360" />
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
-                                <DataGrid Grid.Column="0" ItemsSource="{Binding Parts}" SelectedItem="{Binding SelectedPart}"
-                                          AutoGenerateColumns="False" IsReadOnly="True" Margin="0,0,8,0">
-                                    <DataGrid.Columns>
-                                        <DataGridTextColumn Header="Part (DMC)" Binding="{Binding DmcText}" Width="*" />
-                                        <DataGridTemplateColumn Header="Verdict" CellTemplate="{StaticResource PartVerdictCell}" Width="90" />
-                                        <DataGridTextColumn Header="ok" Binding="{Binding CountText}" Width="70" />
-                                    </DataGrid.Columns>
-                                </DataGrid>
+                                <DockPanel Grid.Column="0" Margin="0,0,8,0">
+                                    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,6,0,0">
+                                        <Button Content="PDF komplett (Teil)" Command="{Binding OpenAllResultsCommand}" Margin="0,0,6,0"
+                                                ToolTipService.ShowOnDisabled="True" ToolTip="PDF des GEWÄHLTEN Teils — bitte ein Teil auswählen" />
+                                        <Button Content="PDF nur Fehler (Teil)" Command="{Binding OpenFailuresOnlyCommand}"
+                                                ToolTipService.ShowOnDisabled="True" ToolTip="Fehler-PDF des GEWÄHLTEN Teils — bitte ein Teil auswählen" />
+                                    </StackPanel>
+                                    <DataGrid ItemsSource="{Binding Parts}" SelectedItem="{Binding SelectedPart}"
+                                              AutoGenerateColumns="False" IsReadOnly="True">
+                                        <DataGrid.Columns>
+                                            <DataGridTextColumn Header="Part (DMC)" Binding="{Binding DmcText}" Width="*" />
+                                            <DataGridTemplateColumn Header="Verdict" CellTemplate="{StaticResource PartVerdictCell}" Width="90" />
+                                            <DataGridTextColumn Header="ok" Binding="{Binding CountText}" Width="70" />
+                                        </DataGrid.Columns>
+                                    </DataGrid>
+                                </DockPanel>
                                 <DataGrid Grid.Column="1" ItemsSource="{Binding Features}" AutoGenerateColumns="False" IsReadOnly="True">
                                     <DataGrid.Columns>
                                         <DataGridTextColumn Header="Measurement" Binding="{Binding DisplayName}" Width="2*" />
@@ -172,6 +267,14 @@
                                     </DataGrid.Columns>
                                 </DataGrid>
                             </Grid>
+
+                            <DockPanel Grid.Row="3" Margin="0,8,0,0">
+                                <TextBlock DockPanel.Dock="Top" Text="Abweichungs-Historie (Klick lädt den Lauf)"
+                                           FontWeight="SemiBold" Margin="0,0,0,4" />
+                                <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="150">
+                                    <ItemsControl ItemsSource="{Binding History}" ItemTemplate="{StaticResource HistoryRow}" />
+                                </ScrollViewer>
+                            </DockPanel>
                         </Grid>
                     </TabItem>
 

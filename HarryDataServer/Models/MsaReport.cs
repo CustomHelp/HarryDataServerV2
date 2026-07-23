@@ -146,12 +146,17 @@ public sealed class MsaReportData
             return MsaEvaluationText.OverallVerdict(type, referenceLoaded: true, proxies);
 
         if (!wholeRun) // one part
-            return (MsaEvaluationText.PartVerdict(type, proxies), string.Empty);
+            return MsaEvaluationText.PartVerdictDetailed(type, proxies);
 
         var parts = src.GroupBy(r => r.Dmc, StringComparer.OrdinalIgnoreCase)
             .Select(g => (g.Key, MsaEvaluationText.PartVerdict(type, g.Select(ProxyOf).ToList())))
             .ToList();
-        return MsaEvaluationText.OverallFromParts(parts);
+        var (verdict, reason) = MsaEvaluationText.OverallFromParts(parts);
+
+        // Vacuous-PASS guard (task A2): a LimitSample PASS that verified no prepared error is INVALID.
+        if (type == MsaType.LimitSample && verdict == MsaVerdict.Pass && !proxies.Any(p => p.Evaluated && p.ExpectedReject))
+            return (MsaVerdict.Invalid, "nur Gut-Muster im Lauf, kein erwarteter Fehler geprüft");
+        return (verdict, reason);
     }
 
     private static MsaMeasurementResult ProxyOf(MsaResultRow r) => new()

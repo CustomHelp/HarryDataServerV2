@@ -47,6 +47,13 @@ public sealed class MySqlConfig
 public sealed class CsvConfig
 {
     public string BasePath { get; init; } = string.Empty;
+
+    /// <summary>Root for the MSA/LimitSample summary CSV ([CSV] CSV_MSAPath, e.g. Y:\01_CSV_Evaluation).
+    /// The CSV lands in &lt;CSV_MSAPath&gt;\YYYY\MM\DD\&lt;BaseID&gt;\; empty → local fallback. It is deliberately
+    /// NOT under [MSA] ReferencePath, which stays pure configuration (the old MSA_Results tree there is
+    /// no longer written).</summary>
+    public string MsaPath { get; init; } = string.Empty;
+
     public string DiagnosticPath { get; init; } = string.Empty;
     public int DataSetsPerFile { get; init; } = 10000;
     public bool Save { get; init; } = true;

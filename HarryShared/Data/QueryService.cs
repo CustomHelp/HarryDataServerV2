@@ -14,6 +14,28 @@ public sealed class QueryService
 
     public QueryService(HarryConfig config) => _config = config;
 
+    /// <summary>Latest MSA/LimitSample BaseID recorded for a DMC (<c>msa_measurements.dmc</c> = Serial2),
+    /// or empty when the part never ran in an MSA/LimitSample mode. Used by HarryLimitSample to stamp
+    /// <c>source_base_id</c> into the reference file (task C). Read-only.</summary>
+    public async Task<string> GetLatestMsaBaseIdAsync(string dmc, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(dmc))
+            return string.Empty;
+        try
+        {
+            await using var conn = await _config.OpenAsync(ct).ConfigureAwait(false);
+            await using var cmd = new MySqlConnector.MySqlCommand(
+                "SELECT base_id FROM msa_measurements WHERE dmc = @dmc ORDER BY measured_at DESC LIMIT 1;", conn);
+            cmd.Parameters.AddWithValue("@dmc", dmc);
+            var result = await cmd.ExecuteScalarAsync(ct).ConfigureAwait(false);
+            return result as string ?? string.Empty;
+        }
+        catch
+        {
+            return string.Empty; // best-effort — never block teaching because the lookup failed
+        }
+    }
+
     /// <summary>M20/M21 cameras write the trimmer (virtual serial) table.</summary>
     public static bool IsTrimmerModule(string module) =>
         module.Equals("M20", StringComparison.OrdinalIgnoreCase) ||
