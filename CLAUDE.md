@@ -1372,9 +1372,12 @@ kept in `App_prev\` for rollback; `App\version.txt` records date + git hash.
 6. The full step-by-step stop-window procedure is in **`tools\DEPLOY_FENSTER.md`**.
 
 ### Deploy (customer companion tools — off-line, off the line)
-`tools\package_customer.cmd` builds a self-contained ZIP per companion into
+`tools\package_customer.cmd` builds a **framework-dependent** ZIP per companion into
 `F:\100_Installer\CompanionTools\` with a stripped customer `Harry.ini` (read-only DB placeholder,
-network paths only, **no `F:` and no write user**) and a README. See the script header for details.
+network paths only, **no `F:` and no write user**) and a README. The target PC needs the **.NET 8
+Desktop Runtime (x64)** — put its installer next to the ZIPs (customer installs it once first).
+Restore runs once with a hard timeout (offline-safe; aborts clearly instead of retrying nuget.org),
+then publishes use `--no-restore`. See the script header for details.
 
 ### Git Repository
 `https://github.com/CustomHelp/HarryDataServerV2`

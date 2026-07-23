@@ -1,31 +1,33 @@
 HarryDataServer companion tool - customer package
 ==================================================
 
-This ZIP is self-contained: it already includes the .NET runtime, so you do
-NOT need to install anything. Just:
+PREREQUISITE: .NET 8 Desktop Runtime (x64)
+------------------------------------------
+These tools need the Microsoft ".NET 8 Desktop Runtime (x64)" on the PC. The
+installer is provided in the SAME folder as these ZIP files
+(windowsdesktop-runtime-8.x.x-win-x64.exe).
 
-1. Unzip this folder anywhere (e.g. C:\HarryTools\<ToolName>).
-2. Double-click <ToolName>.exe to start it.
-3. On first start the tool reads the database connection from the Harry.ini
-   next to the exe. Open Harry.ini in a text editor and set:
-       Server       = the host / IP of your MySQL server
-       GetPassword  = the read-only password your administrator gave you
-   (The user "GetData" is read-only and can only SELECT from camera_data.)
-
-4. If the tool cannot find a config, or you want to use a different one, use
-   "Config-Pfad andern..." in the top bar to browse to a Harry.ini or type a
-   path. Your choice is remembered per tool (stored under
-   %APPDATA%\<ToolName>).
+Steps (in this order):
+  1. Install the .NET 8 Desktop Runtime (x64) - ONCE per PC. Skip if it is already
+     installed. (Run the windowsdesktop-runtime-8.x.x-win-x64.exe from this folder.)
+  2. Unzip this tool's ZIP anywhere (e.g. C:\HarryTools\<ToolName>).
+  3. Double-click <ToolName>.exe to start it.
+  4. Set the database connection on first start:
+       - Most tools read the Harry.ini next to the exe: open it and set
+         Server = your MySQL host / IP, and GetPassword = the read-only password.
+       - Or click "Change config path..." in the top bar to point at another
+         Harry.ini (the choice is remembered per tool under %APPDATA%).
+       - HarryPareto has its own connection dialog instead (enter host / user /
+         password there).
 
 Notes
 -----
 - These tools are READ-ONLY. They never change production data.
-- HarryPareto has its own connection dialog (IP + user + password) instead of
-  a Harry.ini; enter the read-only account there.
-- Features that need shares that do not exist on your PC (image folders, CSV
-  export targets, etc.) are simply disabled - the tool will not crash.
+- The user "GetData" is read-only (SELECT on camera_data only).
+- Features that need network shares which do not exist on your PC (image folders,
+  CSV export targets, ...) are simply disabled - the tool will not crash.
 
 Database access from another PC
 -------------------------------
-Your administrator must allow the read-only user from your network and open
-the MySQL port - see readonly_user.sql and the deployment notes.
+Your administrator must allow the read-only user from your network and open the
+MySQL port - see readonly_user.sql and the deployment notes.
