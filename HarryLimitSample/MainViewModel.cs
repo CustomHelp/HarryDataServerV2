@@ -206,7 +206,13 @@ public partial class MainViewModel : ObservableObject
                 _allRows.Add(new LimitSampleRow(m));
 
             var modules = _allRows.Select(r => r.Module).Distinct().OrderBy(m => m).ToList();
-            SelectedModule = modules.Count == 1 ? modules[0] : "(all)";
+            // Keep the operator's chosen module across a scan (so they can save right away without
+            // re-selecting e.g. M50) whenever the scanned part actually has data for it; otherwise
+            // auto-select when unambiguous, else fall back to "(all)".
+            if (!string.IsNullOrEmpty(SelectedModule) && SelectedModule != "(all)" && modules.Contains(SelectedModule!))
+                OnSelectedModuleChanged(SelectedModule); // value unchanged → re-apply filter + taught list
+            else
+                SelectedModule = modules.Count == 1 ? modules[0] : "(all)";
 
             OnPropertyChanged(nameof(SavePathPreview));
             RefreshTaughtParts();

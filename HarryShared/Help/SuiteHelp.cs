@@ -28,6 +28,8 @@ public static class SuiteHelp
                     "DMC des Teils ins Feld Scan / Serial scannen (oder eingeben) und Enter drücken — die Messungen des Teils werden in die Tabelle geladen."),
                 new("Alternatively pick a Module and click 'Load existing' to start from an already saved reference.",
                     "Alternativ ein Modul wählen und 'Load existing' klicken, um von einer bereits gespeicherten Referenz auszugehen."),
+                new("Your selected module stays selected across scans (as long as the scanned part has data for it), so you can scan and save right away without re-picking it.",
+                    "Das gewählte Modul bleibt über Scans hinweg ausgewählt (solange das gescannte Teil Daten dafür hat), du kannst also scannen und direkt speichern, ohne es erneut zu wählen."),
                 new("In the Expectation column, set each measurement to Should Pass, Should Fail or Ignore.",
                     "In der Spalte Expectation jede Messung auf Should Pass, Should Fail oder Ignore stellen."),
                 new("Click 'Save reference' (or press Ctrl+S). One file per part is written to <ReferencePath>\\<Module>\\LimitSamples\\<DMC>.json.",
