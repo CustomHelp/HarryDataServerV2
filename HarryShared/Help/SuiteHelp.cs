@@ -280,8 +280,8 @@ public static class SuiteHelp
         {
             new("Overview", "Überblick", new List<HelpStep>
             {
-                new("Each tab (Cameras, PLC, Scanner, MSA, Database, CSV, Collage, Log, Tools) shows one subsystem and its live status.",
-                    "Jeder Tab (Cameras, PLC, Scanner, MSA, Database, CSV, Collage, Log, Tools) zeigt ein Subsystem und dessen Live-Status."),
+                new("Each tab (Cameras, PLC, Scanner, MSA, Database, System, CSV, Collage, Log, Tools) shows one subsystem and its live status.",
+                    "Jeder Tab (Cameras, PLC, Scanner, MSA, Database, System, CSV, Collage, Log, Tools) zeigt ein Subsystem und dessen Live-Status."),
                 new("'Capture telegrams' (on the Log tab) writes all incoming raw telegrams to the Capture folder next to the exe — a test/commissioning aid.",
                     "'Capture telegrams' (im Log-Tab) schreibt alle eingehenden Roh-Telegramme in den Capture-Ordner neben der Exe — Test-/Inbetriebnahme-Hilfe."),
                 new("The status bar shows overall health, the error count, uptime and the loaded Harry.ini. Truncated texts show their full content as a tooltip on hover.",
@@ -310,6 +310,15 @@ public static class SuiteHelp
                     "Die MSA-Ansichten aktualisieren sich automatisch: Wechsel des MSA-Tabs oder des Modul-/Typ-Untertabs lädt die Läufe neu, und wenn ein neuer Lauf fertig ist, aktualisiert sich die Historie — auf dem neuesten Lauf springt sie mit, sonst erscheint ein Banner 'New run available – click to load', ohne den betrachteten Lauf wegzureißen."),
                 new("LimitSample references are one file per part (per DMC) under <ReferencePath>\\<Module>\\LimitSamples\\<DMC>.json, taught with the HarryLimitSample tool. MSA1 uses per-part reference files with automatic best-match; a blank DEMO_<Module>.json template is created per module to copy, rename and fill in.",
                     "LimitSample-Referenzen sind eine Datei pro Teil (pro DMC) unter <ReferencePath>\\<Modul>\\LimitSamples\\<DMC>.json, eingelernt mit dem Tool HarryLimitSample. MSA1 nutzt Referenzdateien pro Teil mit automatischem Best-Match; je Modul wird eine leere DEMO_<Modul>.json-Vorlage angelegt zum Kopieren, Umbenennen und Ausfüllen."),
+            }),
+            new("System resources", "Systemauslastung", new List<HelpStep>
+            {
+                new("The System tab shows the live machine load: whole-machine CPU utilisation, physical RAM used of total, this server process's own CPU + memory, and the MySQL (mysqld) process CPU + memory with a running LED.",
+                    "Der System-Tab zeigt die Live-Auslastung des Rechners: CPU-Auslastung der gesamten Maschine, belegter physischer RAM vom Gesamtspeicher, CPU + Speicher dieses Server-Prozesses selbst sowie CPU + Speicher des MySQL-Prozesses (mysqld) mit Läuft-LED."),
+                new("Below the MySQL card, the active MySQL connections and the server uptime are read from the database. Load bars are green up to 70 %, orange above 70 % and red above 90 %.",
+                    "Unter der MySQL-Karte werden die aktiven MySQL-Verbindungen und die Server-Laufzeit aus der Datenbank gelesen. Die Auslastungsbalken sind bis 70 % grün, über 70 % orange und über 90 % rot."),
+                new("CPU and RAM refresh about every 2 seconds; the MySQL connection/uptime figures about every 5 seconds.",
+                    "CPU und RAM aktualisieren sich etwa alle 2 Sekunden; die MySQL-Verbindungs-/Laufzeitwerte etwa alle 5 Sekunden."),
             }),
             new("Notes", "Hinweise", new List<HelpStep>
             {

@@ -1,0 +1,91 @@
+<UserControl x:Class="HarryDataServer.Controls.ucSystemControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- DataContext is the MainViewModel -->
+    <UserControl.Resources>
+        <!-- Themed, flat progress bar used for every load meter on this tab. -->
+        <Style TargetType="{x:Type ProgressBar}">
+            <Setter Property="Height" Value="16" />
+            <Setter Property="Minimum" Value="0" />
+            <Setter Property="Maximum" Value="100" />
+            <Setter Property="Background" Value="{DynamicResource PanelBg}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="16" MaxWidth="640">
+            <TextBlock Text="System resources" FontSize="20" FontWeight="Bold" Margin="0,0,0,14" />
+
+            <!-- Processor -->
+            <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+                <StackPanel>
+                    <DockPanel Margin="0,0,0,6">
+                        <TextBlock Text="Processor (CPU)" FontWeight="Bold" />
+                        <TextBlock Text="{Binding CpuText}" HorizontalAlignment="Right" FontWeight="SemiBold" />
+                    </DockPanel>
+                    <ProgressBar Value="{Binding CpuPercent}" Foreground="{Binding CpuBarBrush}" />
+                    <TextBlock Text="Whole-machine CPU utilisation across all cores."
+                               Foreground="{DynamicResource TextDimBrush}" FontSize="11" Margin="0,6,0,0" />
+                </StackPanel>
+            </Border>
+
+            <!-- Memory -->
+            <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+                <StackPanel>
+                    <DockPanel Margin="0,0,0,6">
+                        <TextBlock Text="Memory (RAM)" FontWeight="Bold" />
+                        <TextBlock Text="{Binding RamText}" HorizontalAlignment="Right" FontWeight="SemiBold" />
+                    </DockPanel>
+                    <ProgressBar Value="{Binding RamPercent}" Foreground="{Binding RamBarBrush}" />
+                    <TextBlock Text="Physical memory used of total installed."
+                               Foreground="{DynamicResource TextDimBrush}" FontSize="11" Margin="0,6,0,0" />
+                </StackPanel>
+            </Border>
+
+            <!-- This server process -->
+            <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+                <StackPanel>
+                    <DockPanel Margin="0,0,0,6">
+                        <TextBlock Text="HarryDataServer process" FontWeight="Bold" />
+                        <TextBlock Text="{Binding ServerCpuText}" HorizontalAlignment="Right" FontWeight="SemiBold" />
+                    </DockPanel>
+                    <ProgressBar Value="{Binding ServerCpuPercent}" Foreground="{Binding ServerCpuBarBrush}" />
+                    <DockPanel Margin="0,6,0,0">
+                        <TextBlock Text="Working set" Foreground="{DynamicResource TextDimBrush}" />
+                        <TextBlock Text="{Binding ServerRamText}" HorizontalAlignment="Right"
+                                   Foreground="{DynamicResource TextDimBrush}" />
+                    </DockPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- MySQL -->
+            <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+                <StackPanel>
+                    <DockPanel Margin="0,0,0,6">
+                        <StackPanel Orientation="Horizontal">
+                            <Ellipse Width="13" Height="13" Fill="{Binding MySqlProcessLed}" VerticalAlignment="Center" />
+                            <TextBlock Text="MySQL (mysqld)" FontWeight="Bold" Margin="6,0,0,0" />
+                        </StackPanel>
+                        <TextBlock Text="{Binding MySqlCpuText}" HorizontalAlignment="Right" FontWeight="SemiBold" />
+                    </DockPanel>
+                    <ProgressBar Value="{Binding MySqlCpuPercent}" Foreground="{Binding MySqlCpuBarBrush}" />
+                    <DockPanel Margin="0,6,0,0">
+                        <TextBlock Text="Working set" Foreground="{DynamicResource TextDimBrush}" />
+                        <TextBlock Text="{Binding MySqlRamText}" HorizontalAlignment="Right"
+                                   Foreground="{DynamicResource TextDimBrush}" />
+                    </DockPanel>
+                    <TextBlock Text="{Binding MySqlProcessText}" Foreground="{DynamicResource TextDimBrush}"
+                               FontSize="11" Margin="0,6,0,0" />
+                    <TextBlock Text="{Binding MySqlConnectionsText}" Foreground="{DynamicResource TextDimBrush}"
+                               Margin="0,6,0,0" />
+                    <TextBlock Text="{Binding MySqlUptimeText}" Foreground="{DynamicResource TextDimBrush}" />
+                </StackPanel>
+            </Border>
+
+            <TextBlock Text="CPU/RAM refresh every ~2 s; MySQL connections/uptime every ~5 s. Bars turn orange above 70 % and red above 90 %."
+                       Foreground="{DynamicResource TextDimBrush}" FontSize="11" TextWrapping="Wrap" />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

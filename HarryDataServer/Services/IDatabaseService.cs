@@ -15,6 +15,9 @@ public enum DatabaseStatus
 /// <summary>Live production figures for the Overview tab (from <c>dmcserial</c>).</summary>
 public sealed record ProductionSnapshot(long TodayOk, long TodayNg, DateTime? LastPartExit, string ActiveOrder);
 
+/// <summary>Live MySQL server figures for the System tab (from <c>SHOW GLOBAL STATUS</c>).</summary>
+public sealed record MySqlServerStatus(bool Reachable, int ThreadsConnected, TimeSpan Uptime);
+
 /// <summary>
 /// High-level database orchestration. Runs the full startup logic from CLAUDE.md
 /// section 8 (connect with backoff, create schema, provision partitions, sync
@@ -44,4 +47,7 @@ public interface IDatabaseService
 
     /// <summary>Today's OK/NG counts, last part-exit time and current order for the Overview tab.</summary>
     Task<ProductionSnapshot> GetProductionSnapshotAsync(CancellationToken ct = default);
+
+    /// <summary>Live MySQL server figures (active connections, uptime) for the System tab.</summary>
+    Task<MySqlServerStatus> GetServerStatusAsync(CancellationToken ct = default);
 }

@@ -103,6 +103,41 @@ FROM dmcserial;", conn))
         }
     }
 
+    public async Task<MySqlServerStatus> GetServerStatusAsync(CancellationToken ct = default)
+    {
+        if (_status != DatabaseStatus.Ready)
+            return new MySqlServerStatus(false, 0, TimeSpan.Zero);
+
+        try
+        {
+            await using var conn = await _repo.OpenAsync(ct).ConfigureAwait(false);
+            await using var cmd = new MySqlCommand(
+                "SHOW GLOBAL STATUS WHERE Variable_name IN ('Threads_connected', 'Uptime');", conn);
+            await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+
+            var threads = 0;
+            var uptime = TimeSpan.Zero;
+            while (await reader.ReadAsync(ct).ConfigureAwait(false))
+            {
+                var name = reader.GetString(0);
+                var value = reader.GetString(1);
+                if (name.Equals("Threads_connected", StringComparison.OrdinalIgnoreCase)
+                    && long.TryParse(value, out var t))
+                    threads = (int)t;
+                else if (name.Equals("Uptime", StringComparison.OrdinalIgnoreCase)
+                    && long.TryParse(value, out var s))
+                    uptime = TimeSpan.FromSeconds(s);
+            }
+
+            return new MySqlServerStatus(true, threads, uptime);
+        }
+        catch (Exception ex)
+        {
+            _log.Debug("MySQL server-status query failed: {Message}", ex.Message);
+            return new MySqlServerStatus(false, 0, TimeSpan.Zero);
+        }
+    }
+
     public async Task<IReadOnlyDictionary<string, long>> GetRowCountsAsync(CancellationToken ct = default)
     {
         var counts = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);

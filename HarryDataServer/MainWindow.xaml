@@ -111,6 +111,10 @@
                 <ctrl:ucDatabaseControl />
             </TabItem>
 
+            <TabItem Header="System">
+                <ctrl:ucSystemControl />
+            </TabItem>
+
             <TabItem Header="CSV">
                 <ctrl:ucCsvControl />
             </TabItem>

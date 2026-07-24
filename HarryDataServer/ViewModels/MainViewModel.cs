@@ -44,6 +44,7 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly Dictionary<SpsChannel, SpsChannelViewModel> _channelByKey = new();
     private readonly DispatcherTimer _timer;
     private readonly DateTime _startUtc = DateTime.UtcNow;
+    private readonly SystemMetricsSampler _metrics = new();
 
     private string _lastHealthKey = string.Empty;
     private bool _rowCountsBusy;
@@ -51,6 +52,9 @@ public sealed partial class MainViewModel : ObservableObject
     private bool _msaLoaded;
     private bool _productionBusy;
     private DateTime _lastProductionUtc = DateTime.MinValue;
+    private DateTime _lastMetricsUtc = DateTime.MinValue;
+    private bool _mysqlStatusBusy;
+    private DateTime _lastMysqlStatusUtc = DateTime.MinValue;
 
     public MainViewModel(
         IConfigService config, ICameraService cameras, IDatabaseService database,
@@ -148,6 +152,29 @@ public sealed partial class MainViewModel : ObservableObject
     // --- Cameras / SPS summary ---
     [ObservableProperty] private string _cameraSummary = "0 / 0 connected";
 
+    // --- System resources (System tab) ---
+    [ObservableProperty] private double _cpuPercent;
+    [ObservableProperty] private string _cpuText = "—";
+    [ObservableProperty] private Brush _cpuBarBrush = Led.Gray;
+
+    [ObservableProperty] private double _ramPercent;
+    [ObservableProperty] private string _ramText = "—";
+    [ObservableProperty] private Brush _ramBarBrush = Led.Gray;
+
+    [ObservableProperty] private double _serverCpuPercent;
+    [ObservableProperty] private string _serverCpuText = "—";
+    [ObservableProperty] private Brush _serverCpuBarBrush = Led.Gray;
+    [ObservableProperty] private string _serverRamText = "—";
+
+    [ObservableProperty] private Brush _mySqlProcessLed = Led.Gray;
+    [ObservableProperty] private string _mySqlProcessText = "—";
+    [ObservableProperty] private double _mySqlCpuPercent;
+    [ObservableProperty] private string _mySqlCpuText = "—";
+    [ObservableProperty] private Brush _mySqlCpuBarBrush = Led.Gray;
+    [ObservableProperty] private string _mySqlRamText = "—";
+    [ObservableProperty] private string _mySqlConnectionsText = "Active connections: —";
+    [ObservableProperty] private string _mySqlUptimeText = "Server uptime: —";
+
     // --- CSV ---
     [ObservableProperty] private string _csvActivePath = "(no file yet)";
     [ObservableProperty] private string _csvRows = "0 rows";
@@ -213,11 +240,98 @@ public sealed partial class MainViewModel : ObservableObject
         RefreshHealth();
         RefreshTopBar();
         RefreshOverviewCameras();
+        RefreshSystem();
         Log.Tick();
         MaybeRefreshRowCounts();
         MaybeRefreshProduction();
+        MaybeRefreshMySqlStatus();
         MaybeLoadMsa();
     }
+
+    /// <summary>
+    /// Sample whole-machine CPU/RAM and the server + mysqld process load for the
+    /// System tab. Throttled to ~2 s so the CPU deltas cover a meaningful window.
+    /// </summary>
+    private void RefreshSystem()
+    {
+        if ((DateTime.UtcNow - _lastMetricsUtc).TotalSeconds < 2)
+            return;
+        _lastMetricsUtc = DateTime.UtcNow;
+
+        SystemMetricsSnapshot m;
+        try { m = _metrics.Sample(); }
+        catch { return; }
+
+        CpuPercent = m.CpuPercent;
+        CpuText = $"{m.CpuPercent:0} %";
+        CpuBarBrush = LoadBrush(m.CpuPercent);
+
+        RamPercent = m.RamPercent;
+        RamText = $"{m.RamUsedGb:0.0} / {m.RamTotalGb:0.0} GB  ({m.RamPercent:0} %)";
+        RamBarBrush = LoadBrush(m.RamPercent);
+
+        ServerCpuPercent = m.ServerCpuPercent;
+        ServerCpuText = $"{m.ServerCpuPercent:0} %";
+        ServerCpuBarBrush = LoadBrush(m.ServerCpuPercent);
+        ServerRamText = $"{m.ServerRamMb:N0} MB";
+
+        if (m.MySqlRunning)
+        {
+            MySqlProcessLed = Led.Green;
+            MySqlProcessText = "mysqld running";
+            MySqlCpuPercent = m.MySqlCpuPercent;
+            MySqlCpuText = $"{m.MySqlCpuPercent:0} %";
+            MySqlCpuBarBrush = LoadBrush(m.MySqlCpuPercent);
+            MySqlRamText = $"{m.MySqlRamMb:N0} MB";
+        }
+        else
+        {
+            MySqlProcessLed = Led.Red;
+            MySqlProcessText = "mysqld process not found";
+            MySqlCpuPercent = 0;
+            MySqlCpuText = "—";
+            MySqlCpuBarBrush = Led.Gray;
+            MySqlRamText = "—";
+        }
+    }
+
+    /// <summary>Green &lt; 70 %, orange &lt; 90 %, red otherwise — matches the health LEDs.</summary>
+    private static Brush LoadBrush(double percent) =>
+        percent >= 90 ? Led.Red : percent >= 70 ? Led.Orange : Led.Green;
+
+    private async void MaybeRefreshMySqlStatus()
+    {
+        if (_mysqlStatusBusy)
+            return;
+        if ((DateTime.UtcNow - _lastMysqlStatusUtc).TotalSeconds < 5)
+            return;
+
+        if (_database.Status != DatabaseStatus.Ready)
+        {
+            MySqlConnectionsText = "Active connections: —";
+            MySqlUptimeText = "Server uptime: —";
+            return;
+        }
+
+        _mysqlStatusBusy = true;
+        try
+        {
+            var status = await _database.GetServerStatusAsync().ConfigureAwait(true);
+            _lastMysqlStatusUtc = DateTime.UtcNow;
+            if (status.Reachable)
+            {
+                MySqlConnectionsText = $"Active connections: {status.ThreadsConnected}";
+                MySqlUptimeText = $"Server uptime: {FormatUptime(status.Uptime)}";
+            }
+        }
+        catch { /* non-critical, surfaced via DB health elsewhere */ }
+        finally { _mysqlStatusBusy = false; }
+    }
+
+    private static string FormatUptime(TimeSpan up) =>
+        up.TotalDays >= 1
+            ? $"{(int)up.TotalDays}d {up.Hours}h {up.Minutes}m"
+            : $"{(int)up.TotalHours}h {up.Minutes}m";
 
     private void RefreshOverviewCameras()
     {
