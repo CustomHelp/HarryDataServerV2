@@ -85,6 +85,21 @@ public sealed class PartExitOrchestrator : IPartExitOrchestrator
             return true;
         }
 
+        // DE (ST160): a rejected trimmer sub-assembly is never put into a frame, so it is NOT a
+        // finished part. Delete its images only — write NOTHING to dmcserial and NOTHING to the
+        // production CSV. The trimmer's measurements_serial_trimmer rows stay untouched and (with the
+        // "DE: n … deleted" log line) are the sole record of the removal.
+        if (data.Result == PartResult.Deleted)
+        {
+            long deMs = 0;
+            var deOk = await RunDeTrimmerDeleteAsync(data, ms => deMs = ms, ct).ConfigureAwait(false);
+            total.Stop();
+            LastTiming = $"DE image delete {deMs}ms | Total {total.ElapsedMilliseconds}ms";
+            Interlocked.Increment(ref _totalProcessed);
+            StatsChanged?.Invoke();
+            return deOk;
+        }
+
         // 1) Persist the part first.
         var dmcOk = await SaveDmcAsync(data, ct).ConfigureAwait(false);
 
@@ -120,19 +135,10 @@ public sealed class PartExitOrchestrator : IPartExitOrchestrator
 
             await Task.WhenAll(csvTask, collageTask, imageTask).ConfigureAwait(false);
         }
-        else if (data.Result == PartResult.Deleted)
-        {
-            // DE from ST160: a rejected trimmer sub-assembly never entered a frame, so it has no
-            // normal part-exit and no collage/frame images. ST160 sends DE carrying the trimmer
-            // serial to purge that trimmer's images. The DB rows (dmcserial result_status=-1 and the
-            // measurements_serial_trimmer measurements) are KEPT for traceability — only images go.
-            imageTask = RunDeTrimmerDeleteAsync(data, ms => imageMs = ms, ct);
-            await Task.WhenAll(csvTask, imageTask).ConfigureAwait(false);
-        }
         else // NG: CSV only.
         {
             // SOW §5.2.3: NG parts produce no collage, so their low-res individual images
-            // are NOT deleted here. They are kept and removed later by ImageCleanupService,
+            // are NOT deleted here. They are kept and removed later by RetentionService,
             // together with the matching full-res NG image (linked by serial prefix).
             imageTask = Task.FromResult(true);
 

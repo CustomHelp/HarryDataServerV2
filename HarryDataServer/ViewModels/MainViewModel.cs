@@ -376,12 +376,15 @@ public sealed partial class MainViewModel : ObservableObject
         ConnectionLed = ready ? Led.Green : status == DatabaseStatus.Failed ? Led.Red : Led.Orange;
         TablesLed = ready ? Led.Green : Led.Gray;
 
-        var mysql = _config.Config.MySql;
-        var nas = _config.Config.Nas;
+        var ret = _config.Config.Retention;
         RetentionInfo =
-            $"DB partitions: {mysql.RetentionPeriodDays} days  ·  " +
-            $"NAS NG: {nas.RetentionNgDays}d  ·  Diagnostic: {nas.RetentionDiagnosticDays}d  ·  GoldenSample: {nas.RetentionGoldenSampleDays}d";
+            $"DB prod: {Days(ret.DatabaseProduction)}  ·  DB MSA: {Days(ret.DatabaseMsa)}  ·  " +
+            $"NG: {Days(ret.ImagesNg)}  ·  Diag: {Days(ret.ImagesDiagnostic)}  ·  GSM: {Days(ret.ImagesGoldenSample)}  ·  " +
+            $"Backup: {Days(ret.ImagesBackup)}";
     }
+
+    /// <summary>Retention days for the status line: "n d" or "never" when 0.</summary>
+    private static string Days(int days) => days > 0 ? $"{days}d" : "never";
 
     private void RefreshCsv()
     {

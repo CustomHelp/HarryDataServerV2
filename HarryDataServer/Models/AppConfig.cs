@@ -17,6 +17,7 @@ public sealed class AppConfig
     public SqlSettingsConfig SqlSettings { get; init; } = new();
     public MsaConfig Msa { get; init; } = new();
     public ScannerConfig Scanner { get; init; } = new();
+    public RetentionConfig Retention { get; init; } = new();
     public IReadOnlyList<CameraConfig> Cameras { get; init; } = Array.Empty<CameraConfig>();
 }
 
@@ -49,7 +50,6 @@ public sealed class MySqlConfig
     public string Database { get; init; } = "camera_data";
     public string User { get; init; } = "SettData";
     public string Password { get; init; } = "1234Set";
-    public int RetentionPeriodDays { get; init; } = 35;
 }
 
 public sealed class CsvConfig
@@ -89,28 +89,12 @@ public sealed class NasConfig
     public string HighResNgPath { get; init; } = string.Empty;
     public string HighResDiagnosticPath { get; init; } = string.Empty;
     public string HighResGoldenSamplePath { get; init; } = string.Empty;
-    public int RetentionNgDays { get; init; } = 30;
-    public int RetentionDiagnosticDays { get; init; } = 30;
-    public int RetentionGoldenSampleDays { get; init; } = 30;
-
-    /// <summary>Retention (days) for finished collages, configurable independently of the
-    /// full-res image types. Falls back to <see cref="FullResRetentionDays"/> when unset.</summary>
-    public int RetentionCollageDays { get; init; } = 30;
-
-    /// <summary>Default full-resolution image retention in days (SOW §5.2.3). Used as the
-    /// fallback for the per-type NG/Diagnostic/GoldenSample retention when those are unset.</summary>
-    public int FullResRetentionDays { get; init; } = 30;
 
     /// <summary>Part-exit image handling: true = delete source images; false = backup then delete.</summary>
     public bool DeletePictures { get; init; } = true;
 
     /// <summary>Root backup folder (used when DeletePictures = false). Structure: \YYYY\MM\DD\.</summary>
     public string BackupFolder { get; init; } = string.Empty;
-
-    /// <summary>Retention (days) for the part-exit backup folder (<c>[NAS] BackupRetentionDays</c>).
-    /// The backup tree grows with every OK part when DeletePictures=false, so it must be cleaned like
-    /// the other sorted day-folders. Falls back to <see cref="FullResRetentionDays"/> when unset.</summary>
-    public int BackupRetentionDays { get; init; } = 30;
 }
 
 public sealed class CollageConfig
@@ -189,4 +173,44 @@ public sealed class MsaConfig
     /// drive) is not reachable at write time. A WARNING is logged and the run is still written —
     /// never a crash or data loss. Default <c>D:\HarryDataServer\MSA_Reports</c> when empty.</summary>
     public string ReportFallbackPath { get; init; } = string.Empty;
+}
+
+/// <summary>
+/// Central retention policy ([Retention] section). ONE place for every "how long do we keep …"
+/// decision — images, MSA reports, CSV exports and the database — consumed by the single
+/// <see cref="HarryDataServer.Services.RetentionService"/>.
+/// <para>Semantics everywhere: the value is a number of DAYS; <b>0 = never delete</b>.</para>
+/// The legacy keys ([MySQL] RetentionPeriodDays, [NAS] Retention*Days / BackupRetentionDays /
+/// FullResRetentionDays) are still read as a fallback (with a deprecation WARNING) when the matching
+/// [Retention] key is absent — see <see cref="Deprecations"/>.
+/// </summary>
+public sealed class RetentionConfig
+{
+    public int ImagesNg { get; init; } = 30;              // Z:\03_High_Resolution_NG
+    public int ImagesDiagnostic { get; init; } = 30;      // Z:\04_High_Resolution_Diagnostic
+    public int ImagesGoldenSample { get; init; } = 30;    // Z:\05_High_Resolution_GoldenSample
+    public int ImagesCollage { get; init; } = 30;         // Z:\02_Low_Resolution_Collage
+    public int ImagesBackup { get; init; } = 30;          // Z:\06_Backup (part-exit backup tree)
+
+    /// <summary>Age (days) after which a file still sitting in a <c>…\Input</c> folder counts as a
+    /// leftover from a failed pipeline run and is deleted (with a WARNING). Default 3.</summary>
+    public int ImagesInputLeftovers { get; init; } = 3;
+
+    /// <summary>Production tables: measurements_serial(_trimmer) (DROP PARTITION) + dmcserial (batch DELETE).</summary>
+    public int DatabaseProduction { get; init; } = 35;
+
+    /// <summary>MSA tables (msa_measurements, msa_results). Default 0 = NEVER — QS data; only the
+    /// customer/QS enables ageing.</summary>
+    public int DatabaseMsa { get; init; }                 // default 0 = never
+
+    /// <summary>MSA report/raw folders under [MSA] ReportPath. Default 0 = NEVER (QS evidence).</summary>
+    public int ReportsMsa { get; init; }                  // default 0 = never
+
+    public int CsvEvaluation { get; init; } = 365;        // Y:\01_CSV_Evaluation ([CSV] CSV_MSAPath)
+    public int CsvMerge { get; init; } = 365;             // Y:\02_CSV_Merge ([CSV] CSV_BasePath) — production evidence
+    public int CsvExtraResults { get; init; } = 90;       // Y:\03_CSV_ExtraResults ([CSV] CSV_DiagnosticPath)
+
+    /// <summary>Human-readable deprecation notes for legacy keys that were used as a fallback
+    /// (logged once at startup). Empty when the [Retention] section fully supersedes them.</summary>
+    public IReadOnlyList<string> Deprecations { get; init; } = Array.Empty<string>();
 }

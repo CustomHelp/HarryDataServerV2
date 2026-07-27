@@ -46,6 +46,7 @@ public sealed class IniConfigManager
             SqlSettings = ParseSqlSettings(data),
             Msa = ParseMsa(data, configDir),
             Scanner = ParseScanner(data),
+            Retention = ParseRetention(data),
             Cameras = ParseCameras(data, configDir),
         };
     }
@@ -104,7 +105,6 @@ public sealed class IniConfigManager
             Database = Str(s, "Database", "camera_data"),
             User = Str(s, "User", "SettData"),
             Password = Str(s, "Password", "1234Set"),
-            RetentionPeriodDays = Int(s, "RetentionPeriodDays", 35),
         };
     }
 
@@ -144,8 +144,6 @@ public sealed class IniConfigManager
     private static NasConfig ParseNas(IniData data)
     {
         var s = data["NAS"];
-        // Default full-res retention; the per-type retentions fall back to it when unset.
-        var fullRes = Int(s, "FullResRetentionDays", 30);
         return new NasConfig
         {
             LowResIndividualPath = Str(s, "LowResIndividualPath", string.Empty),
@@ -153,16 +151,61 @@ public sealed class IniConfigManager
             HighResNgPath = Str(s, "HighResNGPath", string.Empty),
             HighResDiagnosticPath = Str(s, "HighResDiagnosticPath", string.Empty),
             HighResGoldenSamplePath = Str(s, "HighResGoldenSamplePath", string.Empty),
-            FullResRetentionDays = fullRes,
-            RetentionNgDays = Int(s, "RetentionNGDays", fullRes),
-            RetentionDiagnosticDays = Int(s, "RetentionDiagnosticDays", fullRes),
-            RetentionGoldenSampleDays = Int(s, "RetentionGoldenSampleDays", fullRes),
-            RetentionCollageDays = Int(s, "RetentionCollageDays", fullRes),
             DeletePictures = Bool(s, "DeletePictures", true),
             BackupFolder = Str(s, "BackupFolder", string.Empty),
-            BackupRetentionDays = Int(s, "BackupRetentionDays", fullRes),
         };
     }
+
+    /// <summary>
+    /// Parse the central [Retention] section (CLAUDE.md §11a). All values are DAYS; 0 = never delete.
+    /// Legacy keys ([MySQL] RetentionPeriodDays, [NAS] Retention*Days / BackupRetentionDays /
+    /// FullResRetentionDays) are read as a fallback when the matching [Retention] key is absent, and
+    /// each such fallback is recorded in <see cref="RetentionConfig.Deprecations"/> so startup can log
+    /// a "deprecated — use [Retention]" WARNING. The live INI is migrated so no fallback fires there.
+    /// </summary>
+    private static RetentionConfig ParseRetention(IniData data)
+    {
+        var r = data["Retention"];
+        var nas = data["NAS"];
+        var mysql = data["MySQL"];
+        var deprecations = new List<string>();
+
+        // Old [NAS] FullResRetentionDays was the fallback for the per-type image keys.
+        var legacyFullRes = HasKey(nas, "FullResRetentionDays") ? Int(nas, "FullResRetentionDays", 30) : 30;
+
+        // Resolve a [Retention] key, else the legacy key (recording a deprecation), else the default.
+        int Resolve(string newKey, int def, KeyDataCollection? legacySection, string legacyKey, int legacyDefault)
+        {
+            if (HasKey(r, newKey))
+                return Int(r, newKey, def);
+            if (legacySection is not null && HasKey(legacySection, legacyKey))
+            {
+                deprecations.Add($"[{(legacySection == nas ? "NAS" : "MySQL")}] {legacyKey} is deprecated — use [Retention] {newKey}");
+                return Int(legacySection, legacyKey, legacyDefault);
+            }
+            return def;
+        }
+
+        return new RetentionConfig
+        {
+            ImagesNg = Resolve("Images_NG", 30, nas, "RetentionNGDays", legacyFullRes),
+            ImagesDiagnostic = Resolve("Images_Diagnostic", 30, nas, "RetentionDiagnosticDays", legacyFullRes),
+            ImagesGoldenSample = Resolve("Images_GoldenSample", 30, nas, "RetentionGoldenSampleDays", legacyFullRes),
+            ImagesCollage = Resolve("Images_Collage", 30, nas, "RetentionCollageDays", legacyFullRes),
+            ImagesBackup = Resolve("Images_Backup", 30, nas, "BackupRetentionDays", legacyFullRes),
+            ImagesInputLeftovers = Int(r, "Images_InputLeftovers", 3),
+            DatabaseProduction = Resolve("Database_Production", 35, mysql, "RetentionPeriodDays", 35),
+            DatabaseMsa = Int(r, "Database_MSA", 0),
+            ReportsMsa = Int(r, "Reports_MSA", 0),
+            CsvEvaluation = Int(r, "CSV_Evaluation", 365),
+            CsvMerge = Int(r, "CSV_Merge", 365),
+            CsvExtraResults = Int(r, "CSV_ExtraResults", 90),
+            Deprecations = deprecations,
+        };
+    }
+
+    private static bool HasKey(KeyDataCollection? section, string key) =>
+        section is not null && section.ContainsKey(key);
 
     private static CollageConfig ParseCollage(IniData data, string configDir)
     {

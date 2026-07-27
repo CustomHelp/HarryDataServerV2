@@ -318,12 +318,15 @@ is answered with `<32×'0'>;false`). Empty fields are allowed:
   production tables.
 - **NG:** CSV export only; low-res images are kept and removed later with the full-res NG image.
 - **DE (deleted trimmer):** a rejected trimmer sub-assembly is **not** put into a frame, so it never
-  gets a normal part exit. ST160 sends a **DE** telegram (15 fields, `ResultStatus=DE`, **SZID empty,
-  the trimmer serial in field 2**). The server then **deletes that trimmer's images** — matched by
-  the normalised **13-char** trimmer serial as the Field 1 prefix, searched across the low-res, NG and
-  diagnostic roots (incl. the NAS-sorted `YYYY\MM\DD` day-folders) — and **keeps the DB rows**
-  (`dmcserial` `result_status=-1`, `measurements_serial_trimmer`) for traceability. Logs
-  **`DE: n trimmer image(s) … deleted`** on success, a **WARNING** when 0 are found. (`ImageHandler.DeleteByTrimmerSerialAsync`.)
+  gets a normal part exit — **it is not a finished part**. ST160 sends a **DE** telegram (15 fields,
+  `ResultStatus=DE`, **SZID empty, the trimmer serial in field 2**). The server **deletes that
+  trimmer's images** — matched by the normalised **13-char** trimmer serial as the Field 1 prefix,
+  searched across the low-res, NG and diagnostic roots (incl. the NAS-sorted `YYYY\MM\DD`
+  day-folders) — and writes **NOTHING to `dmcserial` and NOTHING to the production CSV** (the early
+  DE branch in `HandleAsync` returns before `SaveDmcAsync`/`WritePartAsync`). The trimmer's existing
+  `measurements_serial_trimmer` rows are left untouched and, together with the log line
+  **`DE: n trimmer image(s) … deleted for <serial>`** (WARNING when 0 found), are the sole record of
+  the removal. (`ImageHandler.DeleteByTrimmerSerialAsync`.)
 
 ### Channels 3–7 — MSA Evaluation Trigger
 
@@ -995,7 +998,8 @@ Server=localhost
 Database=camera_data
 User=SettData
 Password=1234Set
-RetentionPeriodDays=35
+; NOTE: retention moved to the central [Retention] section. The old RetentionPeriodDays is still
+; read as a DEPRECATED fallback (WARNING) when [Retention] Database_Production is absent.
 
 [CSV]
 CSV_BasePath=Y:\02_CSV_Merge      ; production CSV → CSV_BasePath\YYYY\MM\DD
@@ -1012,17 +1016,28 @@ CollagePath=Z:\02_Low_Resolution_Collage\Input
 HighResNGPath=Z:\03_High_Resolution_NG\Input
 HighResDiagnosticPath=Z:\04_High_Resolution_Diagnostic\Input
 HighResGoldenSamplePath=Z:\05_High_Resolution_GoldenSample\Input
-FullResRetentionDays=30   ; default full-res retention (SOW §5.2.3); per-type keys fall back to it
-RetentionNGDays=30
-RetentionDiagnosticDays=30
-RetentionGoldenSampleDays=30
-RetentionCollageDays=30   ; finished-collage retention; falls back to FullResRetentionDays
 ; Part-exit image handling for OK parts. There is NO 'delete after collage' switch — these two keys
 ; decide it: DeletePictures=true deletes the source images; =false copies them to BackupFolder\YYYY\MM\DD
-; (size-verified) then deletes. The backup tree has no NAS sorter, so BackupRetentionDays ages it out.
+; (size-verified) then deletes. ALL retention is central now (see [Retention]).
 DeletePictures=false
 BackupFolder=Z:\06_Backup
-BackupRetentionDays=30     ; falls back to FullResRetentionDays
+
+[Retention]
+; Central retention policy (§11a). Every value is DAYS; 0 = NEVER delete. One RetentionService
+; applies all of these at startup + every 24 h; master data (settings/definitions/cameras) is
+; never touched. Legacy [MySQL]/[NAS] retention keys are read as a deprecated fallback (WARNING).
+Images_NG=30
+Images_Diagnostic=30
+Images_GoldenSample=30
+Images_Collage=30
+Images_Backup=30
+Images_InputLeftovers=3   ; files stuck in a …\Input folder past N days = failed-run leftovers → delete + WARNING
+Database_Production=35    ; measurements_serial(_trimmer) DROP PARTITION + dmcserial batch DELETE
+Database_MSA=0            ; msa_measurements, msa_results → NEVER by default (QS data)
+Reports_MSA=0             ; [MSA] ReportPath dated folders → NEVER by default (QS evidence)
+CSV_Evaluation=365
+CSV_Merge=365
+CSV_ExtraResults=90
 
 [Collage]
 Collage_IniPath=D:\HarryDataServer\Collage.ini
@@ -1118,12 +1133,10 @@ Run images are those whose Field 1 starts with the 14-char BaseID (loop + paddin
 `MSA_<module>.json` INPUT definitions written by HarryLimitSample). Helper: `Infrastructure/MsaResultLayout.cs`.
 
 ### Delete Logic
-- **NG / Diagnostic / GoldenSample images + finished collages:** the NAS sorts them out of each
-  `\Input` folder into sibling `YYYY\MM\DD` day-folders. `ImageCleanupService` walks those
-  day-folders and deletes a **whole day-folder** once its date (from the **folder name**, not the
-  file timestamp) is older than retention. Per-type retention keys: `RetentionNGDays`,
-  `RetentionDiagnosticDays`, `RetentionGoldenSampleDays`, `RetentionCollageDays` (each falls back
-  to `FullResRetentionDays`).
+- **Central retention (§11a `RetentionService`):** NG / Diagnostic / GoldenSample images + finished
+  collages are sorted by the NAS out of each `\Input` folder into sibling `YYYY\MM\DD` day-folders;
+  the service walks those and deletes a **whole day-folder** once its date (from the **folder name**,
+  not the file timestamp) is older than its `[Retention]` days.
 - **NG low-res linkage:** when an NG day-folder is deleted, the matching low-res individual images
   (linked by the 12-char serial prefix) are deleted with it.
 - **OK images (part exit):** an OK part's low-res individual images are handled immediately at part
@@ -1132,13 +1145,33 @@ Run images are those whose Field 1 starts with the 14-char BaseID (loop + paddin
   longer leaves them behind). There is **no `DeleteAfterCollage` switch** — it was dead config and was
   removed. A missing/empty source folder or a 0-match search is now a **WARNING** (it used to be a
   silent no-op — the cause of low-res images piling up in `Z:\01…\Input`).
-- **Backup folder retention:** the `BackupFolder` tree has no NAS sorter, so `ImageCleanupService`
-  ages it out by `[NAS] BackupRetentionDays` (same whole-day-folder rule; falls back to
-  `FullResRetentionDays`). Without this it would grow forever.
 - **DE trimmer image deletion (ST160):** on a `DE` part exit the trimmer's images are deleted by the
   full **13-char** trimmer serial across the low-res / NG / diagnostic roots (§5 Ch 2).
 - **Image search key:** first 12 chars of the SZID (Field 1) for NG linkage / Normal; the full
   13-char trimmer serial for DE deletion.
+
+### 11a. Central Retention (`RetentionService`, [Retention] section)
+
+**One service ages out EVERYTHING** (replaces the old image-only `ImageCleanupService`). Runs ~1 min
+after startup and then every 24 h. Every target has its own age in **days** in the `[Retention]`
+section; **`0` = never delete**. Nothing is silent — each target logs an INFO line (n deleted /
+nothing to do / disabled) and every path/access error is a WARNING with the path.
+
+| Target | `[Retention]` key | What / how |
+|--------|-------------------|------------|
+| NG (+linked low-res), Diagnostic, GoldenSample, Collage, Backup | `Images_*` | delete whole `YYYY\MM\DD` day-folders older than N |
+| `…\Input` leftovers | `Images_InputLeftovers` (default 3) | files left in an `\Input` folder past N days = failed-run remnants → delete + **WARNING** (low-res Input keeps NG-flagged files) |
+| MSA reports | `Reports_MSA` (**default 0 = never**) | dated folders under `[MSA] ReportPath` |
+| CSV Merge / Evaluation / ExtraResults | `CSV_Merge` / `CSV_Evaluation` / `CSV_ExtraResults` | `YYYY\MM\DD` day-folders |
+| Production DB | `Database_Production` | `measurements_serial(_trimmer)` via **DROP PARTITION** (standing rule — never DELETE on partitioned tables); `dmcserial` via bounded **batch DELETE** (`LIMIT 10000`, short pauses → no long locks) |
+| MSA DB | `Database_MSA` (**default 0 = never**) | `msa_measurements`, `msa_results` via batch DELETE |
+
+**Master data (`settings`, `setting_definitions`, `measurement_definitions`, `cameras`) is NEVER
+touched.** `Database_MSA` and `Reports_MSA` default to **0 (never)** on purpose — they are QS data;
+only the customer/QS enables ageing. **Legacy keys** (`[MySQL] RetentionPeriodDays`, `[NAS]
+Retention*Days` / `BackupRetentionDays` / `FullResRetentionDays`) are still read as a **deprecated
+fallback** with a WARNING when the matching `[Retention]` key is absent; the live INI is migrated so
+no fallback fires there.
 
 ---
 

@@ -102,8 +102,8 @@ public partial class App : Application
             var csv = _services.GetRequiredService<ICsvService>();
             _ = Task.Run(() => csv.StartAsync(_shutdownCts.Token));
 
-            var imageCleanup = _services.GetRequiredService<IImageCleanupService>();
-            _ = Task.Run(() => imageCleanup.StartAsync(_shutdownCts.Token));
+            var retention = _services.GetRequiredService<IRetentionService>();
+            _ = Task.Run(() => retention.StartAsync(_shutdownCts.Token));
 
             var msa = _services.GetRequiredService<IMsaService>();
             _ = Task.Run(() => msa.StartAsync(_shutdownCts.Token));
@@ -210,7 +210,7 @@ public partial class App : Application
                 _services?.GetService<IPartExitOrchestrator>()?.StopAsync(),
                 _services?.GetService<ICsvService>()?.StopAsync(),
                 _services?.GetService<IMsaService>()?.StopAsync(),
-                _services?.GetService<IImageCleanupService>()?.StopAsync(),
+                _services?.GetService<IRetentionService>()?.StopAsync(),
                 _services?.GetService<ICollageService>()?.StopAsync(),
             }.Where(t => t is not null).Cast<Task>().ToArray();
 
@@ -286,8 +286,8 @@ public partial class App : Application
         // --- CSV export (Phase 7): main per-part CSV ---
         services.AddSingleton<ICsvService, CsvExportService>();
 
-        // --- Image cleanup (Phase 8) + MSA engine (Phase 10) ---
-        services.AddSingleton<IImageCleanupService, ImageCleanupService>();
+        // --- Central retention (Phase 8: images + reports + CSV + DB) + MSA engine (Phase 10) ---
+        services.AddSingleton<IRetentionService, RetentionService>();
         services.AddSingleton<MsaReferenceLoader>();
         services.AddSingleton<IPdfReportService, PdfReportService>();
         services.AddSingleton<IMsaService, MsaService>();

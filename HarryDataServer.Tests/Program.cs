@@ -59,7 +59,10 @@ internal static class Program
         PartExit_TrimmerNormalisedTo13();
         PartExit_DeParsesAsDeleted();
         DeImageDelete_MatchesFullTrimmerPrefix_NotAdjacent();
+        DePartExit_NoDbNoCsv_DeletesImages_Logs();
         BackupRoot_NonInputPathIsItsOwnRoot();
+        Retention_NewSectionWins_And_ZeroMeansNever();
+        Retention_LegacyKeysFallBack_WithDeprecation();
 
         Console.WriteLine();
         if (_failures == 0)
@@ -573,12 +576,220 @@ internal static class Program
             ImageFileName.SortedRoot(@"Z:\01_Low_Resolution_Individual\Input"));
     }
 
+    private static void Retention_NewSectionWins_And_ZeroMeansNever()
+    {
+        Console.WriteLine("[Case AD] [Retention] section: values applied, 0 = never, defaults for absent keys");
+        var ini = Path.Combine(Path.GetTempPath(), "hds_ret_" + Guid.NewGuid().ToString("N") + ".ini");
+        File.WriteAllText(ini,
+            "[Retention]\r\n" +
+            "Images_NG=10\r\n" +
+            "Images_InputLeftovers=2\r\n" +
+            "Database_MSA=0\r\n" +
+            "Reports_MSA=0\r\n" +
+            "Database_Production=42\r\n");
+        try
+        {
+            var ret = new IniConfigManager().Load(ini).Retention;
+            AssertEqual("Images_NG applied", 10, ret.ImagesNg);
+            AssertEqual("Images_InputLeftovers applied", 2, ret.ImagesInputLeftovers);
+            AssertEqual("Database_MSA = 0 (never)", 0, ret.DatabaseMsa);
+            AssertEqual("Reports_MSA = 0 (never)", 0, ret.ReportsMsa);
+            AssertEqual("Database_Production applied", 42, ret.DatabaseProduction);
+            AssertEqual("CSV_Merge default 365", 365, ret.CsvMerge);
+            AssertEqual("Images_Collage default 30", 30, ret.ImagesCollage);
+            AssertEqual("no deprecations when [Retention] is used", 0, ret.Deprecations.Count);
+        }
+        finally { try { File.Delete(ini); } catch { /* best effort */ } }
+    }
+
+    private static void Retention_LegacyKeysFallBack_WithDeprecation()
+    {
+        Console.WriteLine("[Case AE] Legacy retention keys fall back into [Retention] with a deprecation WARNING");
+        var ini = Path.Combine(Path.GetTempPath(), "hds_retlegacy_" + Guid.NewGuid().ToString("N") + ".ini");
+        // No [Retention] section: values must come from the legacy [MySQL]/[NAS] keys.
+        File.WriteAllText(ini,
+            "[MySQL]\r\nRetentionPeriodDays=50\r\n\r\n" +
+            "[NAS]\r\nRetentionNGDays=20\r\nBackupRetentionDays=7\r\n");
+        try
+        {
+            var ret = new IniConfigManager().Load(ini).Retention;
+            AssertEqual("Database_Production from legacy RetentionPeriodDays", 50, ret.DatabaseProduction);
+            AssertEqual("Images_NG from legacy RetentionNGDays", 20, ret.ImagesNg);
+            AssertEqual("Images_Backup from legacy BackupRetentionDays", 7, ret.ImagesBackup);
+            AssertTrue("deprecation recorded for Database_Production",
+                ret.Deprecations.Any(d => d.Contains("RetentionPeriodDays") && d.Contains("Database_Production")));
+            AssertTrue("deprecation recorded for Images_NG",
+                ret.Deprecations.Any(d => d.Contains("RetentionNGDays") && d.Contains("Images_NG")));
+        }
+        finally { try { File.Delete(ini); } catch { /* best effort */ } }
+    }
+
+    private static void DePartExit_NoDbNoCsv_DeletesImages_Logs()
+    {
+        Console.WriteLine("[Case AC] DE part exit: NO dmcserial, NO CSV, images deleted, INFO logged");
+        var root = Path.Combine(Path.GetTempPath(), "hds_dep_" + Guid.NewGuid().ToString("N"));
+        var input = Path.Combine(root, "Input");
+        Directory.CreateDirectory(input);
+        try
+        {
+            const string trimmer = "2607230000810";
+            var img = Path.Combine(input, $"{trimmer}-000-1-M20_ST060_KF1-1-&Cam1.bmp");
+            File.WriteAllText(img, "x");
+
+            SerialNumberHelper.ConfigureTrimmer(13);
+            var cfg = new AppConfig { Nas = new NasConfig { LowResIndividualPath = input } };
+            var db = new ThrowingDb();     // must never be opened for DE
+            var csv = new RecordingCsv();  // WritePartAsync must never be called for DE
+            var collage = new RecordingCollage();
+            var sps = new HandlerCaptureSps();
+            var log = new RecordingLog();
+
+            var orch = new PartExitOrchestrator(sps, db, csv, collage,
+                new ImageHandler(log), new StubConfig2(cfg), new NoopHealth(), log);
+            orch.StartAsync(CancellationToken.None).GetAwaiter().GetResult();
+            AssertTrue("orchestrator registered a part-exit handler", sps.PartExitHandler is not null);
+
+            var de = SpsPartExitData.TryParse(string.Join(";",
+                "", "", trimmer, "1117", "Normal", "20", "2", "20", "2", "30", "3", "4", "1.0", "2.0", "DE"))!;
+            var ack = sps.PartExitHandler!(de).GetAwaiter().GetResult();
+
+            AssertTrue("ACK success", ack);
+            AssertTrue("no dmcserial write (DB never opened)", !db.Opened);
+            AssertTrue("no CSV row written", !csv.WriteCalled);
+            AssertTrue("no collage composed", !collage.ComposeCalled);
+            AssertTrue("trimmer image deleted", !File.Exists(img));
+            AssertTrue("INFO 'DE: … deleted' logged",
+                log.Messages.Any(m => m.Contains("DE:") && m.Contains("deleted")));
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); } catch { /* best effort */ }
+        }
+    }
+
     /// <summary>Minimal IConfigService stub for the PDF-name test (never reads config when OutputDirectory is set).</summary>
     private sealed class StubConfig : IConfigService
     {
         public AppConfig Config { get; } = new();
         public string IniPath => string.Empty;
         public AppConfig Reload() => Config;
+    }
+
+    // ---- Stubs for the DE part-exit orchestrator test (Case AC) ----
+
+    private sealed class StubConfig2 : IConfigService
+    {
+        private readonly AppConfig _cfg;
+        public StubConfig2(AppConfig cfg) => _cfg = cfg;
+        public AppConfig Config => _cfg;
+        public string IniPath => string.Empty;
+        public AppConfig Reload() => _cfg;
+    }
+
+    /// <summary>DB stub that flags (and refuses) any connection — proves DE never writes dmcserial.</summary>
+    private sealed class ThrowingDb : IDatabaseService
+    {
+        public bool Opened { get; private set; }
+        public DatabaseStatus Status => DatabaseStatus.Ready;
+        public event Action<DatabaseStatus>? StatusChanged { add { } remove { } }
+        public Task StartAsync(CancellationToken ct) => Task.CompletedTask;
+        public Task<MySqlConnector.MySqlConnection> OpenConnectionAsync(CancellationToken ct = default)
+        {
+            Opened = true;
+            throw new InvalidOperationException("DB must not be touched for a DE part exit");
+        }
+        public Task<IReadOnlyDictionary<string, long>> GetRowCountsAsync(CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyDictionary<string, long>>(new Dictionary<string, long>());
+        public Task<ProductionSnapshot> GetProductionSnapshotAsync(CancellationToken ct = default)
+            => Task.FromResult(new ProductionSnapshot(0, 0, null, string.Empty));
+        public Task<MySqlServerStatus> GetServerStatusAsync(CancellationToken ct = default)
+            => Task.FromResult(new MySqlServerStatus(false, 0, TimeSpan.Zero));
+    }
+
+    private sealed class RecordingCsv : ICsvService
+    {
+        public bool WriteCalled { get; private set; }
+        public int PendingCount => 0;
+        public long TotalRows => 0;
+        public string? ActiveFilePath => null;
+        public DateTime? LastWriteTime => null;
+        public event Action? StatsChanged { add { } remove { } }
+        public Task<bool> WritePartAsync(SpsPartExitData part, CancellationToken ct = default)
+        {
+            WriteCalled = true;
+            return Task.FromResult(true);
+        }
+        public Task StartAsync(CancellationToken ct) => Task.CompletedTask;
+        public Task StopAsync() => Task.CompletedTask;
+    }
+
+    private sealed class RecordingCollage : ICollageService
+    {
+        public bool ComposeCalled { get; private set; }
+        public int PendingCount => 0;
+        public long TotalGenerated => 0;
+        public event Action? StatsChanged { add { } remove { } }
+        public event Action<string, DateTime>? CollageGenerated { add { } remove { } }
+        public Task<bool> ComposeForPartAsync(SpsPartExitData part, CancellationToken ct)
+        {
+            ComposeCalled = true;
+            return Task.FromResult(true);
+        }
+        public Task StartAsync(CancellationToken ct) => Task.CompletedTask;
+        public Task StopAsync() => Task.CompletedTask;
+    }
+
+    /// <summary>SPS stub that just captures the part-exit handler the orchestrator registers.</summary>
+    private sealed class HandlerCaptureSps : ISpsServer
+    {
+        public bool IsRunning => false;
+        public int ListeningChannels => 0;
+        public int ActiveConnections => 0;
+        public event Action? StatusChanged { add { } remove { } }
+        public event EventHandler<SpsPartExitEventArgs>? PartExitReceived { add { } remove { } }
+        public event Action<SpsChannel, bool, string>? ChannelActivity { add { } remove { } }
+        public int ConnectionsOn(SpsChannel channel) => 0;
+        public Func<string, string, string>? MsaRequestHandler { get; set; }
+        public Task<bool> PushMsaResultAsync(string moduleKey, string baseId, string status, CancellationToken ct = default)
+            => Task.FromResult(true);
+        public Func<SpsPartExitData, Task<bool>>? PartExitHandler { get; set; }
+        public Task StartAsync(CancellationToken ct) => Task.CompletedTask;
+        public Task StopAsync() => Task.CompletedTask;
+    }
+
+    private sealed class NoopHealth : ISystemHealth
+    {
+        public void Report(string source, HealthSeverity severity, string message, TimeSpan? ttl = null) { }
+        public void Clear(string source) { }
+        public HealthSnapshot Snapshot() => new(null, "OK", string.Empty, Array.Empty<HealthFault>());
+        public event Action? Changed { add { } remove { } }
+    }
+
+    /// <summary>Log that renders {placeholder} messages to text so assertions can match the final line.</summary>
+    private sealed class RecordingLog : ILogService
+    {
+        public List<string> Messages { get; } = new();
+        private void Add(string message, object?[] p)
+        {
+            var text = message;
+            var i = 0;
+            while (i < p.Length)
+            {
+                var open = text.IndexOf('{');
+                if (open < 0) break;
+                var close = text.IndexOf('}', open);
+                if (close < 0) break;
+                text = text[..open] + (p[i]?.ToString() ?? string.Empty) + text[(close + 1)..];
+                i++;
+            }
+            Messages.Add(text);
+        }
+        public void Debug(string message, params object?[] p) => Add(message, p);
+        public void Information(string message, params object?[] p) => Add(message, p);
+        public void Warning(string message, params object?[] p) => Add(message, p);
+        public void Error(string message, params object?[] p) => Add(message, p);
+        public void Error(Exception exception, string message, params object?[] p) => Add(message, p);
+        public void Shutdown() { }
     }
 
     // ---- helpers -----------------------------------------------------------
