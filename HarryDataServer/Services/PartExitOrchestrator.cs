@@ -85,14 +85,15 @@ public sealed class PartExitOrchestrator : IPartExitOrchestrator
             return true;
         }
 
-        // DE (ST160): a rejected trimmer sub-assembly is never put into a frame, so it is NOT a
-        // finished part. Delete its images only — write NOTHING to dmcserial and NOTHING to the
-        // production CSV. The trimmer's measurements_serial_trimmer rows stay untouched and (with the
-        // "DE: n … deleted" log line) are the sole record of the removal.
+        // DE (ST160): a scrapped part. It is NOT a finished part, so write NOTHING to dmcserial and
+        // NOTHING to the production CSV — only purge its images. DE is polymorphic on the live line:
+        // most carry the full frame SZID (assembled part discarded), a few only the trimmer serial
+        // (loose rejected trimmer), so we delete by BOTH serials when present. The measurement rows
+        // stay untouched; the "DE: n … deleted" log line is the record of the removal.
         if (data.Result == PartResult.Deleted)
         {
             long deMs = 0;
-            var deOk = await RunDeTrimmerDeleteAsync(data, ms => deMs = ms, ct).ConfigureAwait(false);
+            var deOk = await RunDeImageDeleteAsync(data, ms => deMs = ms, ct).ConfigureAwait(false);
             total.Stop();
             LastTiming = $"DE image delete {deMs}ms | Total {total.ElapsedMilliseconds}ms";
             Interlocked.Increment(ref _totalProcessed);
@@ -188,20 +189,23 @@ public sealed class PartExitOrchestrator : IPartExitOrchestrator
     }
 
     /// <summary>
-    /// DE (ST160) image purge for a rejected trimmer sub-assembly. Searches the low-res individual,
-    /// high-res NG and high-res diagnostic roots (each recursively, incl. NAS-sorted day-folders) for
-    /// images whose Field 1 starts with the normalised 13-char trimmer serial, and deletes them.
-    /// 0 matches is a WARNING (not a failure); only a real exception fails the ACK.
+    /// DE (ST160) image purge for a scrapped part. Deletes every image whose Field 1 starts with the
+    /// part's frame SZID (19) OR its trimmer serial (13) — whichever the DE telegram carries — across
+    /// the low-res individual, high-res NG and high-res diagnostic roots (each recursively, incl. the
+    /// NAS-sorted day-folders). 0 matches is a WARNING (not a failure); only a real exception fails
+    /// the ACK. No DB or CSV write (see the caller).
     /// </summary>
-    private async Task<bool> RunDeTrimmerDeleteAsync(SpsPartExitData data, Action<long> setMs, CancellationToken ct)
+    private async Task<bool> RunDeImageDeleteAsync(SpsPartExitData data, Action<long> setMs, CancellationToken ct)
     {
         var sw = Stopwatch.StartNew();
         try
         {
-            var trimmer = data.VirtualSerial;
-            if (string.IsNullOrWhiteSpace(trimmer))
+            var serials = new[] { data.Szid, data.VirtualSerial }
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .ToArray();
+            if (serials.Length == 0)
             {
-                _log.Warning("DE part exit without a trimmer serial (SZID='{Szid}'); no images to delete.", data.Szid);
+                _log.Warning("DE part exit with neither a frame nor a trimmer serial; nothing to delete.");
                 return true;
             }
 
@@ -210,17 +214,18 @@ public sealed class PartExitOrchestrator : IPartExitOrchestrator
                 .Where(p => !string.IsNullOrWhiteSpace(p))
                 .ToArray();
 
-            var deleted = await _images.DeleteByTrimmerSerialAsync(trimmer, roots, ct).ConfigureAwait(false);
+            var joined = string.Join(", ", serials);
+            var deleted = await _images.DeleteBySerialsAsync(serials, roots, ct).ConfigureAwait(false);
             if (deleted > 0)
-                _log.Information("DE: {Count} trimmer image(s) for {Serial} deleted.", deleted, trimmer);
+                _log.Information("DE: {Count} image(s) deleted for {Serials}.", deleted, joined);
             else
-                _log.Warning("DE: no images found for trimmer {Serial} (searched {Roots}).",
-                    trimmer, string.Join(", ", roots));
+                _log.Warning("DE: no images found for {Serials} (searched {Roots}).",
+                    joined, string.Join(", ", roots));
             return true;
         }
         catch (Exception ex)
         {
-            _log.Error(ex, "DE trimmer image deletion failed for {Serial}.", data.VirtualSerial);
+            _log.Error(ex, "DE image deletion failed for SZID='{Szid}' trimmer='{Trimmer}'.", data.Szid, data.VirtualSerial);
             return false;
         }
         finally

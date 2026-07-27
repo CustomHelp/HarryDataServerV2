@@ -317,16 +317,20 @@ is answered with `<32×'0'>;false`). Empty fields are allowed:
   images are deleted, or backed up then deleted — see §11). MSA parts are acked but never touch the
   production tables.
 - **NG:** CSV export only; low-res images are kept and removed later with the full-res NG image.
-- **DE (deleted trimmer):** a rejected trimmer sub-assembly is **not** put into a frame, so it never
-  gets a normal part exit — **it is not a finished part**. ST160 sends a **DE** telegram (15 fields,
-  `ResultStatus=DE`, **SZID empty, the trimmer serial in field 2**). The server **deletes that
-  trimmer's images** — matched by the normalised **13-char** trimmer serial as the Field 1 prefix,
-  searched across the low-res, NG and diagnostic roots (incl. the NAS-sorted `YYYY\MM\DD`
-  day-folders) — and writes **NOTHING to `dmcserial` and NOTHING to the production CSV** (the early
-  DE branch in `HandleAsync` returns before `SaveDmcAsync`/`WritePartAsync`). The trimmer's existing
-  `measurements_serial_trimmer` rows are left untouched and, together with the log line
-  **`DE: n trimmer image(s) … deleted for <serial>`** (WARNING when 0 found), are the sole record of
-  the removal. (`ImageHandler.DeleteByTrimmerSerialAsync`.)
+- **DE (deleted part):** a scrapped part. It is **not a finished part**, so the early DE branch in
+  `HandleAsync` returns before `SaveDmcAsync`/`WritePartAsync` — **NOTHING is written to `dmcserial`
+  and NOTHING to the production CSV**. It only **purges the part's images**. DE is a full 15-field
+  telegram (`ResultStatus=DE`, `mode=Normal`) and is **polymorphic** on the live line (verified
+  2026-07-27 over 95 DE part-exits): **91 carry the full frame SZID** (an assembled/partly-assembled
+  part discarded — images across M1X/M5X, sometimes a DMC too) and **4 carry only the trimmer serial**
+  (a loose rejected trimmer, M2X images). The server therefore deletes by **both** the frame SZID (19)
+  **and** the trimmer serial (13) when present — matched as the Field 1 **prefix** (real filenames
+  store Field 1 as the serial right-padded with `0`, **no** separator, so `StartsWith` is exact and
+  never spills onto an adjacent serial), searched across the low-res, NG and diagnostic roots (incl.
+  the NAS-sorted `YYYY\MM\DD` day-folders). The measurement rows are left untouched; the log line
+  **`DE: n image(s) deleted for <serials>`** (WARNING when 0 found) is the sole record of the removal.
+  (`ImageHandler.DeleteBySerialsAsync`.) DE always parses correctly as `PartResult.Deleted` (no
+  malformed telegrams in the live logs), so no parsing change is needed.
 
 ### Channels 3–7 — MSA Evaluation Trigger
 
@@ -1145,10 +1149,11 @@ Run images are those whose Field 1 starts with the 14-char BaseID (loop + paddin
   longer leaves them behind). There is **no `DeleteAfterCollage` switch** — it was dead config and was
   removed. A missing/empty source folder or a 0-match search is now a **WARNING** (it used to be a
   silent no-op — the cause of low-res images piling up in `Z:\01…\Input`).
-- **DE trimmer image deletion (ST160):** on a `DE` part exit the trimmer's images are deleted by the
-  full **13-char** trimmer serial across the low-res / NG / diagnostic roots (§5 Ch 2).
-- **Image search key:** first 12 chars of the SZID (Field 1) for NG linkage / Normal; the full
-  13-char trimmer serial for DE deletion.
+- **DE image deletion (ST160):** on a `DE` part exit the scrapped part's images are deleted by the
+  full frame **SZID (19)** and/or the **trimmer serial (13)** — whichever the telegram carries —
+  across the low-res / NG / diagnostic roots (§5 Ch 2). No `dmcserial`/CSV write.
+- **Image search key:** first 12 chars of the SZID (Field 1) for NG linkage / Normal; the full frame
+  SZID (19) and/or trimmer serial (13) as an exact Field-1 prefix for DE deletion.
 
 ### 11a. Central Retention (`RetentionService`, [Retention] section)
 

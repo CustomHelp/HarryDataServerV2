@@ -78,22 +78,25 @@ public sealed class ImageHandler
     }
 
     /// <summary>
-    /// DE (ST160): delete every image belonging to a rejected trimmer sub-assembly. Such a trimmer
-    /// never entered a frame, so there is no normal part-exit — ST160 sends DE carrying only the
-    /// trimmer serial to purge its images. Matching is by the (normalised, 13-char) trimmer serial
-    /// as the Field 1 PREFIX: a 12-char key would spill onto an adjacent serial (trimmer serials
-    /// differ only in the 13th char), so the full serial is required. Each root is searched
-    /// recursively, which covers both the live <c>\Input</c> folder and the NAS-sorted
-    /// <c>YYYY\MM\DD</c> day-folders beside it. Returns the number of images deleted.
-    /// Failures are logged as WARNING (never swallowed) and do not abort the sweep.
+    /// DE (ST160): delete every image belonging to a scrapped part. DE is polymorphic on the live
+    /// line — most DE telegrams carry the full frame SZID (a fully/partly assembled part being
+    /// discarded, images across M1X/M5X), a few carry only the trimmer serial (a loose rejected
+    /// trimmer, M2X images). We therefore purge by BOTH the frame SZID (19) and the trimmer serial
+    /// (13) when present. Matching is by the normalised serial as the Field 1 PREFIX — the real
+    /// filenames store Field 1 as the serial right-padded with '0' (no separators), so
+    /// <c>Field1.StartsWith(serial)</c> is exact and cannot spill onto an adjacent serial. Each root
+    /// is searched recursively, covering both the live <c>\Input</c> folder and the NAS-sorted
+    /// <c>YYYY\MM\DD</c> day-folders. Returns the number of images deleted. Failures are logged as
+    /// WARNING (never swallowed) and do not abort the sweep.
     /// </summary>
-    public Task<int> DeleteByTrimmerSerialAsync(
-        string trimmerSerial, IReadOnlyList<string> imageRoots, CancellationToken ct) =>
-        Task.Run(() => DeleteByTrimmerSerial(trimmerSerial, imageRoots), ct);
+    public Task<int> DeleteBySerialsAsync(
+        IReadOnlyList<string> serials, IReadOnlyList<string> imageRoots, CancellationToken ct) =>
+        Task.Run(() => DeleteBySerials(serials, imageRoots), ct);
 
-    private int DeleteByTrimmerSerial(string trimmerSerial, IReadOnlyList<string> imageRoots)
+    private int DeleteBySerials(IReadOnlyList<string> serials, IReadOnlyList<string> imageRoots)
     {
-        if (string.IsNullOrWhiteSpace(trimmerSerial))
+        var keys = serials.Where(s => !string.IsNullOrWhiteSpace(s)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        if (keys.Count == 0)
             return 0;
 
         var deleted = 0;
@@ -110,15 +113,15 @@ public sealed class ImageHandler
             }
             catch (Exception ex)
             {
-                _log.Warning("DE: cannot enumerate '{Root}' for trimmer '{Serial}': {Message}",
-                    sortedRoot, trimmerSerial, ex.Message);
+                _log.Warning("DE: cannot enumerate '{Root}' for [{Serials}]: {Message}",
+                    sortedRoot, string.Join(", ", keys), ex.Message);
                 continue;
             }
 
             foreach (var file in files)
             {
                 var field1 = ImageFileName.Field1Of(Path.GetFileName(file));
-                if (field1 is null || !field1.StartsWith(trimmerSerial, StringComparison.OrdinalIgnoreCase))
+                if (field1 is null || !keys.Any(k => field1.StartsWith(k, StringComparison.OrdinalIgnoreCase)))
                     continue;
                 try
                 {
@@ -127,8 +130,8 @@ public sealed class ImageHandler
                 }
                 catch (Exception ex)
                 {
-                    _log.Warning("DE: failed to delete '{File}' for trimmer '{Serial}': {Message}",
-                        file, trimmerSerial, ex.Message);
+                    _log.Warning("DE: failed to delete '{File}' for [{Serials}]: {Message}",
+                        file, string.Join(", ", keys), ex.Message);
                 }
             }
         }

@@ -58,7 +58,7 @@ internal static class Program
         TrimmerSerial_NormalizesTo13_FramesStayAt19();
         PartExit_TrimmerNormalisedTo13();
         PartExit_DeParsesAsDeleted();
-        DeImageDelete_MatchesFullTrimmerPrefix_NotAdjacent();
+        DeImageDelete_MatchesFrameAndTrimmer_NotAdjacent();
         DePartExit_NoDbNoCsv_DeletesImages_Logs();
         BackupRoot_NonInputPathIsItsOwnRoot();
         Retention_NewSectionWins_And_ZeroMeansNever();
@@ -529,9 +529,9 @@ internal static class Program
         AssertEqual("trimmer carried", trimmer, data.VirtualSerial);
     }
 
-    private static void DeImageDelete_MatchesFullTrimmerPrefix_NotAdjacent()
+    private static void DeImageDelete_MatchesFrameAndTrimmer_NotAdjacent()
     {
-        Console.WriteLine("[Case AA] DE image delete: full-13 prefix, incl. sorted day-folders, no adjacent spill");
+        Console.WriteLine("[Case AA] DE image delete: frame SZID + trimmer, padded Field1, sorted day-folders, no adjacent spill");
         var root = Path.Combine(Path.GetTempPath(), "hds_de_" + Guid.NewGuid().ToString("N"));
         var input = Path.Combine(root, "Input");
         var day = Path.Combine(root, "2026", "07", "23");
@@ -539,28 +539,35 @@ internal static class Program
         Directory.CreateDirectory(day);
         try
         {
-            const string target = "2607230000810";
-            const string adjacent = "2607230000811"; // differs only in the 13th char
+            const string szid = "2707261602460031771";  // 19-char frame serial
+            const string trimmer = "2607230000810";       // 13-char trimmer serial
+            const string adjacent = "2607230000811";       // differs only in the 13th char
 
-            var targetInput = Path.Combine(input, $"{target}-000-1-M20_ST060_KF1-1-&Cam1.bmp");
-            var targetDay = Path.Combine(day, $"{target}-000-0-M20_ST060_KF3-2-&Cam2.png");
-            var adjacentFile = Path.Combine(input, $"{adjacent}-000-1-M20_ST060_KF1-1-&Cam1.bmp");
-            File.WriteAllText(targetInput, "x");
-            File.WriteAllText(targetDay, "x");
-            File.WriteAllText(adjacentFile, "x");
-            File.WriteAllText(Path.Combine(input, "readme.txt"), "x"); // no Field1 → ignored
+            // Real Field 1 form on the line: the serial right-padded with '0' to the field width
+            // (no separators), then the hyphen-delimited tail.
+            string Name(string serial, string ctrl) =>
+                $"{serial.PadRight(32, '0')}-{new string('0', 32)}-1-{ctrl}-1-&Cam1Img.bmp";
+
+            var frameFile = Path.Combine(day, Name(szid, "M50_ST040_KF1"));    // frame image in a sorted day-folder
+            var trimmerFile = Path.Combine(input, Name(trimmer, "M20_ST060_KF1"));
+            var adjacentFile = Path.Combine(input, Name(adjacent, "M20_ST060_KF1"));
+            var unrelated = Path.Combine(input, Name("2707269999990039999", "M50_ST040_KF1"));
+            foreach (var f in new[] { frameFile, trimmerFile, adjacentFile, unrelated })
+                File.WriteAllText(f, "x");
+            File.WriteAllText(Path.Combine(input, "readme.txt"), "x"); // no Field1 -> ignored
 
             var handler = new ImageHandler(new NullLog());
-            // Pass the …\Input path (like the config): SortedRoot expands it so both \Input and the
-            // sorted YYYY\MM\DD day-folder are searched.
+            // Pass the ...\Input path (like the config): SortedRoot expands it so both \Input and the
+            // sorted YYYY\MM\DD day-folder are searched. Delete by BOTH the frame and the trimmer serial.
             var deleted = handler
-                .DeleteByTrimmerSerialAsync(target, new[] { input }, CancellationToken.None)
+                .DeleteBySerialsAsync(new[] { szid, trimmer }, new[] { input }, CancellationToken.None)
                 .GetAwaiter().GetResult();
 
-            AssertEqual("deleted both target images (Input + day-folder)", 2, deleted);
-            AssertTrue("target Input image gone", !File.Exists(targetInput));
-            AssertTrue("target day-folder image gone", !File.Exists(targetDay));
-            AssertTrue("adjacent serial survived (no 12-char spill)", File.Exists(adjacentFile));
+            AssertEqual("deleted frame + trimmer image", 2, deleted);
+            AssertTrue("frame image (day-folder) gone", !File.Exists(frameFile));
+            AssertTrue("trimmer image gone", !File.Exists(trimmerFile));
+            AssertTrue("adjacent trimmer survived (no 13th-char spill)", File.Exists(adjacentFile));
+            AssertTrue("unrelated part survived", File.Exists(unrelated));
         }
         finally
         {
