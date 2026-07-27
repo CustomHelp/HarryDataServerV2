@@ -33,6 +33,14 @@ public sealed class GeneralConfig
     /// <see cref="HarryDataServer.Infrastructure.SerialNumberHelper"/>). Default 19 (live line).
     /// </summary>
     public int SerialNumberLength { get; init; } = HarryDataServer.Infrastructure.SerialNumberHelper.DefaultMeaningfulLength;
+
+    /// <summary>
+    /// Meaningful (unpadded) length of a TRIMMER serial (M20/M21 Virtual Serial). The camera pads it
+    /// with trailing '0'; the SPS delivers it unpadded (13 chars on the live line). Both are normalised
+    /// to this length so measurements_serial_trimmer matches the part-exit serial and trimmer image
+    /// search works. Default 13 (live line).
+    /// </summary>
+    public int TrimmerSerialNumberLength { get; init; } = HarryDataServer.Infrastructure.SerialNumberHelper.DefaultTrimmerLength;
 }
 
 public sealed class MySqlConfig
@@ -76,7 +84,6 @@ public sealed class DiagnosticConfig
 
 public sealed class NasConfig
 {
-    public string BasePath { get; init; } = string.Empty;
     public string LowResIndividualPath { get; init; } = string.Empty;
     public string CollagePath { get; init; } = string.Empty;
     public string HighResNgPath { get; init; } = string.Empty;
@@ -94,13 +101,16 @@ public sealed class NasConfig
     /// fallback for the per-type NG/Diagnostic/GoldenSample retention when those are unset.</summary>
     public int FullResRetentionDays { get; init; } = 30;
 
-    public bool DeleteAfterCollage { get; init; } = true;
-
     /// <summary>Part-exit image handling: true = delete source images; false = backup then delete.</summary>
     public bool DeletePictures { get; init; } = true;
 
     /// <summary>Root backup folder (used when DeletePictures = false). Structure: \YYYY\MM\DD\.</summary>
     public string BackupFolder { get; init; } = string.Empty;
+
+    /// <summary>Retention (days) for the part-exit backup folder (<c>[NAS] BackupRetentionDays</c>).
+    /// The backup tree grows with every OK part when DeletePictures=false, so it must be cleaned like
+    /// the other sorted day-folders. Falls back to <see cref="FullResRetentionDays"/> when unset.</summary>
+    public int BackupRetentionDays { get; init; } = 30;
 }
 
 public sealed class CollageConfig

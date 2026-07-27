@@ -73,11 +73,12 @@ public sealed class SpsPartExitData
         return new SpsPartExitData
         {
             Dmc = f[0].Trim(),
-            // Normalise the frame + trimmer serials to the canonical (unpadded) form so they match
+            // Normalise the frame + trimmer serials to their canonical (unpadded) form so they match
             // the serials the camera pipeline stored in measurements_serial(_trimmer) (Problem 1).
-            // The DMC is a separate, wider field and is left as-is.
+            // The frame SZID uses the frame length (19); the trimmer uses its own length (13) — see
+            // SerialNumberHelper. The DMC is a separate, wider field and is left as-is.
             Szid = SerialNumberHelper.Normalize(f[1]),
-            VirtualSerial = SerialNumberHelper.Normalize(f[2]),
+            VirtualSerial = SerialNumberHelper.NormalizeTrimmer(f[2]),
             OrderName = f[3].Trim(),
             Mode = f[4].Trim(),
             M1xModule = ParseInt(f[5]),

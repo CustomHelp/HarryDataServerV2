@@ -87,6 +87,11 @@ public sealed class ImageCleanupService : IImageCleanupService
         CleanupSortedDayFolders(nas.HighResGoldenSamplePath, nas.RetentionGoldenSampleDays, null);
         CleanupSortedDayFolders(nas.CollagePath, nas.RetentionCollageDays, null);
 
+        // Part-exit backup (DeletePictures=false copies OK-part images to BackupFolder\YYYY\MM\DD).
+        // This tree has no NAS sorter, so without its own retention it would grow forever — clean it
+        // by the same day-folder age rule.
+        CleanupSortedDayFolders(nas.BackupFolder, nas.BackupRetentionDays, null);
+
         // Drop expired DB partitions (never DELETE) once the database is ready.
         if (_database.Status == DatabaseStatus.Ready)
         {

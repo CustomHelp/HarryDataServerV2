@@ -91,6 +91,7 @@ public sealed class IniConfigManager
             LoggingActive = Bool(s, "LoggingActive", true),
             Language = Str(s, "Language", "English"),
             SerialNumberLength = Int(s, "SerialNumberLength", Infrastructure.SerialNumberHelper.DefaultMeaningfulLength),
+            TrimmerSerialNumberLength = Int(s, "TrimmerSerialNumberLength", Infrastructure.SerialNumberHelper.DefaultTrimmerLength),
         };
     }
 
@@ -147,7 +148,6 @@ public sealed class IniConfigManager
         var fullRes = Int(s, "FullResRetentionDays", 30);
         return new NasConfig
         {
-            BasePath = Str(s, "NAS_BasePath", string.Empty),
             LowResIndividualPath = Str(s, "LowResIndividualPath", string.Empty),
             CollagePath = Str(s, "CollagePath", string.Empty),
             HighResNgPath = Str(s, "HighResNGPath", string.Empty),
@@ -158,9 +158,9 @@ public sealed class IniConfigManager
             RetentionDiagnosticDays = Int(s, "RetentionDiagnosticDays", fullRes),
             RetentionGoldenSampleDays = Int(s, "RetentionGoldenSampleDays", fullRes),
             RetentionCollageDays = Int(s, "RetentionCollageDays", fullRes),
-            DeleteAfterCollage = Bool(s, "DeleteAfterCollage", true),
             DeletePictures = Bool(s, "DeletePictures", true),
             BackupFolder = Str(s, "BackupFolder", string.Empty),
+            BackupRetentionDays = Int(s, "BackupRetentionDays", fullRes),
         };
     }
 

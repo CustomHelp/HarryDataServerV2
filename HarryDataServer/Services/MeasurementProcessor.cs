@@ -108,10 +108,14 @@ public sealed class MeasurementProcessor : IMeasurementProcessor
         if (telegram.Mode != CameraOperatingMode.Normal)
             return;
 
-        // Serial1 is already normalised by the parser; run it through the single helper again so
-        // every write path canonicalises identically (drops controller padding, caps to 22) and the
-        // stored serial matches the SPS part-exit serial for the measurement lookup (Problem 1).
-        var serial = SerialNumberHelper.Normalize(telegram.Serial1);
+        // Routing decides the serial KIND: M2X carry the trimmer serial (13 chars), everyone else
+        // the frame SZID (19). Normalise with the matching length so measurements_serial_trimmer
+        // stores the same 13-char value the SPS delivers at part-exit (otherwise the lookup only
+        // matched via a prefix fallback WARNING and trimmer image search missed).
+        var isTrimmer = _isTrimmerByCamera.GetValueOrDefault(telegram.ControllerName);
+        var serial = isTrimmer
+            ? SerialNumberHelper.NormalizeTrimmer(telegram.Serial1)
+            : SerialNumberHelper.Normalize(telegram.Serial1);
         if (string.IsNullOrWhiteSpace(serial))
         {
             _log.Debug("{Camera}: results telegram without serial; skipped.", telegram.ControllerName);
@@ -127,7 +131,6 @@ public sealed class MeasurementProcessor : IMeasurementProcessor
             return;
         }
 
-        var isTrimmer = _isTrimmerByCamera.GetValueOrDefault(telegram.ControllerName);
         var measuredAt = DateTime.Now;
 
         // Combine each R_/V_ pair into ONE row (keyed by the R_ definition): result

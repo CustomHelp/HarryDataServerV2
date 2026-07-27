@@ -161,14 +161,24 @@ position — this check runs *before* the signal-word dispatch (`TelegramParser.
 > `SerialField.MaxLength = 22`). The **SPS part-exit telegram delivers the SAME serial UNPADDED**
 > (its true length, **19 chars** on the live line). To make the two compare equal (the part-exit
 > measurement lookup joins `measurements_serial(_trimmer)` ↔ `dmcserial` on the serial), **every
-> receive path normalises Serial1 through the single `Infrastructure/SerialNumberHelper.Normalize`**
-> — it drops the controller's trailing `0` padding down to the meaningful length
-> (`[General] SerialNumberLength`, **default 19**) *only when the tail past that length is all `0`*
-> (never a blind `TrimEnd('0')`, so a real serial that legitimately ends in `0` is preserved) and
-> caps to 22. Applied at `TelegramParser` (camera), `SpsPartExitData.TryParse` (frame + trimmer
-> serials) and `MeasurementProcessor`. The **DMC / Serial2 is a separate, wider field and is NOT
-> length-normalised**. **Serial2 (tokens 35–66)** keeps its full 32 chars (needed for DMC uniqueness
-> in MSA). Image-filename search still uses the 12/14-char prefix, unaffected by the change.
+> receive path normalises Serial1 through `Infrastructure/SerialNumberHelper`** — it drops the
+> controller's trailing `0` padding down to the meaningful length *only when the tail past that
+> length is all `0`* (never a blind `TrimEnd('0')`, so a real serial that legitimately ends in `0`
+> is preserved) and caps to 22.
+>
+> **Two serial KINDS, two lengths (confirmed 2026-07-27).** The FRAME serial (SZID, M1X/M5X) is
+> **19** (`[General] SerialNumberLength`, `Normalize`); the TRIMMER serial (Virtual Serial, M20/M21)
+> is a **shorter, separate format — 13** on the live line (`[General] TrimmerSerialNumberLength`,
+> `NormalizeTrimmer`). They must not share one length: the camera padded a 13-char trimmer to 19
+> (13 + 6 zeros) while the SPS delivered it at 13, so `measurements_serial_trimmer` and the part-exit
+> serial never matched — the part-exit CSV lookup fell back to a prefix match (a WARNING **2656×** in
+> the live logs) and trimmer image search missed. The trimmer length is applied at
+> `MeasurementProcessor` (M2X camera write) and `SpsPartExitData.TryParse` (VirtualSerial); the frame
+> length everywhere else. `Configure`/`ConfigureTrimmer` are set once at startup (`App.xaml.cs`).
+> The **DMC / Serial2 is a separate, wider field and is NOT length-normalised**. **Serial2 (tokens
+> 35–66)** keeps its full 32 chars. Image-filename search uses the 12/14-char prefix (frame/BaseID);
+> **DE trimmer image deletion uses the FULL 13-char serial** as the Field 1 prefix (a 12-char key
+> would spill onto the adjacent serial, which differs only in the 13th char).
 >
 > **Operating mode** is derived from the three flags at tokens 68–70: all 0 → `Normal`;
 > exactly one set → `MSA1` / `MSA3` / `LimitSample` (GoldenSample → `LimitSample`). Only one is
@@ -302,7 +312,18 @@ is answered with `<32×'0'>;false`). Empty fields are allowed:
 > `M2X_Module` / `M2X_Nest` are parsed as Int; `M3X_*` / `M50_Nest` stay String. Full protocol
 > spec for the PLC programmer: `SPS_Schnittstellen.md` §4.
 
-**Triggers after receiving:** CSV export, Collage generation, MSA evaluation (if MSA mode)
+**Triggers after receiving (`PartExitOrchestrator`):**
+- **OK:** CSV export ‖ Collage (if `Collage_Generate`) ‖ image handling (the part's low-res individual
+  images are deleted, or backed up then deleted — see §11). MSA parts are acked but never touch the
+  production tables.
+- **NG:** CSV export only; low-res images are kept and removed later with the full-res NG image.
+- **DE (deleted trimmer):** a rejected trimmer sub-assembly is **not** put into a frame, so it never
+  gets a normal part exit. ST160 sends a **DE** telegram (15 fields, `ResultStatus=DE`, **SZID empty,
+  the trimmer serial in field 2**). The server then **deletes that trimmer's images** — matched by
+  the normalised **13-char** trimmer serial as the Field 1 prefix, searched across the low-res, NG and
+  diagnostic roots (incl. the NAS-sorted `YYYY\MM\DD` day-folders) — and **keeps the DB rows**
+  (`dmcserial` `result_status=-1`, `measurements_serial_trimmer`) for traceability. Logs
+  **`DE: n trimmer image(s) … deleted`** on success, a **WARNING** when 0 are found. (`ImageHandler.DeleteByTrimmerSerialAsync`.)
 
 ### Channels 3–7 — MSA Evaluation Trigger
 
@@ -345,10 +366,14 @@ push with its request — format `<Status>;<BaseID>[;<description>]`:
 > Serial1 = tokens 3–34, Serial2 = tokens 35–66 (each 32 comma-tokens, see §4).
 
 ### Normal Mode
-- **M10/M11:** SZID (frame identity) in Serial1 (tokens 3–34). Serial2 empty.
-- **M20/M21:** Virtual Serial (trimmer identity) in Serial1 (tokens 3–34). Serial2 empty.
+- **M10/M11:** SZID (frame identity) in Serial1 (tokens 3–34). Serial2 empty. Normalised to the
+  **frame** length (`[General] SerialNumberLength`, **19**).
+- **M20/M21:** Virtual Serial (trimmer identity) in Serial1 (tokens 3–34). Serial2 empty. Normalised
+  to the **trimmer** length (`[General] TrimmerSerialNumberLength`, **13** — a shorter, separate
+  format; see §4). This is the length used for `measurements_serial_trimmer`, the part-exit lookup
+  and DE trimmer image deletion.
 - **M50:** SZID in Serial1 (tokens 3–34). Serial2 empty.
-- **Part Exit (Ch2):** All three known: DMC + SZID + VirtualSerial.
+- **Part Exit (Ch2):** All three known: DMC + SZID + VirtualSerial (SZID @19, VirtualSerial @13).
 
 ### MSA Modes (MSA1, MSA3, LimitSample)
 - Serial1 (tokens 3–34): **BaseID (14 chars) + 3-digit loop counter = a fixed 17-char run serial**
@@ -962,6 +987,8 @@ Location: configurable per camera in Harry.ini (`JsonParameters=` and `JsonSetti
 LogFilePath=D:\HarryDataServer\Logs\
 LoggingActive=true
 Language=English
+SerialNumberLength=19          ; meaningful (unpadded) FRAME serial length (SZID, M1X/M5X)
+TrimmerSerialNumberLength=13   ; meaningful (unpadded) TRIMMER serial length (Virtual Serial, M20/M21)
 
 [MySQL]
 Server=localhost
@@ -979,18 +1006,23 @@ CSVMSA_Save=true
 CSVDiagnostic_Save=true
 
 [NAS]
-NAS_BasePath=Z:\Images
-LowResIndividualPath=Z:\Images\01_Low_Resolution_Individual\Input
-CollagePath=Z:\Images\02_Collage\Input
-HighResNGPath=Z:\Images\03_High_Resolution_NG\Input
-HighResDiagnosticPath=Z:\Images\04_High_Resolution_Diagnostic\Input
-HighResGoldenSamplePath=Z:\Images\05_High_Resolution_GoldenSample\Input
+; Z:\ IS the images share, so the folders live directly under it (01_… … 06_…), NOT under Z:\Images.
+LowResIndividualPath=Z:\01_Low_Resolution_Individual\Input
+CollagePath=Z:\02_Low_Resolution_Collage\Input
+HighResNGPath=Z:\03_High_Resolution_NG\Input
+HighResDiagnosticPath=Z:\04_High_Resolution_Diagnostic\Input
+HighResGoldenSamplePath=Z:\05_High_Resolution_GoldenSample\Input
 FullResRetentionDays=30   ; default full-res retention (SOW §5.2.3); per-type keys fall back to it
 RetentionNGDays=30
 RetentionDiagnosticDays=30
 RetentionGoldenSampleDays=30
 RetentionCollageDays=30   ; finished-collage retention; falls back to FullResRetentionDays
-DeleteAfterCollage=true
+; Part-exit image handling for OK parts. There is NO 'delete after collage' switch — these two keys
+; decide it: DeletePictures=true deletes the source images; =false copies them to BackupFolder\YYYY\MM\DD
+; (size-verified) then deletes. The backup tree has no NAS sorter, so BackupRetentionDays ages it out.
+DeletePictures=false
+BackupFolder=Z:\06_Backup
+BackupRetentionDays=30     ; falls back to FullResRetentionDays
 
 [Collage]
 Collage_IniPath=D:\HarryDataServer\Collage.ini
@@ -1094,8 +1126,19 @@ Run images are those whose Field 1 starts with the 14-char BaseID (loop + paddin
   to `FullResRetentionDays`).
 - **NG low-res linkage:** when an NG day-folder is deleted, the matching low-res individual images
   (linked by the 12-char serial prefix) are deleted with it.
-- **OK images:** deleted after the collage is created (if configured).
-- **Image search key:** use only the first 12 characters of the SZID (Field 1).
+- **OK images (part exit):** an OK part's low-res individual images are handled immediately at part
+  exit — **deleted** (`[NAS] DeletePictures=true`) or **copied to `[NAS] BackupFolder\YYYY\MM\DD`
+  then deleted** (`DeletePictures=false`). This runs **regardless of collage** (a disabled collage no
+  longer leaves them behind). There is **no `DeleteAfterCollage` switch** — it was dead config and was
+  removed. A missing/empty source folder or a 0-match search is now a **WARNING** (it used to be a
+  silent no-op — the cause of low-res images piling up in `Z:\01…\Input`).
+- **Backup folder retention:** the `BackupFolder` tree has no NAS sorter, so `ImageCleanupService`
+  ages it out by `[NAS] BackupRetentionDays` (same whole-day-folder rule; falls back to
+  `FullResRetentionDays`). Without this it would grow forever.
+- **DE trimmer image deletion (ST160):** on a `DE` part exit the trimmer's images are deleted by the
+  full **13-char** trimmer serial across the low-res / NG / diagnostic roots (§5 Ch 2).
+- **Image search key:** first 12 chars of the SZID (Field 1) for NG linkage / Normal; the full
+  13-char trimmer serial for DE deletion.
 
 ---
 

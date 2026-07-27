@@ -55,6 +55,12 @@ internal static class Program
         LimitSample_PartialRun_IsInvalidNotPass();
         LimitSample_GoodReferenceAllowed();
 
+        TrimmerSerial_NormalizesTo13_FramesStayAt19();
+        PartExit_TrimmerNormalisedTo13();
+        PartExit_DeParsesAsDeleted();
+        DeImageDelete_MatchesFullTrimmerPrefix_NotAdjacent();
+        BackupRoot_NonInputPathIsItsOwnRoot();
+
         Console.WriteLine();
         if (_failures == 0)
         {
@@ -464,6 +470,107 @@ internal static class Program
         var goodRunWithNok = MsaReportData.ComputeVerdict(MsaType.LimitSample,
             new[] { LsRow("D1", false, expectedReject: false) }, wholeRun: true);
         AssertEqual("all-good run with a false reject → FAIL (not INVALID)", MsaVerdict.Fail, goodRunWithNok.Verdict);
+    }
+
+    // ---- Trimmer serial length + DE image delete + backup retention (2026-07-27) ----
+
+    private static void TrimmerSerial_NormalizesTo13_FramesStayAt19()
+    {
+        Console.WriteLine("[Case X] Trimmer serial normalises to 13, frame stays 19");
+        SerialNumberHelper.Configure(19);
+        SerialNumberHelper.ConfigureTrimmer(13);
+
+        // The camera pads the 13-char trimmer serial with trailing '0' to the field width.
+        AssertEqual("padded trimmer → 13", "2607230000810",
+            SerialNumberHelper.NormalizeTrimmer("2607230000810000000"));
+        // Already 13 (as the SPS delivers it) → unchanged (idempotent).
+        AssertEqual("bare 13 trimmer unchanged", "2607230000810",
+            SerialNumberHelper.NormalizeTrimmer("2607230000810"));
+        // A non-zero tail past 13 is a genuinely longer serial → never blindly trimmed.
+        AssertEqual("non-zero tail preserved", "2607230000810500000",
+            SerialNumberHelper.NormalizeTrimmer("2607230000810500000"));
+        // The frame normaliser still keeps 19 for a padded frame serial.
+        AssertEqual("frame stays 19", "2707261005160030078",
+            SerialNumberHelper.Normalize("2707261005160030078" + "000"));
+        // Two adjacent trimmer serials (differ only in the 13th char) stay distinct after normalising —
+        // this is why DE image matching must use the full 13, not a 12-char key.
+        AssertTrue("adjacent trimmers stay distinct",
+            SerialNumberHelper.NormalizeTrimmer("2607230000810000") != SerialNumberHelper.NormalizeTrimmer("2607230000811000"));
+    }
+
+    private static void PartExit_TrimmerNormalisedTo13()
+    {
+        Console.WriteLine("[Case Y] Part-exit VirtualSerial normalised to 13, SZID to 19");
+        SerialNumberHelper.Configure(19);
+        SerialNumberHelper.ConfigureTrimmer(13);
+        var szid = "2707261005160030078";
+        var trimmerPadded = "2607230000810" + "000000000"; // camera-style padding
+        var telegram = string.Join(";",
+            "", szid, trimmerPadded, "1117", "Normal", "50", "1", "20", "2", "30", "3", "4", "1.0", "2.0", "OK");
+        var data = SpsPartExitData.TryParse(telegram);
+        AssertTrue("parses", data is not null);
+        AssertEqual("SZID length 19", szid, data!.Szid);
+        AssertEqual("trimmer normalised to 13", "2607230000810", data.VirtualSerial);
+    }
+
+    private static void PartExit_DeParsesAsDeleted()
+    {
+        Console.WriteLine("[Case Z] Part-exit DE (SZID empty, trimmer only) → Deleted, result_status -1");
+        var trimmer = "2607230000810";
+        var telegram = string.Join(";",
+            "", "", trimmer, "1117", "Normal", "20", "2", "20", "2", "30", "3", "4", "1.0", "2.0", "DE");
+        var data = SpsPartExitData.TryParse(telegram);
+        AssertTrue("parses", data is not null);
+        AssertEqual("result = Deleted", PartResult.Deleted, data!.Result);
+        AssertEqual("result_status code = -1", -1, data.ResultStatusCode);
+        AssertEqual("trimmer carried", trimmer, data.VirtualSerial);
+    }
+
+    private static void DeImageDelete_MatchesFullTrimmerPrefix_NotAdjacent()
+    {
+        Console.WriteLine("[Case AA] DE image delete: full-13 prefix, incl. sorted day-folders, no adjacent spill");
+        var root = Path.Combine(Path.GetTempPath(), "hds_de_" + Guid.NewGuid().ToString("N"));
+        var input = Path.Combine(root, "Input");
+        var day = Path.Combine(root, "2026", "07", "23");
+        Directory.CreateDirectory(input);
+        Directory.CreateDirectory(day);
+        try
+        {
+            const string target = "2607230000810";
+            const string adjacent = "2607230000811"; // differs only in the 13th char
+
+            var targetInput = Path.Combine(input, $"{target}-000-1-M20_ST060_KF1-1-&Cam1.bmp");
+            var targetDay = Path.Combine(day, $"{target}-000-0-M20_ST060_KF3-2-&Cam2.png");
+            var adjacentFile = Path.Combine(input, $"{adjacent}-000-1-M20_ST060_KF1-1-&Cam1.bmp");
+            File.WriteAllText(targetInput, "x");
+            File.WriteAllText(targetDay, "x");
+            File.WriteAllText(adjacentFile, "x");
+            File.WriteAllText(Path.Combine(input, "readme.txt"), "x"); // no Field1 → ignored
+
+            var handler = new ImageHandler(new NullLog());
+            // Pass the …\Input path (like the config): SortedRoot expands it so both \Input and the
+            // sorted YYYY\MM\DD day-folder are searched.
+            var deleted = handler
+                .DeleteByTrimmerSerialAsync(target, new[] { input }, CancellationToken.None)
+                .GetAwaiter().GetResult();
+
+            AssertEqual("deleted both target images (Input + day-folder)", 2, deleted);
+            AssertTrue("target Input image gone", !File.Exists(targetInput));
+            AssertTrue("target day-folder image gone", !File.Exists(targetDay));
+            AssertTrue("adjacent serial survived (no 12-char spill)", File.Exists(adjacentFile));
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); } catch { /* best effort */ }
+        }
+    }
+
+    private static void BackupRoot_NonInputPathIsItsOwnRoot()
+    {
+        Console.WriteLine("[Case AB] Backup folder (no \\Input) is its own sorted root for retention");
+        AssertEqual("non-Input path → itself", @"Z:\06_Backup", ImageFileName.SortedRoot(@"Z:\06_Backup"));
+        AssertEqual("Input path → parent", @"Z:\01_Low_Resolution_Individual",
+            ImageFileName.SortedRoot(@"Z:\01_Low_Resolution_Individual\Input"));
     }
 
     /// <summary>Minimal IConfigService stub for the PDF-name test (never reads config when OutputDirectory is set).</summary>

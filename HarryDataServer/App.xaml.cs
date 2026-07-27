@@ -63,7 +63,9 @@ public partial class App : Application
             // Configure the single serial-number normalisation length BEFORE any camera/SPS parsing
             // starts, so camera and part-exit serials are canonicalised identically (Problem 1).
             SerialNumberHelper.Configure(config.Config.General.SerialNumberLength);
-            _log.Information("Serial-number normalisation length = {Length}.", SerialNumberHelper.MeaningfulLength);
+            SerialNumberHelper.ConfigureTrimmer(config.Config.General.TrimmerSerialNumberLength);
+            _log.Information("Serial-number normalisation length = {Length} (frame), {Trimmer} (trimmer).",
+                SerialNumberHelper.MeaningfulLength, SerialNumberHelper.TrimmerLength);
 
             var window = _services.GetRequiredService<MainWindow>();
             _mainWindow = window;

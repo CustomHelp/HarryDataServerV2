@@ -107,13 +107,29 @@ public sealed class PartExitOrchestrator : IPartExitOrchestrator
 
             // Images always run; when a collage is being made it must read the images
             // first, so the image task waits for it (untimed) before its own work.
+            // Source folder for the individual OK-part images. Prefer the explicit [Collage]
+            // Collage_SingleImages, but fall back to [NAS] LowResIndividualPath when it is unset —
+            // otherwise an empty key silently disables cleanup and the low-res folder fills up.
+            var imageSource = !string.IsNullOrWhiteSpace(collage.SingleImagesPath)
+                ? collage.SingleImagesPath
+                : nas.LowResIndividualPath;
+
             var dependency = collageEnabled ? collageTask : null;
-            imageTask = RunImagesAfterAsync(dependency, serials, collage.SingleImagesPath,
+            imageTask = RunImagesAfterAsync(dependency, serials, imageSource,
                 nas.DeletePictures, nas.BackupFolder, ms => imageMs = ms, ct);
 
             await Task.WhenAll(csvTask, collageTask, imageTask).ConfigureAwait(false);
         }
-        else // NG (or deleted): CSV only.
+        else if (data.Result == PartResult.Deleted)
+        {
+            // DE from ST160: a rejected trimmer sub-assembly never entered a frame, so it has no
+            // normal part-exit and no collage/frame images. ST160 sends DE carrying the trimmer
+            // serial to purge that trimmer's images. The DB rows (dmcserial result_status=-1 and the
+            // measurements_serial_trimmer measurements) are KEPT for traceability — only images go.
+            imageTask = RunDeTrimmerDeleteAsync(data, ms => imageMs = ms, ct);
+            await Task.WhenAll(csvTask, imageTask).ConfigureAwait(false);
+        }
+        else // NG: CSV only.
         {
             // SOW §5.2.3: NG parts produce no collage, so their low-res individual images
             // are NOT deleted here. They are kept and removed later by ImageCleanupService,
@@ -163,6 +179,49 @@ public sealed class PartExitOrchestrator : IPartExitOrchestrator
         try { return await _images.HandleAsync(serials, searchPath, deletePictures, backupFolder, ct).ConfigureAwait(false); }
         catch { return false; }
         finally { sw.Stop(); setMs(sw.ElapsedMilliseconds); }
+    }
+
+    /// <summary>
+    /// DE (ST160) image purge for a rejected trimmer sub-assembly. Searches the low-res individual,
+    /// high-res NG and high-res diagnostic roots (each recursively, incl. NAS-sorted day-folders) for
+    /// images whose Field 1 starts with the normalised 13-char trimmer serial, and deletes them.
+    /// 0 matches is a WARNING (not a failure); only a real exception fails the ACK.
+    /// </summary>
+    private async Task<bool> RunDeTrimmerDeleteAsync(SpsPartExitData data, Action<long> setMs, CancellationToken ct)
+    {
+        var sw = Stopwatch.StartNew();
+        try
+        {
+            var trimmer = data.VirtualSerial;
+            if (string.IsNullOrWhiteSpace(trimmer))
+            {
+                _log.Warning("DE part exit without a trimmer serial (SZID='{Szid}'); no images to delete.", data.Szid);
+                return true;
+            }
+
+            var nas = _config.Config.Nas;
+            var roots = new[] { nas.LowResIndividualPath, nas.HighResNgPath, nas.HighResDiagnosticPath }
+                .Where(p => !string.IsNullOrWhiteSpace(p))
+                .ToArray();
+
+            var deleted = await _images.DeleteByTrimmerSerialAsync(trimmer, roots, ct).ConfigureAwait(false);
+            if (deleted > 0)
+                _log.Information("DE: {Count} trimmer image(s) for {Serial} deleted.", deleted, trimmer);
+            else
+                _log.Warning("DE: no images found for trimmer {Serial} (searched {Roots}).",
+                    trimmer, string.Join(", ", roots));
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _log.Error(ex, "DE trimmer image deletion failed for {Serial}.", data.VirtualSerial);
+            return false;
+        }
+        finally
+        {
+            sw.Stop();
+            setMs(sw.ElapsedMilliseconds);
+        }
     }
 
     private async Task<bool> SaveDmcAsync(SpsPartExitData part, CancellationToken ct)
