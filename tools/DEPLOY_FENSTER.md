@@ -53,24 +53,25 @@ Server aus der neuen Verknüpfung starten und prüfen:
 - [ ] **Ein Teil durchlaufen lassen**: Part-Exit kommt an, CSV/DB-Eintrag entsteht, keine Fehler im Log.
 
 ### 5b. Bereinigungs-SQLs erneut ausführen — ~1 min
-Die ALTE Version schrieb bis zum Umschalten weiter 19-stellige Trimmer-Serien; erst die neue
-Version normalisiert auf 13. Beide SQLs sind **idempotent** — nach dem Start der neuen Version
-noch einmal laufen lassen, um die in der Zwischenzeit geschriebenen 19er-Serien (und evtl.
-DE-Leer-Zeilen) zu bereinigen. Client: `"C:\Program Files\MySQL\MySQL Server 9.7\bin\mysql.exe" -u SettData -p1234Set camera_data`
+Die ALTE Version schreibt bis zum Umschalten weiter 19-stellige Trimmer-Serien (erst die neue
+Version normalisiert auf 13) UND weiter DE-Zeilen nach `dmcserial` (die neue Version schreibt bei
+DE gar nichts mehr). Beide SQLs sind **idempotent** — nach dem Start der neuen Version noch einmal
+laufen lassen, um die in der Zwischenzeit geschriebenen 19er-Serien und DE-Zeilen zu bereinigen.
+Client: `"C:\Program Files\MySQL\MySQL Server 9.7\bin\mysql.exe" -u SettData -p1234Set camera_data`
 ```sql
 -- 1) Trimmer-Serien 19 -> 13 (nur wenn der Rest hinter Stelle 13 komplett '0' ist)
 UPDATE measurements_serial_trimmer SET serial_trimmer = LEFT(serial_trimmer,13)
 WHERE CHAR_LENGTH(serial_trimmer) > 13 AND SUBSTRING(serial_trimmer,14) REGEXP '^0+$';
--- 2) Alte DE-Leer-Serial-Zeilen (falls die alte Version welche geschrieben hat)
-DELETE FROM dmcserial WHERE result_status = -1 AND (serial_number IS NULL OR serial_number = '');
+-- 2) DE-Zeilen (verschrottete Teile) aus dmcserial entfernen — die neue Version schreibt keine mehr
+DELETE FROM dmcserial WHERE result_status = -1;
 -- 3) Bestätigen, dass beide 0 ergeben
 SELECT COUNT(*) FROM measurements_serial_trimmer
   WHERE CHAR_LENGTH(serial_trimmer) > 13 AND SUBSTRING(serial_trimmer,14) REGEXP '^0+$';
-SELECT COUNT(*) FROM dmcserial WHERE result_status = -1 AND (serial_number IS NULL OR serial_number = '');
+SELECT COUNT(*) FROM dmcserial WHERE result_status = -1;
 ```
 - [ ] Trimmer-Korrektur gelaufen, Bestätigungs-COUNT = 0.
-- [ ] DE-Leer-Serial-Delete gelaufen, Bestätigungs-COUNT = 0.
-> Erst-Ausführung war am 2026-07-27 (63.888 Trimmer-Zeilen korrigiert, 0 DE-Zeilen).
+- [ ] DE-Delete (`result_status = -1`) gelaufen, Bestätigungs-COUNT = 0.
+> Erst-Ausführung 2026-07-27: 63.888 Trimmer-Zeilen korrigiert; DE-Delete 91 Zeilen entfernt.
 
 ### 6. Rollback-Plan (falls etwas klemmt) — ~1–2 min
 - Neuen Server beenden.
