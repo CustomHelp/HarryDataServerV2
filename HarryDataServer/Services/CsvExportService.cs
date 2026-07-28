@@ -15,12 +15,18 @@ namespace HarryDataServer.Services;
 public sealed class CsvExportService : ICsvService
 {
     // Fixed meta columns written before the dynamic measurement columns.
+    // "M50St110Kf" was added after "M50Nest" on 2026-07-28: the two ST110 control windows now share
+    // their measurement columns, so this records WHICH window (1/3) supplied them — the same kind of
+    // traceability M1xModule/M2xModule give for the two strands. Empty when the part has no ST110 row.
     private static readonly string[] MetaHeaders =
     {
         "Timestamp", "DMC", "SerialNumber", "VirtualSerial", "OrderName", "Mode",
         "Result", "M1xModule", "M1xNest", "M2xModule", "M2xNest", "M3xModule", "M3xNest",
-        "M50Nest", "Temperature", "Humidity",
+        "M50Nest", "M50St110Kf", "Temperature", "Humidity",
     };
+
+    /// <summary>Index of the <c>M50St110Kf</c> meta column, filled while the measurements are read.</summary>
+    private static readonly int M50St110KfColumn = Array.IndexOf(MetaHeaders, "M50St110Kf");
 
     private readonly IDatabaseService _database;
     private readonly ISystemHealth _health;
@@ -31,12 +37,10 @@ public sealed class CsvExportService : ICsvService
 
     private readonly SemaphoreSlim _writeLock = new(1, 1);
 
-    // Dynamic column layout (built once when the DB is ready). Two header rows:
-    // controller name (row 1) above the parameter/variable name (row 2).
-    private readonly List<string> _measurementControllers = new();
-    private readonly List<string> _measurementHeaders = new();
-    private readonly Dictionary<int, int> _columnByDefinitionId = new();
-    private readonly Dictionary<int, int> _valueColumnByResultDefinitionId = new();
+    // Dynamic column layout (built once when the DB is ready). Two header rows: merge group /
+    // controller name (row 1) above the parameter/variable name (row 2). See CsvColumnLayout for the
+    // merging of the parallel strands (M1x/M2x) and the two M50 ST110 control windows.
+    private CsvColumnLayout? _layout;
 
     private CsvFileWriter? _csv;
     private string? _currentOrder;
@@ -148,31 +152,30 @@ ORDER BY c.camera_name, md.telegram_place;";
 
         try
         {
-            var columns = new List<(int Id, string Camera, string Variable, int Index)>();
+            var sources = new List<CsvColumnSource>();
 
             await using (var conn = await _database.OpenConnectionAsync(ct).ConfigureAwait(false))
             await using (var cmd = new MySqlCommand(sql, conn))
             await using (var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false))
             {
                 while (await reader.ReadAsync(ct).ConfigureAwait(false))
-                {
-                    var definitionId = reader.GetInt32(0);
-                    var camera = reader.GetString(1);
-                    var variable = reader.GetString(2);
-                    var index = _measurementHeaders.Count;
-
-                    _columnByDefinitionId[definitionId] = index;
-                    _measurementControllers.Add(camera);
-                    _measurementHeaders.Add(variable);
-                    columns.Add((definitionId, camera, variable, index));
-                }
+                    sources.Add(new CsvColumnSource(reader.GetInt32(0), reader.GetString(1), reader.GetString(2)));
             }
 
-            BuildResultValuePairs(columns);
+            var layout = CsvColumnLayout.Build(sources);
+
+            // A variable without a partner on the other strand/window is never folded away silently.
+            foreach (var warning in layout.Warnings)
+                _log.Warning("CSV layout: {Warning}.", warning);
+
+            _layout = layout;
             _csv = new CsvFileWriter(_basePath, _maxRows, dateSubfolders: true, _log);
             _layoutBuilt = true;
-            _log.Information("CSV layout built: {Meta} meta + {Cols} measurement columns ({Pairs} R_/V_ pairs).",
-                MetaHeaders.Length, _measurementHeaders.Count, _valueColumnByResultDefinitionId.Count);
+            _log.Information(
+                "CSV layout built: {Meta} meta + {Cols} measurement columns ({Pairs} R_/V_ pairs); " +
+                "{Sources} definitions folded into {Merged} shared column(s) (M1x/M2x strands + M50_ST110 windows).",
+                MetaHeaders.Length, layout.ColumnCount, layout.ValueColumnByResultDefinitionId.Count,
+                layout.SourceCount, layout.MergedColumnCount);
             return true;
         }
         catch (Exception ex)
@@ -182,42 +185,24 @@ ORDER BY c.camera_name, md.telegram_place;";
         }
     }
 
-    private void BuildResultValuePairs(List<(int Id, string Camera, string Variable, int Index)> columns)
-    {
-        var groups = columns.GroupBy(c => (c.Camera, MeasurementRowBuilder.StripTypePrefix(c.Variable)));
-        foreach (var group in groups)
-        {
-            int? resultId = null;
-            int? valueColumn = null;
-            foreach (var c in group)
-            {
-                if (c.Variable.StartsWith("R_", StringComparison.Ordinal))
-                    resultId = c.Id;
-                else if (c.Variable.StartsWith("V_", StringComparison.Ordinal))
-                    valueColumn = c.Index;
-            }
-
-            if (resultId.HasValue && valueColumn.HasValue)
-                _valueColumnByResultDefinitionId[resultId.Value] = valueColumn.Value;
-        }
-    }
-
     private IReadOnlyList<IReadOnlyList<string>> FullHeaderRows()
     {
-        var row1 = new List<string>(MetaHeaders.Length + _measurementControllers.Count);
-        row1.AddRange(Enumerable.Repeat(string.Empty, MetaHeaders.Length));
-        row1.AddRange(_measurementControllers);
+        var layout = _layout!;
 
-        var row2 = new List<string>(MetaHeaders.Length + _measurementHeaders.Count);
+        var row1 = new List<string>(MetaHeaders.Length + layout.ColumnCount);
+        row1.AddRange(Enumerable.Repeat(string.Empty, MetaHeaders.Length));
+        row1.AddRange(layout.ControllerHeaders);
+
+        var row2 = new List<string>(MetaHeaders.Length + layout.ColumnCount);
         row2.AddRange(MetaHeaders);
-        row2.AddRange(_measurementHeaders);
+        row2.AddRange(layout.VariableHeaders);
 
         return new IReadOnlyList<string>[] { row1, row2 };
     }
 
     private async Task<string?[]> BuildRowAsync(MySqlConnection conn, SpsPartExitData part, CancellationToken ct)
     {
-        var row = new string?[MetaHeaders.Length + _measurementHeaders.Count];
+        var row = new string?[MetaHeaders.Length + _layout!.ColumnCount];
 
         row[0] = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
         row[1] = part.Dmc;
@@ -233,21 +218,31 @@ ORDER BY c.camera_name, md.telegram_place;";
         row[11] = part.M3xModule;
         row[12] = part.M3xNest;
         row[13] = part.M50Nest;
-        row[14] = part.Temperature?.ToString(CultureInfo.InvariantCulture);
-        row[15] = part.Humidity?.ToString(CultureInfo.InvariantCulture);
+        // row[14] = M50St110Kf — filled from the measurements below (which control window supplied them).
+        row[15] = part.Temperature?.ToString(CultureInfo.InvariantCulture);
+        row[16] = part.Humidity?.ToString(CultureInfo.InvariantCulture);
 
-        await FillMeasurementsAsync(conn, "measurements_serial", "serial_number", part.Szid, row, ct).ConfigureAwait(false);
+        // Tracks which controller wrote a shared column, so a (theoretical) collision between the two
+        // strands / control windows is resolved by the documented priority instead of "last one wins".
+        var fill = new CsvMergeFill(part, _log);
+
+        await FillMeasurementsAsync(conn, "measurements_serial", "serial_number", part.Szid, row, fill, ct)
+            .ConfigureAwait(false);
         if (!string.IsNullOrWhiteSpace(part.VirtualSerial))
-            await FillMeasurementsAsync(conn, "measurements_serial_trimmer", "serial_trimmer", part.VirtualSerial, row, ct).ConfigureAwait(false);
+            await FillMeasurementsAsync(conn, "measurements_serial_trimmer", "serial_trimmer", part.VirtualSerial, row, fill, ct)
+                .ConfigureAwait(false);
 
+        row[M50St110KfColumn] = fill.M50St110Kf;
+        fill.ReportConflicts(part);
         return row;
     }
 
     private async Task FillMeasurementsAsync(
-        MySqlConnection conn, string table, string serialColumn, string serial, string?[] row, CancellationToken ct)
+        MySqlConnection conn, string table, string serialColumn, string serial, string?[] row,
+        CsvMergeFill fill, CancellationToken ct)
     {
         // Exact match first (the normalised serial should match what the camera pipeline stored).
-        var filled = await FillFromQueryAsync(conn, table, serialColumn, serial, exact: true, row, ct).ConfigureAwait(false);
+        var filled = await FillFromQueryAsync(conn, table, serialColumn, serial, exact: true, row, fill, ct).ConfigureAwait(false);
         if (filled > 0)
             return;
 
@@ -260,7 +255,7 @@ ORDER BY c.camera_name, md.telegram_place;";
         if (string.IsNullOrEmpty(serial))
             return;
 
-        var viaPrefix = await FillFromQueryAsync(conn, table, serialColumn, serial, exact: false, row, ct).ConfigureAwait(false);
+        var viaPrefix = await FillFromQueryAsync(conn, table, serialColumn, serial, exact: false, row, fill, ct).ConfigureAwait(false);
         if (viaPrefix > 0)
             _log.Warning("Part-exit CSV: matched {Count} row(s) in {Table} for {Column} via prefix '{Serial}%' — verify serial normalisation.",
                 viaPrefix, table, serialColumn, serial);
@@ -271,8 +266,10 @@ ORDER BY c.camera_name, md.telegram_place;";
     /// is false a prefix match (<c>LIKE serial%</c>) is used. Returns the number of rows read.
     /// </summary>
     private async Task<int> FillFromQueryAsync(
-        MySqlConnection conn, string table, string serialColumn, string serial, bool exact, string?[] row, CancellationToken ct)
+        MySqlConnection conn, string table, string serialColumn, string serial, bool exact, string?[] row,
+        CsvMergeFill fill, CancellationToken ct)
     {
+        var layout = _layout!;
         var predicate = exact ? "= @serial" : "LIKE @serial";
         var sql =
             $"SELECT definition_id, measurement_value, measurement_string, result_status " +
@@ -286,33 +283,39 @@ ORDER BY c.camera_name, md.telegram_place;";
         {
             count++;
             var definitionId = reader.GetInt32(0);
-            if (!_columnByDefinitionId.TryGetValue(definitionId, out var column))
+            if (!layout.ColumnByDefinitionId.TryGetValue(definitionId, out var column))
                 continue;
+
+            var camera = layout.CameraByDefinitionId.GetValueOrDefault(definitionId, string.Empty);
+            fill.NoteController(camera);
 
             var str = reader.IsDBNull(2) ? null : reader.GetString(2);
             var value = reader.IsDBNull(1) ? (double?)null : reader.GetDouble(1);
             var result = reader.IsDBNull(3) ? (int?)null : reader.GetInt32(3);
 
-            if (_valueColumnByResultDefinitionId.TryGetValue(definitionId, out var valueColumn))
+            if (layout.ValueColumnByResultDefinitionId.TryGetValue(definitionId, out var valueColumn))
             {
                 if (result.HasValue)
-                    row[MetaHeaders.Length + column] = result.Value.ToString(CultureInfo.InvariantCulture);
+                    fill.Write(row, MetaHeaders.Length, column, camera, result.Value.ToString(CultureInfo.InvariantCulture));
 
                 var valueCell = !string.IsNullOrEmpty(str)
                     ? str
                     : value?.ToString(CultureInfo.InvariantCulture);
                 if (valueCell is not null)
-                    row[MetaHeaders.Length + valueColumn] = valueCell;
+                    fill.Write(row, MetaHeaders.Length, valueColumn, camera, valueCell);
             }
             else
             {
-                row[MetaHeaders.Length + column] = !string.IsNullOrEmpty(str)
+                var cell = !string.IsNullOrEmpty(str)
                     ? str
                     : value?.ToString(CultureInfo.InvariantCulture)
                       ?? result?.ToString(CultureInfo.InvariantCulture);
+                if (cell is not null)
+                    fill.Write(row, MetaHeaders.Length, column, camera, cell);
             }
         }
 
         return count;
     }
+
 }

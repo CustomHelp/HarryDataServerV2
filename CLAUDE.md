@@ -1329,7 +1329,8 @@ KeyName=M50_ST120_KF1
 
 ### Main CSV (triggered on Part Exit)
 - One row per finished part containing ALL measurement values from ALL cameras
-- Header: dynamic from `measurement_definitions` table
+- Header: **2 rows**, dynamic from `measurement_definitions` — row 1 = merge group / controller,
+  row 2 = variable name (see the merged-column section below)
 - Missing values (camera was offline): empty column
 - File rotation: on order name change OR when `DataSetsPerFile` rows reached
 - Filename: `<DDMMYY_HHMMSS>_<OrderName>.csv` (SOW §5.1.2 stamp via `FileNaming.Stamp`; `NoOrder` when
@@ -1338,6 +1339,43 @@ KeyName=M50_ST120_KF1
 - **Only OK and NG parts produce a row.** DE and an unrecognised result (`Unknown`) are excluded, so
   the production CSV contains finished parts with an understood result only.
 - Path: `CSV_BasePath\YYYY\MM\DD\`
+
+#### Merged columns: parallel strands + redundant control windows (changed 2026-07-28)
+
+> **NOTE FOR QS / THE CUSTOMER — the column layout changed on 2026-07-28 (v2.0.0).**
+> Files written **before** that keep the old 722-column layout; files written **after** it have
+> **431** columns. The layout is fixed when a file is created and is **never changed inside an
+> existing file** (`CsvFileWriter.Configure` runs on rotation only), so no file ever mixes both.
+> **No value is lost** — the removed columns were structurally always empty.
+
+The two production strands are mutually exclusive per part (strand A = M10 + M20, strand B = M11 +
+M21) and the two M50 ST110 control windows inspect the same part, while their variable names are
+**identical**. One column per controller therefore produced 292 column pairs of which exactly one half
+was always empty. Those pairs now share a column (`Infrastructure/CsvColumnLayout.cs`):
+
+| Merge group (header row 1) | Source controllers |
+|---------------------------|--------------------|
+| `M1x_<Station>_<KF>` | `M10_<Station>_<KF>` + `M11_<Station>_<KF>` |
+| `M2x_<Station>_<KF>` | `M20_<Station>_<KF>` + `M21_<Station>_<KF>` |
+| `M50_ST110` | `M50_ST110_KF1` + `M50_ST110_KF3` |
+| unchanged | `M50_ST040_KF1`, `M50_ST120_KF1`, `M50_ST130_KF1`, `M50_ST140_KF1`, … |
+
+- **Column count:** 706 active definitions → **414** measurement columns (292 of them shared);
+  with the meta columns **722 → 431** total.
+- **Value rule** (`Infrastructure/CsvMergeFill.cs`): the shared cell takes the **non-empty** value of
+  its sources. Should both ever be filled, the controller **matching the part** wins
+  (`M1xModule`/`M2xModule` from the part-exit telegram) and **one WARNING per part** is logged — never
+  one per cell. The ST110 windows have no counterpart in the telegram, so there the first non-empty
+  value wins and the new `M50St110Kf` meta column records which window it was.
+- **Nothing is folded away silently:** a variable that exists on only ONE side of a pair keeps **its
+  own column under the original controller name** and produces a one-off WARNING at header-build time.
+  Today there is none — all five pairs are exactly identical in the live DB (0 one-sided variables).
+- **New meta column `M50St110Kf`** (`1`/`3`, empty without an ST110 measurement) sits directly behind
+  `M50Nest`; every other meta column keeps its name and relative order, and the delimiter/format are
+  unchanged. Meta columns: **16 → 17**.
+- **Validated against reality** before the change: all five pairs identical in
+  `measurement_definitions`, and the live file `280726_141335_1118.csv` (4 099 data rows) pushed row by
+  row through the new mapping — **1 477 452 filled cells before and after, 0 collisions, 0 data loss**.
 
 ### MSA/Evaluation CSV
 - Exported on MSA evaluation completion into the per-run folder

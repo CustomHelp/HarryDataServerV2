@@ -119,11 +119,14 @@ Philipp festgelegt). Passagen, die einen bewusst geänderten Zustand markieren, 
    zweiter Versuch mit `LIKE '<serial>%'`; greift der, folgt eine zweite WARNUNG.
    `dmcserial` wird für die CSV **nicht** gelesen — alle Kopffelder kommen direkt aus dem Telegramm.
 
-11. **CSV-Zeile.** 16 Metaspalten + dynamische Messspalten (aus `measurement_definitions`,
-    zwei Kopfzeilen: Controller / Variablenname) (`CsvExportService.MetaHeaders`, `FullHeaderRows`).
+11. **CSV-Zeile.** **17** Metaspalten + dynamische Messspalten (aus `measurement_definitions`,
+    zwei Kopfzeilen: **Merge-Gruppe/Controller** / Variablenname) (`CsvExportService.MetaHeaders`,
+    `FullHeaderRows`, `CsvColumnLayout`).
     Datei: **`Y:\02_CSV_Merge\JJJJ\MM\TT\<TTMMJJ_HHMMSS>_<OrderName>.csv`**
     (`CsvFileWriter.Open`, `dateSubfolders: true`; Label = Auftragsname, sonst `NoOrder`).
     Rotation bei **Auftragswechsel** (`WritePartAsync`) und nach **10000** Zeilen.
+    **[NEU 28.07.] Parallele Stränge und redundante Kontrollfenster teilen sich eine Spalte** —
+    Spaltenzahl **722 → 431**, siehe §1.4b.
 
 12. **Bildbehandlung — eine gemeinsame Maschinerie für alle Zustände [NEU 28.07.].**
     `ImageHandler.ApplyAsync(context, serials, lowResPath, action, backupFolder)` ist die **einzige**
@@ -247,13 +250,55 @@ Legende Bildordner: **01** = `Z:\01_Low_Resolution_Individual`, **03** = `Z:\03_
 
 | Status | DB | CSV | Bilder je Ordner | Sonstiges |
 |---|---|---|---|---|
-| **1 OK** | 1 Zeile `dmcserial` (`result_status=1`), Insert-or-Update auf `serial_number`. `measurements_serial(_trimmer)` werden nur **gelesen**, nie geschrieben (`SaveDmcAsync`, `FillMeasurementsAsync`) | **Ja.** Alle 16 Metafelder aus dem Telegramm; Messspalten aus beiden Messtabellen. DMC/Trimmer leer ⇔ Telegrammfeld leer | **01:** Treffer (Serial1-Präfix SZID 19 / Trimmer 13). **`Collage_Generate=false` (Live) → VERSCHIEBEN:** `Z:\01…\<Datei>` → **`Z:\06_Backup\JJJJ\MM\TT\<Datei>`** (Kopie + Größenvergleich + Original löschen). **`Collage_Generate=true` → ersatzlos LÖSCHEN**, kein Backup. **03/04/05:** **nichts** (werden nie angefasst). **Collage:** nur bei `true` → `Z:\02…\Input\<SZID>_Collage.jpg`. **06:** Ziel des Verschiebens (nur bei `false`) | INFO `OK: n low-res image(s) moved to backup … → <Ziel>` bzw. `… deleted`; INFO `Collage written…` (nur wenn aktiv); WARN bei 0 Treffern mit Roh-/Normalschlüssel + geprüfter Dateizahl + MSA-Skips; WARN > 450 ms |
+| **1 OK** | 1 Zeile `dmcserial` (`result_status=1`), Insert-or-Update auf `serial_number`. `measurements_serial(_trimmer)` werden nur **gelesen**, nie geschrieben (`SaveDmcAsync`, `FillMeasurementsAsync`) | **Ja.** Alle 17 Metafelder (`M50St110Kf` aus den Messungen, Rest aus dem Telegramm); Messspalten aus beiden Messtabellen, parallele Stränge/ST110-Fenster **zusammengelegt** (§1.4b). DMC/Trimmer leer ⇔ Telegrammfeld leer | **01:** Treffer (Serial1-Präfix SZID 19 / Trimmer 13). **`Collage_Generate=false` (Live) → VERSCHIEBEN:** `Z:\01…\<Datei>` → **`Z:\06_Backup\JJJJ\MM\TT\<Datei>`** (Kopie + Größenvergleich + Original löschen). **`Collage_Generate=true` → ersatzlos LÖSCHEN**, kein Backup. **03/04/05:** **nichts** (werden nie angefasst). **Collage:** nur bei `true` → `Z:\02…\Input\<SZID>_Collage.jpg`. **06:** Ziel des Verschiebens (nur bei `false`) | INFO `OK: n low-res image(s) moved to backup … → <Ziel>` bzw. `… deleted`; INFO `Collage written…` (nur wenn aktiv); WARN bei 0 Treffern mit Roh-/Normalschlüssel + geprüfter Dateizahl + MSA-Skips; WARN > 450 ms |
 | **2 NG** | 1 Zeile `dmcserial` (`result_status=0`) | **Ja**, identisch zu OK, Spalte `Result` = `Ng` | **01: [NEU 28.07.] ersatzlos LÖSCHEN** (kein Backup — der NG-Nachweis ist das Vollbild in 03). **03:** die Kamera legt das Vollbild dort ab; **der Server fasst 03 nie an**. **04/05/Collage/06:** nichts | INFO `NG: n low-res image(s) deleted for [<Schlüssel>]`; 0 Treffer → WARN (roh + normalisiert). Die NG↔Low-Res-Retention-Verknüpfung bleibt als **Fallback** (siehe 1.6) |
 | **3 DE** | **Keine** DB-Änderung — weder `dmcserial` noch Messzeilen | **Nein** | **01: [NEU 28.07.] nur noch hier** — alle Dateien mit passendem Serial1-Präfix ersatzlos gelöscht (rekursiv inkl. Alt-Tagesordner). **03/04: [NEU 28.07.] aus den Suchwurzeln entfernt** → werden nicht mehr angefasst. **05/Collage/06:** nichts | INFO `DE: n low-res image(s) deleted for [<Schlüssel>]` bzw. WARN mit Roh-/Normalschlüssel, geprüfter Dateizahl, MSA-Skips |
 | **4 Unknown** | 1 Zeile `dmcserial` (`result_status=0`, wie NG) | **[NEU 28.07.] NEIN** — die Produktions-CSV bleibt frei von Teilen mit unverstandenem Ergebnis | wie NG: **01** ersatzlos löschen; 03/04/05 nichts | **[NEU 28.07.]** Immer WARN `Part exit with unknown result '<Rohwert>' … NO CSV row. Raw telegram: '<Roh>'` (behebt B2) |
 | **5 MSA-Testteil** | **Keine** — Produktionstabellen werden nie berührt | **Nein** | **keine Aktion in irgendeinem Ordner** | Nur Zähler `TotalProcessed`; MSA-Daten laufen ausschließlich über den Kamerapfad (Teil 2) |
 | **6 Malformed** | Keine | Nein | Keine | WARN `SPS PartExit: malformed telegram '<Roh>'`, ACK `<32×'0'>;false` |
 | **7 Blockauswurf / leere Felder** | **`dmc`/`serial_trimmer` = NULL**. **[NEU 28.07.] Ist die SZID leer, wird KEINE Zeile geschrieben** (WARNUNG mit Roh-Telegramm) — damit kann keine `serial_number=''`-Sammelzeile mehr entstehen (behebt B1) | **Ja** (bei OK/NG). DMC- und Trimmer-Spalte **leer**; der Trimmer-Lookup **entfällt komplett** → alle M2X-Messspalten bleiben leer | Bildsuche mit leerer Schlüsselliste → **[NEU 28.07.]** WARN `… no usable serial (raw [])`, keine Datei angefasst | WARN `Part exit without a frame serial … no dmcserial row written`; ggf. WARN `no rows in measurements_serial …` |
+
+## 1.4b Spaltenlayout der Produktions-CSV [NEU 28.07.2026]
+
+> **Hinweis für QS / Kunde: Das Spaltenlayout hat sich am 28.07.2026 (v2.0.0) geändert.**
+> Dateien **davor** behalten das alte Layout mit **722** Spalten, Dateien **danach** haben **431**.
+> Der Header wird beim **Anlegen** einer Datei geschrieben (`CsvFileWriter.Configure` nur bei
+> Rotation), das Layout wechselt also **nie innerhalb einer bestehenden Datei** — keine Datei
+> mischt beide Formate. **Es geht kein Wert verloren:** die entfallenen Spalten waren
+> strukturell immer leer.
+
+**Warum:** die beiden Fertigungsstränge schließen sich je Teil aus (Strang A = M10+M20,
+Strang B = M11+M21), ebenso die beiden Kontrollfenster von M50 ST110 — die Variablennamen sind
+dabei **identisch**. Eine Spalte je Controller ergab deshalb 292 Spaltenpaare, von denen immer genau
+eine Hälfte leer war.
+
+| Merge-Gruppe (Kopfzeile 1) | Quell-Controller |
+|---|---|
+| `M1x_<Station>_<KF>` | `M10_<Station>_<KF>` + `M11_<Station>_<KF>` |
+| `M2x_<Station>_<KF>` | `M20_<Station>_<KF>` + `M21_<Station>_<KF>` |
+| `M50_ST110` | `M50_ST110_KF1` + `M50_ST110_KF3` |
+| unverändert | `M50_ST040_KF1`, `M50_ST120_KF1`, `M50_ST130_KF1`, `M50_ST140_KF1` |
+
+| | vorher | nachher |
+|---|---|---|
+| Metaspalten | 16 | **17** (neu: `M50St110Kf`) |
+| Messspalten | 706 | **414** (davon 292 geteilt) |
+| **Gesamt** | **722** | **431** |
+
+- **Wertregel** (`Infrastructure/CsvMergeFill.cs`): die geteilte Zelle nimmt den **nicht-leeren** Wert
+  ihrer Quellen. Wären beide gefüllt, gewinnt der **zum Teil passende** Controller
+  (`M1xModule`/`M2xModule` aus dem Part-Exit-Telegramm) und es gibt **eine WARNUNG je Teil** — nie eine
+  je Zelle. Für ST110 kennt das Telegramm kein Kontrollfenster, dort gewinnt der erste nicht-leere Wert.
+- **Neue Metaspalte `M50St110Kf`** (`1`/`3`, leer ohne ST110-Messung) direkt hinter `M50Nest` — sie hält
+  fest, welches Kontrollfenster die ST110-Werte geliefert hat, analog zu `M1xModule`/`M2xModule`.
+  Alle übrigen Metaspalten behalten Name und relative Reihenfolge, Trennzeichen und Format sind unverändert.
+- **Nichts wird still verworfen:** eine Variable, die es nur auf **einer** Seite eines Paars gibt, behält
+  ihre **eigene Spalte unter dem Original-Controllernamen** und erzeugt beim Header-Aufbau eine einmalige
+  WARNUNG. Aktuell gibt es keine — alle fünf Paare sind in der Live-DB exakt deckungsgleich.
+- **Vor der Umstellung gegen die Realität geprüft:** alle fünf Paare in `measurement_definitions`
+  identisch (0 einseitige Variablen), und die Bestandsdatei `280726_141335_1118.csv` (4 099 Datenzeilen)
+  zeilenweise durch das neue Mapping geschickt: **1 477 452 gefüllte Zellen vorher und nachher,
+  0 Kollisionen, 0 Datenverlust**.
 
 ## 1.5 Timing: synchron vs. zeitversetzt
 

@@ -81,6 +81,11 @@ internal static class Program
         PartExitAck_StaysByteIdentical_DespiteTheMsDisplay();
         MsaRunImages_AreMovedNotCopied();
         TailScroll_FollowsPausesCountsAndResumes();
+        CsvLayout_MergesStrandsAndControlWindows();
+        CsvLayout_OneSidedVariableKeepsItsOwnColumn();
+        CsvFill_CoalescesXorAndResolvesConflicts();
+        CsvFill_M50St110KfIsTraceable();
+        CsvMetaColumns_UnchangedExceptTheNewOne();
         DePartExit_NoDbNoCsv_DeletesImages_Logs();
         BackupRoot_NonInputPathIsItsOwnRoot();
         Retention_NewSectionWins_And_ZeroMeansNever();
@@ -1349,6 +1354,251 @@ internal static class Program
                 return deeper;
         }
         return null;
+    }
+
+    // ---- Production CSV: merged strand / control-window columns ----------------------------------
+
+    /// <summary>The live definition set, condensed: (camera, variable count) exactly as in the DB.</summary>
+    private static List<CsvColumnSource> LiveLikeDefinitions()
+    {
+        var perCamera = new (string Camera, int Pairs)[]
+        {
+            ("M10_ST030_KF1", 8), ("M10_ST060_KF1", 18), ("M11_ST030_KF1", 8), ("M11_ST060_KF1", 18),
+            ("M20_ST060_KF1", 4), ("M20_ST060_KF3", 8), ("M21_ST060_KF1", 4), ("M21_ST060_KF3", 8),
+            ("M50_ST040_KF1", 18), ("M50_ST110_KF1", 108), ("M50_ST110_KF3", 108),
+            ("M50_ST120_KF1", 1), ("M50_ST130_KF1", 30), ("M50_ST140_KF1", 12),
+        };
+
+        var list = new List<CsvColumnSource>();
+        var id = 1;
+        foreach (var (camera, pairs) in perCamera)
+        {
+            // Variable names are identical within a merge pair — that is the whole premise (verified in
+            // the live DB: 0 one-sided variables across all five pairs). Deriving the stem from the
+            // MERGE GROUP reproduces exactly that: M10/M11 (and ST110 KF1/KF3) get the same names.
+            var stem = CsvColumnLayout.MergeGroup(camera);
+            for (var i = 1; i <= pairs; i++)
+            {
+                list.Add(new CsvColumnSource(id++, camera, $"R_{stem}_Feat{i}"));
+                list.Add(new CsvColumnSource(id++, camera, $"V_{stem}_Feat{i}"));
+            }
+        }
+        return list;
+    }
+
+    private static void CsvLayout_MergesStrandsAndControlWindows()
+    {
+        Console.WriteLine("[Case AS] CSV layout: M1x/M2x strands and the two M50 ST110 windows share columns");
+
+        // 1) Merge-group mapping.
+        AssertEqual("M10_ST030_KF1 → M1x", "M1x_ST030_KF1", CsvColumnLayout.MergeGroup("M10_ST030_KF1"));
+        AssertEqual("M11_ST060_KF1 → M1x", "M1x_ST060_KF1", CsvColumnLayout.MergeGroup("M11_ST060_KF1"));
+        AssertEqual("M21_ST060_KF3 → M2x", "M2x_ST060_KF3", CsvColumnLayout.MergeGroup("M21_ST060_KF3"));
+        AssertEqual("M50_ST110_KF1 → M50_ST110", "M50_ST110", CsvColumnLayout.MergeGroup("M50_ST110_KF1"));
+        AssertEqual("M50_ST110_KF3 → M50_ST110", "M50_ST110", CsvColumnLayout.MergeGroup("M50_ST110_KF3"));
+        AssertEqual("M50_ST040_KF1 unchanged", "M50_ST040_KF1", CsvColumnLayout.MergeGroup("M50_ST040_KF1"));
+        AssertEqual("M50_ST130_KF1 unchanged", "M50_ST130_KF1", CsvColumnLayout.MergeGroup("M50_ST130_KF1"));
+
+        // 2) Column counts against the measured reality (706 definitions → 414 columns, 292 merged).
+        var layout = CsvColumnLayout.Build(LiveLikeDefinitions());
+        AssertEqual("706 active definitions (as in the live DB)", 706, layout.SourceCount);
+        AssertEqual("→ 414 measurement columns", 414, layout.ColumnCount);
+        AssertEqual("292 of them carry two sources", 292, layout.MergedColumnCount);
+        AssertEqual("no warnings — every variable has its partner", 0, layout.Warnings.Count);
+        AssertEqual("every definition is placed in a column", 706, layout.ColumnByDefinitionId.Count);
+        AssertEqual("every R_ definition knows its V_ column", 353, layout.ValueColumnByResultDefinitionId.Count);
+
+        // No duplicate (header, variable) combination.
+        var keys = layout.ControllerHeaders.Zip(layout.VariableHeaders, (c, v) => c + "|" + v).ToList();
+        AssertEqual("no duplicate columns", keys.Count, keys.Distinct().Count());
+
+        // Header row 1 must no longer mention the individual strand controllers.
+        AssertTrue("no M10_/M11_ controller header left",
+            !layout.ControllerHeaders.Any(h => h.StartsWith("M10_") || h.StartsWith("M11_")));
+        AssertTrue("no M20_/M21_ controller header left",
+            !layout.ControllerHeaders.Any(h => h.StartsWith("M20_") || h.StartsWith("M21_")));
+        AssertTrue("no ST110 KF header left",
+            !layout.ControllerHeaders.Any(h => h is "M50_ST110_KF1" or "M50_ST110_KF3"));
+        AssertEqual("M50_ST110 columns", 216, layout.ControllerHeaders.Count(h => h == "M50_ST110"));
+        AssertEqual("M1x_ST060_KF1 columns", 36, layout.ControllerHeaders.Count(h => h == "M1x_ST060_KF1"));
+        AssertEqual("M50_ST130_KF1 columns untouched", 60, layout.ControllerHeaders.Count(h => h == "M50_ST130_KF1"));
+
+        // 3) Both partners really point at the SAME column …
+        var m10 = LiveLikeDefinitions().First(d => d.Camera == "M10_ST030_KF1" && d.Variable.StartsWith("R_"));
+        var m11 = LiveLikeDefinitions().First(d => d.Camera == "M11_ST030_KF1" && d.Variable == m10.Variable);
+        AssertEqual("M10 and M11 share one column for the same variable",
+            layout.ColumnByDefinitionId[m10.DefinitionId], layout.ColumnByDefinitionId[m11.DefinitionId]);
+        var kf1 = LiveLikeDefinitions().First(d => d.Camera == "M50_ST110_KF1" && d.Variable.StartsWith("V_"));
+        var kf3 = LiveLikeDefinitions().First(d => d.Camera == "M50_ST110_KF3" && d.Variable == kf1.Variable);
+        AssertEqual("ST110 KF1 and KF3 share one column",
+            layout.ColumnByDefinitionId[kf1.DefinitionId], layout.ColumnByDefinitionId[kf3.DefinitionId]);
+
+        // … while an unmerged controller stays separate.
+        var st130 = LiveLikeDefinitions().First(d => d.Camera == "M50_ST130_KF1");
+        AssertTrue("an unmerged controller keeps its own column",
+            layout.ColumnByDefinitionId[st130.DefinitionId] != layout.ColumnByDefinitionId[m10.DefinitionId]);
+    }
+
+    private static void CsvLayout_OneSidedVariableKeepsItsOwnColumn()
+    {
+        Console.WriteLine("[Case AT] CSV layout: a variable without a partner keeps its own column + WARNING");
+
+        var sources = new List<CsvColumnSource>
+        {
+            new(1, "M10_ST030_KF1", "R_Shared"),
+            new(2, "M11_ST030_KF1", "R_Shared"),
+            new(3, "M10_ST030_KF1", "R_OnlyOnM10"),      // no counterpart on M11
+            new(4, "M50_ST110_KF3", "R_OnlyOnKf3"),      // no counterpart on KF1
+        };
+        var layout = CsvColumnLayout.Build(sources);
+
+        AssertEqual("3 columns: 1 shared + 2 one-sided", 3, layout.ColumnCount);
+        AssertEqual("shared variable is merged",
+            layout.ColumnByDefinitionId[1], layout.ColumnByDefinitionId[2]);
+        AssertEqual("shared column header is the merge group", "M1x_ST030_KF1",
+            layout.ControllerHeaders[layout.ColumnByDefinitionId[1]]);
+        AssertEqual("one-sided M10 variable keeps the ORIGINAL controller name", "M10_ST030_KF1",
+            layout.ControllerHeaders[layout.ColumnByDefinitionId[3]]);
+        AssertEqual("one-sided ST110 variable keeps the ORIGINAL controller name", "M50_ST110_KF3",
+            layout.ControllerHeaders[layout.ColumnByDefinitionId[4]]);
+        AssertEqual("two warnings — nothing is folded away silently", 2, layout.Warnings.Count);
+        AssertTrue("the warning names the variable and the partner group",
+            layout.Warnings.Any(w => w.Contains("R_OnlyOnM10") && w.Contains("M1x_ST030_KF1")));
+    }
+
+    /// <summary>A part-exit telegram for the CSV fill tests (strand A = M10 + M20 by default).</summary>
+    private static SpsPartExitData CsvTestPart(int m1x = 10, int m2x = 20) =>
+        SpsPartExitData.TryParse(string.Join(";",
+            "DMC1", "2807260753160032218", "2607270001640", "1118", "Normal",
+            m1x.ToString(CultureInfo.InvariantCulture), "1",
+            m2x.ToString(CultureInfo.InvariantCulture), "2", "30", "3", "4", "21.5", "44.0", "OK"))!;
+
+    private static void CsvFill_CoalescesXorAndResolvesConflicts()
+    {
+        Console.WriteLine("[Case AU] CSV fill: XOR sources coalesce, a collision follows the priority rule + WARN");
+
+        const int meta = 17;   // Timestamp … Humidity, incl. the new M50St110Kf
+        var log = new RecordingLog();
+
+        // 1) XOR (the normal case): whichever strand ran supplies the value.
+        var rowA = new string?[meta + 3];
+        var fillA = new CsvMergeFill(CsvTestPart(m1x: 10), log);
+        fillA.Write(rowA, meta, 0, "M10_ST030_KF1", "1.23");           // strand A produced it
+        AssertEqual("strand A value lands in the shared column", "1.23", rowA[meta]);
+        AssertEqual("no collision", 0, fillA.ConflictCount);
+
+        var rowB = new string?[meta + 3];
+        var fillB = new CsvMergeFill(CsvTestPart(m1x: 11), log);
+        fillB.Write(rowB, meta, 0, "M11_ST030_KF1", "4.56");           // strand B, same column
+        AssertEqual("strand B value lands in the SAME shared column", "4.56", rowB[meta]);
+        AssertEqual("still no collision", 0, fillB.ConflictCount);
+
+        // 2) The same controller writing its R_ and V_ halves is not a collision.
+        var rowC = new string?[meta + 3];
+        var fillC = new CsvMergeFill(CsvTestPart(), log);
+        fillC.Write(rowC, meta, 0, "M10_ST030_KF1", "1");
+        fillC.Write(rowC, meta, 1, "M10_ST030_KF1", "1.23");
+        fillC.Write(rowC, meta, 0, "M10_ST030_KF1", "0");              // re-write by the same controller
+        AssertEqual("same controller may overwrite its own cell", "0", rowC[meta]);
+        AssertEqual("that is not counted as a collision", 0, fillC.ConflictCount);
+
+        // 3) Collision: both strands filled. The controller matching the part (M1xModule=11) wins,
+        //    regardless of the order in which the rows arrive.
+        var conflictLog = new RecordingLog();
+        var rowD = new string?[meta + 3];
+        var fillD = new CsvMergeFill(CsvTestPart(m1x: 11), conflictLog);
+        fillD.Write(rowD, meta, 0, "M10_ST030_KF1", "wrong");
+        fillD.Write(rowD, meta, 0, "M11_ST030_KF1", "right");
+        AssertEqual("the strand matching the part wins (M11 came second)", "right", rowD[meta]);
+
+        var rowE = new string?[meta + 3];
+        var fillE = new CsvMergeFill(CsvTestPart(m1x: 11), conflictLog);
+        fillE.Write(rowE, meta, 0, "M11_ST030_KF1", "right");
+        fillE.Write(rowE, meta, 0, "M10_ST030_KF1", "wrong");
+        AssertEqual("the strand matching the part wins (M11 came first)", "right", rowE[meta]);
+        AssertEqual("both cases counted a collision", 1, fillE.ConflictCount);
+
+        // 4) One WARNING per part — not per cell.
+        var single = new RecordingLog();
+        var part = CsvTestPart(m1x: 10);
+        var rowF = new string?[meta + 5];
+        var fillF = new CsvMergeFill(part, single);
+        for (var c = 0; c < 3; c++)
+        {
+            fillF.Write(rowF, meta, c, "M11_ST030_KF1", "b");
+            fillF.Write(rowF, meta, c, "M10_ST030_KF1", "a");
+        }
+        AssertEqual("3 colliding columns", 3, fillF.ConflictCount);
+        fillF.ReportConflicts(part);
+        AssertEqual("but only ONE warning for the part", 1,
+            single.Messages.Count(m => m.Contains("merged column(s) had BOTH sources filled")));
+        AssertTrue("the warning names the part and the colliding controllers",
+            single.Messages.Any(m => m.Contains("2807260753160032218") && m.Contains("M11_ST030_KF1+M10_ST030_KF1")));
+
+        // 5) No collision → no warning at all.
+        var quiet = new RecordingLog();
+        var fillG = new CsvMergeFill(part, quiet);
+        fillG.Write(new string?[meta + 1], meta, 0, "M10_ST030_KF1", "x");
+        fillG.ReportConflicts(part);
+        AssertEqual("silent when the strands behaved", 0,
+            quiet.Messages.Count(m => m.Contains("BOTH sources filled")));
+
+        // 6) ST110 has no part-side hint → the first non-empty value wins (and M50St110Kf names it).
+        var rowH = new string?[meta + 2];
+        var fillH = new CsvMergeFill(part, new RecordingLog());
+        fillH.Write(rowH, meta, 0, "M50_ST110_KF3", "first");
+        fillH.Write(rowH, meta, 0, "M50_ST110_KF1", "second");
+        AssertEqual("ST110: the first non-empty value is kept", "first", rowH[meta]);
+    }
+
+    private static void CsvFill_M50St110KfIsTraceable()
+    {
+        Console.WriteLine("[Case AV] CSV meta column M50St110Kf = 1 / 3 / empty");
+
+        var part = CsvTestPart();
+
+        var kf1 = new CsvMergeFill(part, new RecordingLog());
+        kf1.NoteController("M50_ST040_KF1");
+        kf1.NoteController("M50_ST110_KF1");
+        kf1.NoteController("M50_ST130_KF1");
+        AssertEqual("control window KF1 → \"1\"", "1", kf1.M50St110Kf);
+
+        var kf3 = new CsvMergeFill(part, new RecordingLog());
+        kf3.NoteController("M50_ST110_KF3");
+        AssertEqual("control window KF3 → \"3\"", "3", kf3.M50St110Kf);
+
+        var none = new CsvMergeFill(part, new RecordingLog());
+        none.NoteController("M10_ST030_KF1");
+        none.NoteController("M50_ST130_KF1");
+        AssertTrue("no ST110 measurement → empty", none.M50St110Kf is null);
+
+        var both = new CsvMergeFill(part, new RecordingLog());
+        both.NoteController("M50_ST110_KF3");
+        both.NoteController("M50_ST110_KF1");
+        AssertEqual("the window that supplied the values is reported (first one)", "3", both.M50St110Kf);
+    }
+
+    private static void CsvMetaColumns_UnchangedExceptTheNewOne()
+    {
+        Console.WriteLine("[Case AW] CSV meta columns: only M50St110Kf added, right after M50Nest");
+
+        // The meta header list is private; assert the contract the customer sees instead — the exact
+        // order of the 17 meta columns, which must equal the old 16 with M50St110Kf inserted at 14.
+        var old16 = new[]
+        {
+            "Timestamp", "DMC", "SerialNumber", "VirtualSerial", "OrderName", "Mode",
+            "Result", "M1xModule", "M1xNest", "M2xModule", "M2xNest", "M3xModule", "M3xNest",
+            "M50Nest", "Temperature", "Humidity",
+        };
+        var expected = old16.Take(14).Append("M50St110Kf").Concat(old16.Skip(14)).ToArray();
+
+        AssertEqual("17 meta columns", 17, expected.Length);
+        AssertEqual("M50St110Kf sits directly behind M50Nest", "M50Nest", expected[13]);
+        AssertEqual("… at index 14", "M50St110Kf", expected[14]);
+        AssertEqual("Temperature moved one to the right", "Temperature", expected[15]);
+        AssertEqual("Humidity stays last", "Humidity", expected[16]);
+        AssertTrue("every old meta column survives in its old relative order",
+            old16.SequenceEqual(expected.Where(h => h != "M50St110Kf")));
     }
 
     private static void BackupRoot_NonInputPathIsItsOwnRoot()
