@@ -118,7 +118,8 @@ public sealed class IniConfigManager
             DiagnosticPath = Str(s, "CSV_DiagnosticPath", string.Empty),
             DataSetsPerFile = Int(s, "DataSetsPerFile", 10000),
             Save = Bool(s, "CSV_Save", true),
-            MsaSave = Bool(s, "CSVMSA_Save", true),
+            // CSVMSA_Save is intentionally NOT mapped any more (deprecated 2026-07-28, the MSA summary
+            // CSV was removed); MsaPath is kept because the retention still ages out the legacy tree.
             DiagnosticSave = Bool(s, "CSVDiagnostic_Save", true),
         };
     }
@@ -151,7 +152,8 @@ public sealed class IniConfigManager
             HighResNgPath = Str(s, "HighResNGPath", string.Empty),
             HighResDiagnosticPath = Str(s, "HighResDiagnosticPath", string.Empty),
             HighResGoldenSamplePath = Str(s, "HighResGoldenSamplePath", string.Empty),
-            DeletePictures = Bool(s, "DeletePictures", true),
+            // [NAS] DeletePictures is intentionally NOT mapped any more (deprecated 2026-07-28) — a
+            // still-present key is reported in ParseRetention's deprecation list.
             BackupFolder = Str(s, "BackupFolder", string.Empty),
         };
     }
@@ -163,12 +165,37 @@ public sealed class IniConfigManager
     /// each such fallback is recorded in <see cref="RetentionConfig.Deprecations"/> so startup can log
     /// a "deprecated — use [Retention]" WARNING. The live INI is migrated so no fallback fires there.
     /// </summary>
+    /// <summary>
+    /// Parse the [Retention] section. This also collects the <b>central deprecation list</b> for the
+    /// whole INI (it is the one list that is logged as WARNINGs at startup by
+    /// <see cref="Services.RetentionService.StartAsync"/>), so a key that is still present but no
+    /// longer honoured is never silently ignored.
+    /// </summary>
     private static RetentionConfig ParseRetention(IniData data)
     {
         var r = data["Retention"];
         var nas = data["NAS"];
         var mysql = data["MySQL"];
+        var csvSection = data["CSV"];
         var deprecations = new List<string>();
+
+        // --- Keys that are still read from a live INI but no longer have any effect (2026-07-28) ---
+
+        // [NAS] DeletePictures: the OK-part behaviour now follows [Collage] Collage_Generate ONLY
+        // (collage on → delete the originals, collage off → move them to [NAS] BackupFolder).
+        if (HasKey(nas, "DeletePictures"))
+            deprecations.Add("[NAS] DeletePictures is deprecated and IGNORED — the OK-part image action " +
+                             "now follows [Collage] Collage_Generate only (on → delete, off → move to BackupFolder)");
+
+        // [CSV] CSVMSA_Save: the per-run MSA summary CSV was removed; [MSA] ReportPath holds PDF+RAW+IMG.
+        if (HasKey(csvSection, "CSVMSA_Save"))
+            deprecations.Add("[CSV] CSVMSA_Save is deprecated and IGNORED — the MSA summary CSV was removed; " +
+                             "MSA files live under [MSA] ReportPath (PDF/RAW/IMG) and the numbers in msa_results");
+
+        // [CSV] CSV_MSAPath is deliberately NOT flagged here: nothing is written to it any more, but it
+        // is still the retention root that ages out the existing legacy tree ([Retention] CSV_Evaluation).
+        // A key we actively use must not produce a deprecation WARNING on every start; its changed role
+        // is documented on CsvConfig.MsaPath and in the INI comment instead.
 
         // Old [NAS] FullResRetentionDays was the fallback for the per-type image keys.
         var legacyFullRes = HasKey(nas, "FullResRetentionDays") ? Int(nas, "FullResRetentionDays", 30) : 30;

@@ -64,7 +64,7 @@ public interface ISpsServer
     /// across all SPS channels; V1 used CR+LF). When null,
     /// the server falls back to an immediate "OK". Set by the part-exit orchestrator.
     /// </summary>
-    Func<SpsPartExitData, Task<bool>>? PartExitHandler { get; set; }
+    Func<SpsPartExitData, Task<PartExitOutcome>>? PartExitHandler { get; set; }
 
     Task StartAsync(CancellationToken ct);
     Task StopAsync();

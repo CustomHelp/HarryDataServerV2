@@ -13,6 +13,13 @@ public sealed class LogEntryVm
 {
     public required string Text { get; init; }
     public required Brush Brush { get; init; }
+
+    /// <summary>
+    /// The line text is the stable identity of an entry. <see cref="Controls.TailScrollView"/> uses it to
+    /// hold the scroll position and to count new entries across the per-tick rebuild of
+    /// <see cref="LogViewModel.Entries"/> (the item objects themselves are recreated every tick).
+    /// </summary>
+    public override string ToString() => Text;
 }
 
 /// <summary>

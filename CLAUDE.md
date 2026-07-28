@@ -313,24 +313,34 @@ is answered with `<32×'0'>;false`). Empty fields are allowed:
 > spec for the PLC programmer: `SPS_Schnittstellen.md` §4.
 
 **Triggers after receiving (`PartExitOrchestrator`):**
-- **OK:** CSV export ‖ Collage (if `Collage_Generate`) ‖ image handling (the part's low-res individual
-  images are deleted, or backed up then deleted — see §11). MSA parts are acked but never touch the
-  production tables.
-- **NG:** CSV export only; low-res images are kept and removed later with the full-res NG image.
+> **All image actions below search `01_Low_Resolution_Individual` ONLY** and share one implementation
+> (`ImageHandler.ApplyAsync`) — see §11 "Folder roles + Delete Logic" for the binding target concept.
+
+- **OK:** CSV export ‖ Collage (if `Collage_Generate`) ‖ image handling. The image action depends on
+  **`Collage_Generate` only**: on → collage, then **delete** the originals; off → **move** them to
+  `[NAS] BackupFolder\YYYY\MM\DD`. MSA parts are acked but never touch the production tables.
+- **NG:** CSV export ‖ **low-res images deleted without a replacement** (changed 2026-07-28 — they used
+  to be kept; the NG evidence is the full-res image in `03`, which is never touched by the server).
+- **Unknown** (field 14 is neither `OK`/`NG`/`DE`): `dmcserial` row + image delete like NG, but
+  **NO CSV row**, and always a WARNING with the raw field 14 and the raw telegram.
 - **DE (deleted part):** a scrapped part. It is **not a finished part**, so the early DE branch in
   `HandleAsync` returns before `SaveDmcAsync`/`WritePartAsync` — **NOTHING is written to `dmcserial`
-  and NOTHING to the production CSV**. It only **purges the part's images**. DE is a full 15-field
-  telegram (`ResultStatus=DE`, `mode=Normal`) and is **polymorphic** on the live line (verified
+  and NOTHING to the production CSV**. It only **purges the part's low-res images**. DE is a full
+  15-field telegram (`ResultStatus=DE`, `mode=Normal`) and is **polymorphic** on the live line (verified
   2026-07-27 over 95 DE part-exits): **91 carry the full frame SZID** (an assembled/partly-assembled
-  part discarded — images across M1X/M5X, sometimes a DMC too) and **4 carry only the trimmer serial**
-  (a loose rejected trimmer, M2X images). The server therefore deletes by **both** the frame SZID (19)
-  **and** the trimmer serial (13) when present — matched as the Field 1 **prefix** (real filenames
-  store Field 1 as the serial right-padded with `0`, **no** separator, so `StartsWith` is exact and
-  never spills onto an adjacent serial), searched across the low-res, NG and diagnostic roots (incl.
-  the NAS-sorted `YYYY\MM\DD` day-folders). The measurement rows are left untouched; the log line
-  **`DE: n image(s) deleted for <serials>`** (WARNING when 0 found) is the sole record of the removal.
-  (`ImageHandler.DeleteBySerialsAsync`.) DE always parses correctly as `PartResult.Deleted` (no
-  malformed telegrams in the live logs), so no parsing change is needed.
+  part discarded) and **4 carry only the trimmer serial** (a loose rejected trimmer, M2X images). The
+  server therefore deletes by **both** the frame SZID (19) **and** the trimmer serial (13) when present
+  — matched as the **Serial1 prefix** (real filenames store Serial1 as the serial right-padded with `0`,
+  **no** separator, so `StartsWith` is exact and never spills onto an adjacent serial), searched
+  recursively in the low-res root (incl. legacy `YYYY\MM\DD` day-folders). **The NG (03) and diagnostic
+  (04) roots were removed from the search on 2026-07-28.** The measurement rows are left untouched; the
+  log line with count + keys (WARNING when 0 found) is the sole record of the removal. DE always parses
+  correctly as `PartResult.Deleted` (no malformed telegrams in the live logs).
+- **No frame serial:** no `dmcserial` row is written at all (it would collide with every other
+  serial-less part on `uk_serial`) — a WARNING with the raw telegram is logged instead.
+- **ACK:** `<SZID padded to 32>;true|false` + CR — unchanged. The orchestrator additionally returns its
+  measured duration, which is appended **only** to the UI's "Last responses" line
+  (`…;true (87 ms)`), never to the telegram.
 
 ### Channels 3–7 — MSA Evaluation Trigger
 
@@ -414,8 +424,34 @@ When the run completes, the SPS sends the completion signal on the MSA channel a
 There is no longer any "MoverNumber" / TrayRow / TrayCol field.
 
 ### Image Filename Search
-Image filenames start with a 12-character abbreviated serial + underscore.
-When searching for images, use only the **first 12 characters** of the SZID.
+
+> **Corrected 2026-07-28 — there is NO underscore in the serial.** Field 1 of a real filename is
+> the **bare serial right-padded with `0`**, no separator inside it
+> (`2707261603210031811000-000…0-1-M50_ST140_KF1-1-&Cam1Img.bmp`). The V1 carry-over
+> `CollageService.FormattedSerials`, which inserted a `_` after char 12, therefore made **every**
+> `filename.Contains(serial)` test fail: no collage source image was ever found and no OK-part
+> low-res image was ever cleaned up (live WARNINGs `no images found … for '270726160321_0031811,
+> 260727000164_0'` while those files sat in `Z:\01…\Input`). Search keys now come from
+> `SerialNumberHelper.ToImageSearchKey` (strips separators, caps to 22, **no** `TrimEnd('0')`), and
+> every search site re-applies it immediately before searching.
+
+Image filenames start with **Serial1** = the serial right-padded with `0` (no separator). The full
+binding filename spec — all six fields, the field content per mode/module, the camera-number rule and
+the two live deviations (M2X camera 1 swapped widths, M50_ST040 legacy underscore/OCR form) — is in
+**§11 "Image Filename Format — BINDING SPEC"**. The one parser is `Infrastructure/ImageFileName.cs`.
+
+Search keys, always matched **field-accurately** (never `Contains` over the whole filename — in MSA
+mode Serial2 carries a real DMC that can contain any digit sequence):
+
+| Purpose | Key | Matched against |
+|---------|-----|-----------------|
+| Part-exit image handling, DE deletion, collage source | frame SZID **19** / trimmer **13** (full length) | **prefix of Serial1** |
+| NG ↔ low-res retention linkage | first **12** chars | **Serial1 prefix on both sides** (parsed, not raw filename) |
+| MSA run-image collection | **14**-char BaseID | **prefix of Serial1** |
+| MSA per-part lookup | DMC | **Serial2** |
+
+**MSA images (`Serial2 ≠ zeros`) are excluded from every production sweep** and are never deleted by
+production retention; an unparsable filename is likewise kept and reported (WARN).
 
 ---
 
@@ -535,11 +571,18 @@ fills it from config so it is never a misleading "(none configured)".
   (default `D:\HarryDataServer\MSA_Reports`) — SAME layout — with a WARNING, never a crash/data loss.
   Old flat `<ReportPath>\<Module>\<Date>\` files are left untouched (no migration). The per-run
   **measurement summary CSV** still lives under `[MSA] ResultPath\YYYY\MM\DD\<BaseID>\CSV`.
-- **Run images (`IMG\`, task C):** `MsaService.CopyRunImages` **copies** (never moves — NAS originals
-  stay) every image whose filename Field 1 starts with the 14-char BaseID from the **GoldenSample**
-  NAS input (`[NAS] HighResGoldenSamplePath`) into `IMG\`. Missing/unmatched images are not a run
-  error — only a log line "n found / m copied". (Predecessor `MoveRunImages` moved GoldenSample-only
-  images into the old ResultPath IMG tree and so appeared inactive.)
+- **Run images (`IMG\`) — MOVED since 2026-07-28:** `MsaService.MoveRunImages` → `MsaRunImages.Move`
+  **moves** (no longer copies) every image whose filename **Serial1** starts with the 14-char BaseID out
+  of the **GoldenSample transit folder** (`[NAS] HighResGoldenSamplePath`) into `IMG\`. Crossing the
+  drive boundary (Z: → X:) it is copy → size-verify → delete. A single failed move is a WARNING and the
+  **original is left in place** (the 3-day retention removes it later); the run is never failed by an
+  image. Missing/unmatched images are not a run error — only a log line "n found / n moved".
+  Rationale: `05` is a transit buffer, so a finished run takes its images with it (copying left every
+  run's originals there forever).
+- **No MSA summary CSV any more (removed 2026-07-28):** `[MSA] ReportPath` is the single file-based MSA
+  location (PDF + RAW + IMG); the numbers additionally live in `msa_results`. `[CSV] CSVMSA_Save` is
+  deprecated/ignored (WARNING when set); `[CSV] CSV_MSAPath` is only still read as the retention root
+  that ages out the existing legacy `Y:\01` tree. Existing files there are left untouched.
 
 ### MSA Reference Files
 
@@ -1010,20 +1053,26 @@ CSV_BasePath=Y:\02_CSV_Merge      ; production CSV → CSV_BasePath\YYYY\MM\DD
 CSV_DiagnosticPath=Y:\03_CSV_Diagnostic  ; diagnostic CSV → \YYYY\MM\DD
 DataSetsPerFile=10000
 CSV_Save=true
-CSVMSA_Save=true
 CSVDiagnostic_Save=true
+; CSVMSA_Save removed 2026-07-28 (deprecated + ignored: the MSA summary CSV export is gone).
+; CSV_MSAPath is only still read as the retention root of the existing legacy Y:\01 tree.
 
 [NAS]
 ; Z:\ IS the images share, so the folders live directly under it (01_… … 06_…), NOT under Z:\Images.
+; NAS sorting is OFF — no new YYYY\MM\DD day-folders in 01–05; existing ones are legacy stock.
+; Folder roles: 01 = the ONLY folder part-exit image actions search · 02 = collage output ·
+; 03 NG + 04 diagnostic = camera only, the program NEVER touches them · 05 = MSA TRANSIT buffer
+; (a finished run MOVES its images to [MSA] ReportPath) · 06 = OK backup when no collage is made.
 LowResIndividualPath=Z:\01_Low_Resolution_Individual\Input
 CollagePath=Z:\02_Low_Resolution_Collage\Input
 HighResNGPath=Z:\03_High_Resolution_NG\Input
 HighResDiagnosticPath=Z:\04_High_Resolution_Diagnostic\Input
 HighResGoldenSamplePath=Z:\05_High_Resolution_GoldenSample\Input
-; Part-exit image handling for OK parts. There is NO 'delete after collage' switch — these two keys
-; decide it: DeletePictures=true deletes the source images; =false copies them to BackupFolder\YYYY\MM\DD
-; (size-verified) then deletes. ALL retention is central now (see [Retention]).
-DeletePictures=false
+; OK part: the image action follows [Collage] Collage_Generate ONLY —
+;   true  -> collage, then DELETE the originals
+;   false -> MOVE the originals to BackupFolder\YYYY\MM\DD (copy, verify size, delete)
+; NG / Unknown / DE: low-res images are DELETED without a replacement (NG evidence = full-res in 03).
+; [NAS] DeletePictures was REMOVED 2026-07-28 (deprecated + ignored; a still-present key logs a WARNING).
 BackupFolder=Z:\06_Backup
 
 [Retention]
@@ -1032,10 +1081,12 @@ BackupFolder=Z:\06_Backup
 ; never touched. Legacy [MySQL]/[NAS] retention keys are read as a deprecated fallback (WARNING).
 Images_NG=30
 Images_Diagnostic=30
-Images_GoldenSample=30
+Images_GoldenSample=3     ; 3, NOT 30: 05 is only a TRANSIT buffer (finished runs are moved to X:)
 Images_Collage=30
 Images_Backup=30
 Images_InputLeftovers=3   ; files stuck in a …\Input folder past N days = failed-run leftovers → delete + WARNING
+                          ; MSA images are spared in 01–04 but NOT in 05 (transit buffer);
+                          ; an unparsable filename is never deleted anywhere (reported instead)
 Database_Production=35    ; measurements_serial(_trimmer) DROP PARTITION + dmcserial batch DELETE
 Database_MSA=0            ; msa_measurements, msa_results → NEVER by default (QS data)
 Reports_MSA=0             ; [MSA] ReportPath dated folders → NEVER by default (QS evidence)
@@ -1093,32 +1144,60 @@ Z:\Images\
 ```
 NAS auto-sorts images into date subfolders (YYYY\MM\DD).
 
-### Image Filename Format
+### Image Filename Format — BINDING SPEC (Philipp, 2026-07-28)
 
 The Keyence controller writes the filename. The **same** camera program runs in Normal and MSA
-mode, so the structure is identical — only the first two fields differ. The field separator is
-the **hyphen `-`** (the SZID contains an underscore after char 12, so `_` cannot be the separator):
+mode, so the structure is identical — only the two serial fields differ. Field separator is the
+**hyphen `-`**; the controller name and the image variable contain **underscores**, so `_` can
+never be the separator.
 
 ```
-<Field1 22>-<Field2 32>-<overall 1|0>-<Controller>-<Nest>-&<ImageName>.png
+{Serial1}-{Serial2}-{Overall}-{Controller}-{CameraNumber}-{ImageVariable}.bmp
 ```
 
-| Field | Normal mode | MSA / LimitSample mode |
-|-------|-------------|------------------------|
-| Field 1 (≤22 chars) | SZID (frame serial) | BaseID(14) + Loop(3) + padding |
-| Field 2 (32 chars) | 32 zeros (ignore) | DMC printed on the test part |
-| overall `1\|0` | overall camera result (1=OK, 0=NG) | same |
-| Controller | camera controller name (e.g. `M50_ST040_KF1`) | same |
-| Nest | nest number under the camera | same |
-| `&<ImageName>` | image identifier (a camera may save several images per part, e.g. height/bright-light) — may contain dots | same |
+| Field | Width / values | Content |
+|-------|----------------|---------|
+| **Serial1** | exactly **22** chars, right-padded with `0` | see mode table below |
+| **Serial2** | exactly **32** chars, right-padded with `0` | see mode table below |
+| **Overall** | `0` / `1` | camera's overall result |
+| **Controller** | e.g. `M50_ST140_KF1` | **contains `_`** |
+| **CameraNumber** | `1`–`4` on M1X · `1`–`2` elsewhere · always `1` on M50 ST110 | camera under the controller (this is the *camera number*, NOT a nest number — the older "Nest" naming was wrong) |
+| **ImageVariable** | e.g. `&Cam1Img`, `&Cam1Img_Dark` | contains `&`, `_` and dots |
 
-> Parser: `Infrastructure/ImageFileName.cs`. Field 1 is everything up to the first `-` (it never
-> contains a `-`), capped to **22 chars** (`SerialField.MaxLength`) to match the stored Serial1.
-> Field 2 (DMC) **may** contain hyphens, so it is recovered by anchoring on the `&ImageName` tail
-> rather than a naive split.
-> **Search keys:** Normal = first 12 chars of Field 1 (SZID, NG cleanup linkage); MSA = first 14
-> chars of Field 1 (BaseID, run-image collection — matches all loops regardless of the 22-char
-> Serial1). The 22-char Serial1 is the stored/DB form; image matching uses the shorter prefixes.
+| Mode / module | Serial1 | Serial2 |
+|---------------|---------|---------|
+| Normal — M1X + M50 | frame serial (19 digits) + `0` padding | all zeros |
+| Normal — M2X | **virtual (trimmer) serial** + `0` padding | all zeros |
+| **MSA / LimitSample** | full **BaseID incl. loop counter** + padding | **the DMC lasered on the part** — real content, *not* a zero field |
+
+> **`Serial2 ≠ all zeros` is the one reliable MSA marker** (`ImageFileName.IsMsa`). Every production
+> sweep (DE purge, OK backup/delete, `[Retention] Images_InputLeftovers`, NG↔low-res linkage, collage
+> source search) **skips MSA images** — they are QS evidence and are only ever removed by an explicit
+> MSA retention key. A filename that cannot be parsed is likewise never deleted, only reported (WARN).
+
+**Two deviations that really occur on the line (verified 2026-07-28 over 26 093 files, 100 % parsed):**
+
+| Form | Who | What |
+|------|-----|------|
+| `SwappedWidths` | **M20/M21 camera 1** (~2 400 files/day) | the two serial field **widths are swapped**: Serial1 = 32, Serial2 = 22. Content unchanged (trimmer serial in Serial1, zeros in Serial2). → **open point for the camera side** |
+| `LegacyUnderscore` | **M50_ST040_KF1**, OCR images only (~500/day, NG folder) | the **old V1 layout**: `_` separators, an extra `OCR` marker, and the serial split by a `_` after char 12 — `270726161219_00320440000000000000_1_M50_ST040_KF1_2_OCR_&Cam2Img_Dark.png`. The parser reassembles Serial1 **without** the `_`, so it matches with the same key as the modern form. → **open point for the camera side** |
+
+> **Underscore history:** the very first V1 camera program wrote the serial with a `_` after char 12
+> and used `_` as the field separator. Since the change to the two serial fields there is no
+> underscore in the serial — the stale "`_` after char 12" documentation (corrected 2026-07-28) came
+> from that era, and one un-migrated camera program still produces it (see `LegacyUnderscore`).
+
+> **Parser: `Infrastructure/ImageFileName.cs` is the SINGLE place that splits a filename** — no other
+> code may `Split('-')` an image name. Serial1/Serial2 are separated at the **fixed offset** (`-`
+> expected at index 22, or 32 for the known swap), and the three trailing fields are read from the
+> **end**, so a hyphen inside a DMC cannot shift any field. Unparsable → `null` + a WARN from the
+> caller (one line per sweep with a count and one example), never a silent skip.
+>
+> **Matching is field-accurate (behaviour change 2026-07-28, was `Contains` over the whole name):**
+> production keys (frame 19 / trimmer 13 / virtual serial, normalised via
+> `SerialNumberHelper.ToImageSearchKey`) match **as a prefix of Serial1**; MSA searches match the
+> **BaseID against Serial1** and the **DMC against Serial2**. The 12-char prefix is still used for the
+> NG ↔ low-res retention linkage — but taken from the parsed **Serial1**, not from the raw filename.
 
 ### MSA Result Collection (on run complete)
 
@@ -1136,24 +1215,47 @@ Run images are those whose Field 1 starts with the 14-char BaseID (loop + paddin
 `[MSA] ResultPath` (per-run OUTPUT) is kept **separate** from `[MSA] ReferencePath` (the persistent
 `MSA_<module>.json` INPUT definitions written by HarryLimitSample). Helper: `Infrastructure/MsaResultLayout.cs`.
 
-### Delete Logic
-- **Central retention (§11a `RetentionService`):** NG / Diagnostic / GoldenSample images + finished
-  collages are sorted by the NAS out of each `\Input` folder into sibling `YYYY\MM\DD` day-folders;
-  the service walks those and deletes a **whole day-folder** once its date (from the **folder name**,
-  not the file timestamp) is older than its `[Retention]` days.
-- **NG low-res linkage:** when an NG day-folder is deleted, the matching low-res individual images
-  (linked by the 12-char serial prefix) are deleted with it.
-- **OK images (part exit):** an OK part's low-res individual images are handled immediately at part
-  exit — **deleted** (`[NAS] DeletePictures=true`) or **copied to `[NAS] BackupFolder\YYYY\MM\DD`
-  then deleted** (`DeletePictures=false`). This runs **regardless of collage** (a disabled collage no
-  longer leaves them behind). There is **no `DeleteAfterCollage` switch** — it was dead config and was
-  removed. A missing/empty source folder or a 0-match search is now a **WARNING** (it used to be a
-  silent no-op — the cause of low-res images piling up in `Z:\01…\Input`).
-- **DE image deletion (ST160):** on a `DE` part exit the scrapped part's images are deleted by the
-  full frame **SZID (19)** and/or the **trimmer serial (13)** — whichever the telegram carries —
-  across the low-res / NG / diagnostic roots (§5 Ch 2). No `dmcserial`/CSV write.
-- **Image search key:** first 12 chars of the SZID (Field 1) for NG linkage / Normal; the full frame
-  SZID (19) and/or trimmer serial (13) as an exact Field-1 prefix for DE deletion.
+### Folder roles + Delete Logic (TARGET CONCEPT, Philipp 2026-07-28 — binding)
+
+| Folder | Role |
+|--------|------|
+| `01_Low_Resolution_Individual\Input` | camera writes the per-part low-res images. **THE ONLY folder any part-exit image action searches** (OK/NG/DE/Unknown) |
+| `02_Low_Resolution_Collage\Input` | collage output (when `Collage_Generate=true`) |
+| `03_High_Resolution_NG` | camera writes NG full-res images. **The program NEVER touches 03** — only retention (`Images_NG`, day-folders) |
+| `04_High_Resolution_Diagnostic` | third threshold on OK parts (extra full-res image). **The program NEVER touches 04** — only retention |
+| `05_High_Resolution_GoldenSample\Input` | first threshold (GoldenSample/MSA). **TRANSIT BUFFER:** an MSA completion **MOVES** the run's images to `[MSA] ReportPath`; whatever is left (aborted runs **and** the M1X production `.png` — deliberate decision) is deleted after **3 days** |
+| `06_Backup` | target for an OK part's low-res images **only when no collage is generated**; retention 30 days |
+
+> **NAS sorting is OFF (2026-07-28):** no new `YYYY\MM\DD` day-folders appear in 01–05; existing ones
+> are legacy stock. Searches still run **recursively from the folder root** (`ImageFileName.SortedRoot`)
+> and therefore tolerate them.
+
+- **ONE image machinery for every part state** (`ImageHandler.ApplyAsync`, called via
+  `PartExitOrchestrator.RunImagesAsync`): same root (`01`, recursive), **no extension filter** (`*.bmp`
+  and `*.png` alike), field-accurate **Serial1-prefix** match, and **MSA images
+  (`Serial2 ≠ zeros`) plus unparsable names are never touched**. Every delete/move logs count + keys;
+  0 matches is a WARNING carrying the raw AND normalised key, the folder, the inspected count and the
+  MSA-skip count.
+- **OK images (part exit):** the action depends on **`[Collage] Collage_Generate` ONLY** —
+  `true` → build the collage into `[Collage] Collage_ResultImages`, then **delete** the originals;
+  `false` → **move** them to `[NAS] BackupFolder\YYYY\MM\DD` (copy → size-verify → delete).
+  **`[NAS] DeletePictures` is deprecated and IGNORED** (a still-present key logs a WARNING at startup).
+- **NG images (part exit, new 2026-07-28):** the low-res images are **deleted without a replacement** —
+  the NG evidence is the full-res image in `03`, which is not touched.
+- **Unknown result (field 14 neither OK/NG/DE):** handled like NG (`dmcserial` + image delete) but
+  **without a CSV row**, and always reported as a WARNING with the raw field + raw telegram.
+- **DE image deletion (ST160):** deleted by the full frame **SZID (19)** and/or the **trimmer serial
+  (13)** — whichever the telegram carries — **in `01` only** (03/04 were removed from the search roots
+  on 2026-07-28). No `dmcserial`/CSV write.
+- **No frame serial → no `dmcserial` row** (it would collide with every other serial-less part on
+  `uk_serial`); reported as a WARNING with the raw telegram instead.
+- **NG low-res linkage (retention):** when an NG day-folder expires, the matching low-res images
+  (12-char **Serial1** prefix on both sides) are deleted with it. **Kept as a FALLBACK** even though NG
+  now deletes at part exit — a missed part exit (restart, lost telegram) or an image written after the
+  part exit would otherwise orphan a low-res image that no other sweep picks up.
+- **Image search key:** frame SZID (19) / trimmer serial (13) as a **Serial1 prefix** for every
+  part-exit action; the first 12 chars of Serial1 for the NG↔low-res retention linkage; the 14-char
+  BaseID for MSA run images.
 
 ### 11a. Central Retention (`RetentionService`, [Retention] section)
 
@@ -1165,7 +1267,7 @@ nothing to do / disabled) and every path/access error is a WARNING with the path
 | Target | `[Retention]` key | What / how |
 |--------|-------------------|------------|
 | NG (+linked low-res), Diagnostic, GoldenSample, Collage, Backup | `Images_*` | delete whole `YYYY\MM\DD` day-folders older than N |
-| `…\Input` leftovers | `Images_InputLeftovers` (default 3) | files left in an `\Input` folder past N days = failed-run remnants → delete + **WARNING** (low-res Input keeps NG-flagged files) |
+| `…\Input` leftovers | `Images_InputLeftovers` (default 3) | files left in an `\Input` folder past N days = failed-run remnants → delete + **WARNING**. **In 01–04 never deleted:** MSA images (`Serial2 ≠ zeros`) — kept and reported; the low-res Input additionally keeps NG-flagged files. **In 05 (MSA transit buffer) MSA images ARE deleted** (`isMsaTransitFolder: true`, 2026-07-28) — a finished run has moved its images to `[MSA] ReportPath`, so what is left is an aborted run or an M1X production image. **Everywhere: a name that does not parse is never deleted** (`RetentionService.ClassifyLeftover`) |
 | MSA reports | `Reports_MSA` (**default 0 = never**) | dated folders under `[MSA] ReportPath` |
 | CSV Merge / Evaluation / ExtraResults | `CSV_Merge` / `CSV_Evaluation` / `CSV_ExtraResults` | `YYYY\MM\DD` day-folders |
 | Production DB | `Database_Production` | `measurements_serial(_trimmer)` via **DROP PARTITION** (standing rule — never DELETE on partitioned tables); `dmcserial` via bounded **batch DELETE** (`LIMIT 10000`, short pauses → no long locks) |
@@ -1219,7 +1321,11 @@ KeyName=M50_ST120_KF1
 - Header: dynamic from `measurement_definitions` table
 - Missing values (camera was offline): empty column
 - File rotation: on order name change OR when `DataSetsPerFile` rows reached
-- Filename: `YYYY-MM-DD-HH-mm-OrderName.csv`
+- Filename: `<DDMMYY_HHMMSS>_<OrderName>.csv` (SOW §5.1.2 stamp via `FileNaming.Stamp`; `NoOrder` when
+  the order name is empty). Corrected 2026-07-28 — the old `YYYY-MM-DD-HH-mm-OrderName.csv` in this
+  spec never matched the code.
+- **Only OK and NG parts produce a row.** DE and an unrecognised result (`Unknown`) are excluded, so
+  the production CSV contains finished parts with an understood result only.
 - Path: `CSV_BasePath\YYYY\MM\DD\`
 
 ### MSA/Evaluation CSV
@@ -1336,9 +1442,22 @@ server; per-tool on the companions). Default is Dark when nothing is saved.
   HarryCollageCreator) and launches them with `Process.Start`. Each exe is discovered **next to the
   running exe** (`<name>.exe` or a `<name>\<name>.exe` sibling) — no hardcoded paths; a missing exe
   shows a disabled button with a "not found next to exe" hint. (`CompanionToolViewModel`)
-- **Log tab autoscroll:** console/chat style — follows the newest entry (now at the **bottom**) only
-  while the view is scrolled to the bottom; scrolling up holds position across the per-tick rebuild;
-  returning to the bottom resumes following. (`ucLogControl.xaml.cs`)
+- **Console tail auto-scroll (`Controls/TailScrollView.cs`, 2026-07-28):** ONE reusable wrapper provides
+  the whole mechanic for the **log tab** and both **PLC channel lists** — wrap the list, nothing else:
+  `<ctl:TailScrollView><ListBox …/></ctl:TailScrollView>`. At the bottom it follows new entries;
+  scrolling up **or clicking a line** pauses following and holds the position **exactly** (anchored on
+  the line's text, so a ring buffer dropping old rows cannot shift the view); while paused a
+  **"▼ n new"** overlay counts the entries added since the pause and jumps back on click; scrolling
+  back to the bottom (2-unit tolerance) resumes; nothing scrolls while the mouse button is held or a
+  wrapped text control has a selection. The **selected line survives the per-tick rebuild**, so
+  *Copy line* (context menu / Ctrl+C) works while the log runs.
+  **Content changes are detected via `CollectionChanged`, not `ScrollChanged`** — with a full ring
+  buffer the item count is constant, so `ExtentHeightChange` stays 0 and a scroll-event-based
+  detection silently drifts and never counts. Pure view mechanics: no view-model involvement; the only
+  requirement on an item type is a meaningful `ToString()` (the line text) as its stable identity.
+- **PLC channel lists are in console order** (oldest at the top, newest at the bottom, changed
+  2026-07-28 from newest-on-top) so they use the same mechanic as the log
+  (`SpsChannelViewModel.Sync`).
 - **Copy serial:** right-clicking a line in a camera tile's "Last telegrams" list offers
   *"Seriennummer kopieren"*, copying just the 22-char Serial1 to the clipboard. (`ucCameraControl`)
 
@@ -1580,6 +1699,31 @@ Build in this sequence — each phase must compile before starting the next:
 **SOW requirement:** M1X captures 4 nests in one image. Filename must include all 4 parts' SZIDs.
 **Current state:** Our image file-matching logic uses the 12-char SZID prefix per part. M1X images with 4 SZIDs in the filename won't match this pattern.
 **Question:** What is the exact filename format Harry's will use for M1X multi-part images? Our `ImageHandler` needs a special matching rule for M1X images.
+**Update 2026-07-28:** the live M1X images (`M10/M11_ST030|ST060_KF1`) carry **one** SZID and camera number **4** — no 4-in-1 filename appeared yet.
+
+#### 19.3.6 Camera-side filename deviations (found 2026-07-28 on the live NAS)
+Both are parsed by `ImageFileName` (nothing is lost), but both deviate from the spec Philipp confirmed
+and should be aligned in the camera programs:
+1. **M20/M21 camera 1** writes the two serial field **widths swapped** — `Serial1 = 32`, `Serial2 = 22`
+   (~2 400 files/day). Camera 2 of the same controllers writes the spec form 22/32.
+2. **M50_ST040_KF1** still writes its **OCR images in the old V1 layout** (~500/day into the NG folder):
+   `_` separators, an extra `OCR` field, and the serial split by a `_` after char 12
+   (`270726161219_00320440000000000000_1_M50_ST040_KF1_2_OCR_&Cam2Img_Dark.png`).
+
+#### 19.3.7 Where do the M1X images belong? (found 2026-07-28 — **decided, see the note at the end**)
+`Z:\05_High_Resolution_GoldenSample\Input` — the folder the server treats as the **MSA/GoldenSample**
+source (`[NAS] HighResGoldenSamplePath`, read by `MsaService.CopyRunImages`) — currently holds ~1 000
+**normal-production M1X images** (`M10/M11_ST060_KF1`, camera 4, `Serial2 = zeros`). Consequences today:
+- No production flow consumes them: the **DE purge searches LowRes / NG / Diagnostic only**, so a
+  scrapped part's M1X images are **not** deleted; the OK part-exit cleanup only searches the low-res path.
+- The only sweep that ever removes them is `[Retention] Images_InputLeftovers=3` — i.e. they are deleted
+  as "failed-run leftovers" after 3 days, with a WARNING. Nothing in the folder is older than 3 days yet.
+**DECIDED 2026-07-28 (Philipp):** `05` is a **transit buffer** — a finished MSA run moves its images
+out, and **everything left over, explicitly including the M1X production `.png`, is deleted by the
+3-day retention**. The DE purge deliberately does **not** search `05`, so a scrapped part's M1X images
+simply age out there. Consequence to be aware of: M1X **OK** images are therefore never moved into
+`06_Backup` either. If M1X images should be backed up / DE-purged like the other modules, the camera
+must write them into `01_Low_Resolution_Individual\Input` — that remains a camera-side question.
 
 ---
 

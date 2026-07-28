@@ -113,7 +113,10 @@ public sealed class RetentionService : IRetentionService
         CleanupInputLeftovers("Input/Collage", nas.CollagePath, ret.ImagesInputLeftovers, skipNgFlagged: false);
         CleanupInputLeftovers("Input/NG", nas.HighResNgPath, ret.ImagesInputLeftovers, skipNgFlagged: false);
         CleanupInputLeftovers("Input/Diagnostic", nas.HighResDiagnosticPath, ret.ImagesInputLeftovers, skipNgFlagged: false);
-        CleanupInputLeftovers("Input/GoldenSample", nas.HighResGoldenSamplePath, ret.ImagesInputLeftovers, skipNgFlagged: false);
+        // 05 is the MSA transit buffer: finished runs are MOVED out by MsaService, so leftovers here
+        // (aborted runs, M1X production images) may be deleted — MSA images included.
+        CleanupInputLeftovers("Input/GoldenSample", nas.HighResGoldenSamplePath, ret.ImagesInputLeftovers,
+            skipNgFlagged: false, isMsaTransitFolder: true);
 
         // --- MSA reports: dated top-level folders under ReportPath (default 0 = never) ---
         CleanupDatedTopFolders("Reports/MSA", msa.ReportPath, ret.ReportsMsa);
@@ -252,7 +255,58 @@ public sealed class RetentionService : IRetentionService
 
     // ---- Input leftovers: files stuck in an \Input folder ------------------------------------
 
-    private void CleanupInputLeftovers(string target, string inputPath, int retentionDays, bool skipNgFlagged)
+    /// <summary>What the Input-leftover sweep does with one aged-out file.</summary>
+    public enum LeftoverAction
+    {
+        /// <summary>Ordinary production leftover of a failed run — delete it.</summary>
+        Delete,
+
+        /// <summary>MSA / LimitSample image (Serial2 carries the DMC) — QS evidence, never deleted here.</summary>
+        KeepMsa,
+
+        /// <summary>Filename does not match the camera spec — cannot be proven safe, so never deleted.</summary>
+        KeepUnknown,
+
+        /// <summary>Low-res image of an NG part — removed later together with its full-res NG image.</summary>
+        KeepNg,
+    }
+
+    /// <summary>
+    /// Decide what the Input-leftover sweep may do with one file, based on the parsed filename only
+    /// (age is checked by the caller). Extracted so the MSA rules are unit-testable without the whole
+    /// service graph.
+    /// </summary>
+    /// <param name="isMsaTransitFolder">
+    /// True for <c>05_High_Resolution_GoldenSample\Input</c> only. That folder is a <b>transit buffer</b>
+    /// by design (Philipp, 2026-07-28): a finished MSA run MOVES its images to <c>[MSA] ReportPath</c>,
+    /// so whatever is still lying there after the retention window is an aborted run or an M1X
+    /// production image — both may be deleted. In every other Input folder MSA images stay protected.
+    /// </param>
+    public static LeftoverAction ClassifyLeftover(string fileName, bool skipNgFlagged, bool isMsaTransitFolder = false)
+    {
+        var parsed = ImageFileName.TryParse(fileName);
+
+        // A name we cannot interpret is never deleted — we cannot prove what it is. This also holds in
+        // the transit folder.
+        if (parsed is null)
+            return LeftoverAction.KeepUnknown;
+
+        // MSA / LimitSample images are QS evidence and are never aged out by this production sweep
+        // (recognised by Serial2 carrying the part's DMC instead of zeros) — except in the transit
+        // folder, see the parameter doc.
+        if (parsed.IsMsa && !isMsaTransitFolder)
+            return LeftoverAction.KeepMsa;
+
+        // In the low-res Input, NG images are kept intentionally (removed with their NG full-res via
+        // the linkage), so never age those out here.
+        if (skipNgFlagged && parsed.Overall == "0")
+            return LeftoverAction.KeepNg;
+
+        return LeftoverAction.Delete;
+    }
+
+    private void CleanupInputLeftovers(
+        string target, string inputPath, int retentionDays, bool skipNgFlagged, bool isMsaTransitFolder = false)
     {
         if (retentionDays <= 0)
             return; // 0 = never (kept quiet; the day-folder targets already report the disabled state)
@@ -261,6 +315,9 @@ public sealed class RetentionService : IRetentionService
 
         var cutoffUtc = DateTime.UtcNow.AddDays(-retentionDays);
         var deleted = 0;
+        var msaKept = 0;
+        var unknownKept = 0;
+        string? firstUnknown = null;
 
         foreach (var file in EnumerateTopFilesSafe(inputPath))
         {
@@ -269,12 +326,17 @@ public sealed class RetentionService : IRetentionService
                 if (File.GetLastWriteTimeUtc(file) >= cutoffUtc)
                     continue;
 
-                // In the low-res Input, NG images are kept intentionally (removed with their NG
-                // full-res via the linkage), so never age those out here.
-                if (skipNgFlagged)
+                var name = Path.GetFileName(file);
+                switch (ClassifyLeftover(name, skipNgFlagged, isMsaTransitFolder))
                 {
-                    var parsed = ImageFileName.TryParse(Path.GetFileName(file));
-                    if (parsed is not null && parsed.Overall == "0")
+                    case LeftoverAction.KeepMsa:
+                        msaKept++;
+                        continue;
+                    case LeftoverAction.KeepUnknown:
+                        unknownKept++;
+                        firstUnknown ??= name;
+                        continue;
+                    case LeftoverAction.KeepNg:
                         continue;
                 }
 
@@ -290,6 +352,16 @@ public sealed class RetentionService : IRetentionService
         if (deleted > 0)
             _log.Warning("Retention: {Target} – {Deleted} leftover file(s) deleted from '{Path}' (older than {Days} days; failed pipeline runs).",
                 target, deleted, inputPath, retentionDays);
+
+        // Never silent: say what was deliberately spared, so "the folder is not shrinking" is explainable.
+        if (msaKept > 0)
+            _log.Warning("Retention: {Target} – {Kept} MSA image(s) in '{Path}' are older than {Days} days but were KEPT " +
+                         "(QS data is never aged out by the production leftover sweep).",
+                target, msaKept, inputPath, retentionDays);
+        if (unknownKept > 0)
+            _log.Warning("Retention: {Target} – {Kept} file(s) in '{Path}' do not match the camera filename spec and were KEPT " +
+                         "(first: '{Example}').",
+                target, unknownKept, inputPath, firstUnknown);
     }
 
     // ---- Database: bounded batch DELETE by age -----------------------------------------------
@@ -366,6 +438,21 @@ public sealed class RetentionService : IRetentionService
     private static bool TryNum(string text, int min, int max, out int value) =>
         int.TryParse(text, out value) && value >= min && value <= max;
 
+    /// <summary>
+    /// Delete the low-res individual images that belong to the NG images of an expiring day-folder.
+    /// The link is the 12-char serial prefix — taken <b>field-accurately from Serial1</b> on both
+    /// sides (<see cref="SerialPrefix"/>) instead of from the raw first 12 filename characters, so a
+    /// legacy/underscore or swapped-width name is compared on the same basis. MSA images are never
+    /// deleted here; an unparsable name is left alone.
+    ///
+    /// <para><b>Kept deliberately as a FALLBACK</b> even though the NG part exit now deletes the
+    /// low-res images immediately (2026-07-28). Reasons: a part exit can be missed (server restart,
+    /// PLC telegram lost), and the camera may write an image after the part exit has already run — in
+    /// both cases the low-res image is orphaned. The leftover sweep cannot pick those up either,
+    /// because it deliberately spares NG-flagged files in the low-res Input
+    /// (<c>skipNgFlagged: true</c>) and does not descend into the legacy day-folders. Without this
+    /// linkage such orphans would never be removed at all.</para>
+    /// </summary>
     private int DeleteLinkedLowRes(string lowResRoot, IReadOnlySet<string> serialPrefixes)
     {
         if (serialPrefixes.Count == 0)
@@ -374,8 +461,10 @@ public sealed class RetentionService : IRetentionService
         var deleted = 0;
         foreach (var file in EnumerateFilesSafe(lowResRoot))
         {
-            var name = Path.GetFileName(file);
-            if (name.Length < 12 || !serialPrefixes.Contains(name[..12]))
+            var parsed = ImageFileName.TryParse(Path.GetFileName(file));
+            if (parsed is null || parsed.IsMsa)
+                continue;
+            if (parsed.Serial12.Length < 12 || !serialPrefixes.Contains(parsed.Serial12))
                 continue;
             try
             {
@@ -390,8 +479,15 @@ public sealed class RetentionService : IRetentionService
         return deleted;
     }
 
-    private static string? SerialPrefix(string fileName) =>
-        fileName.Length >= 12 ? fileName[..12] : null;
+    /// <summary>The 12-char linkage key of an image: the first 12 chars of its Serial1 field.
+    /// Null when the name cannot be parsed or carries MSA content (never used as a delete key).</summary>
+    private static string? SerialPrefix(string fileName)
+    {
+        var parsed = ImageFileName.TryParse(fileName);
+        if (parsed is null || parsed.IsMsa || parsed.Serial12.Length < 12)
+            return null;
+        return parsed.Serial12;
+    }
 
     private IEnumerable<string> EnumerateFilesSafe(string directory)
     {

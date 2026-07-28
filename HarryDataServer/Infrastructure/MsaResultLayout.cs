@@ -5,49 +5,27 @@ using HarryDataServer.Services;
 namespace HarryDataServer.Infrastructure;
 
 /// <summary>
-/// Resolves the per-run MSA/LimitSample result collection folder (task: image naming /
-/// MSA result folders). Everything produced for one run is gathered under
-/// <c>&lt;ResultPath&gt;\YYYY\MM\DD\&lt;BaseID&gt;\</c> with three subfolders:
+/// Resolves the per-run MSA/LimitSample output folder. Everything produced for one run is gathered
+/// under <c>&lt;[MSA] ReportPath&gt;\yyyy-MM-dd\&lt;Module&gt;\&lt;BaseID&gt;\</c> with three subfolders:
 /// <code>
-///   PDF\  — the 2 PDF reports (AllResults + FailuresOnly)
-///   CSV\  — the MSA measurement CSV
-///   IMG\  — all run images (moved out of the GoldenSample input folder)
+///   PDF\  — the PDF reports (per part for MSA1/LimitSample, per run for MSA3)
+///   RAW\  — the Minitab raw-data export
+///   IMG\  — the run images, MOVED out of the GoldenSample transit folder
 /// </code>
-/// The date is derived from the BaseID timestamp (not the current time), so it stays
-/// stable even when the completion request arrives later than the run started. Both the
-/// MSA engine and the PDF service resolve the same folder through this helper.
+/// The date is the run's calendar day from the BaseID timestamp (not the current time), so it stays
+/// stable even when the completion request arrives later than the run started. Both the MSA engine and
+/// the PDF service resolve the same folder through this helper.
+///
+/// <para><b>Removed 2026-07-28:</b> the old <c>&lt;[MSA] ResultPath&gt;\YYYY\MM\DD\&lt;BaseID&gt;\{PDF,CSV,IMG}</c>
+/// layout (<c>RunRoot</c>/<c>PdfDir</c>/<c>CsvDir</c>/<c>ImgDir</c>) and the MSA summary-CSV helpers.
+/// <c>[MSA] ResultPath</c> was never set in the live config, so that code path was dead (finding B6),
+/// and the summary CSV itself is gone — <c>ReportPath</c> is the single file-based MSA location.</para>
 /// </summary>
 public static class MsaResultLayout
 {
     public const string PdfSubfolder = "PDF";
-    public const string CsvSubfolder = "CSV";
     public const string ImgSubfolder = "IMG";
     public const string RawSubfolder = "RAW";
-
-    /// <summary>
-    /// The run root <c>&lt;root&gt;\YYYY\MM\DD\&lt;BaseID&gt;</c>. <paramref name="resultPath"/> is
-    /// <c>[MSA] ResultPath</c>; when empty it falls back to <c>&lt;ReferencePath&gt;\MSA_Results</c>
-    /// and finally the application directory, so a run is never lost.
-    /// </summary>
-    public static string RunRoot(string resultPath, string referencePath, string baseId)
-    {
-        var root =
-            !string.IsNullOrWhiteSpace(resultPath) ? resultPath :
-            !string.IsNullOrWhiteSpace(referencePath) ? Path.Combine(referencePath, "MSA_Results") :
-            Path.Combine(AppContext.BaseDirectory, "MSA_Results");
-
-        var date = BaseId.TryGetTimestamp(baseId, out var dt) ? dt : DateTime.Now;
-        return Path.Combine(root, date.ToString("yyyy"), date.ToString("MM"), date.ToString("dd"), Sanitize(baseId));
-    }
-
-    public static string PdfDir(string resultPath, string referencePath, string baseId) =>
-        Path.Combine(RunRoot(resultPath, referencePath, baseId), PdfSubfolder);
-
-    public static string CsvDir(string resultPath, string referencePath, string baseId) =>
-        Path.Combine(RunRoot(resultPath, referencePath, baseId), CsvSubfolder);
-
-    public static string ImgDir(string resultPath, string referencePath, string baseId) =>
-        Path.Combine(RunRoot(resultPath, referencePath, baseId), ImgSubfolder);
 
     /// <summary>Built-in local fallback root for the report output when nothing else is set.</summary>
     public const string DefaultReportFallback = @"D:\HarryDataServer\MSA_Reports";
@@ -105,56 +83,6 @@ public static class MsaResultLayout
             catch (Exception ex2)
             {
                 log.Error(ex2, "MSA report fallback directory {Dir} could not be created either.", fallbackDir);
-                return null;
-            }
-        }
-    }
-
-    /// <summary>The MSA summary-CSV run root <c>&lt;root&gt;\YYYY\MM\DD\&lt;BaseID&gt;</c> (date from the BaseID).</summary>
-    public static string CsvRunRoot(string root, string baseId)
-    {
-        var date = BaseId.TryGetTimestamp(baseId, out var dt) ? dt : DateTime.Now;
-        return Path.Combine(root, date.ToString("yyyy"), date.ToString("MM"), date.ToString("dd"), Sanitize(baseId));
-    }
-
-    /// <summary>
-    /// Resolve AND create a writable folder for the MSA summary CSV (task E). Primary root is
-    /// <c>[CSV] CSV_MSAPath</c> (e.g. Y:\01_CSV_Evaluation); if unset or unwritable it falls back to
-    /// <c>[MSA] ReportFallbackPath</c> (or <see cref="DefaultReportFallback"/>) with a WARNING — SAME
-    /// as the report-dir logic. It NEVER writes under <c>[MSA] ReferencePath</c> (kept pure config).
-    /// Returns the created dir, or null only if even the fallback fails.
-    /// </summary>
-    public static string? EnsureWritableCsvDir(
-        string csvMsaPath, string reportFallbackPath, string baseId, ILogService log)
-    {
-        var fallbackRoot = !string.IsNullOrWhiteSpace(reportFallbackPath) ? reportFallbackPath : DefaultReportFallback;
-        var primaryRoot = !string.IsNullOrWhiteSpace(csvMsaPath) ? csvMsaPath : fallbackRoot;
-
-        var primaryDir = CsvRunRoot(primaryRoot, baseId);
-        try
-        {
-            Directory.CreateDirectory(primaryDir);
-            return primaryDir;
-        }
-        catch (Exception ex)
-        {
-            var fallbackDir = CsvRunRoot(fallbackRoot, baseId);
-            if (string.Equals(Path.GetFullPath(primaryDir), Path.GetFullPath(fallbackDir), StringComparison.OrdinalIgnoreCase))
-            {
-                log.Error(ex, "MSA CSV directory {Dir} could not be created (no fallback available).", primaryDir);
-                return null;
-            }
-
-            log.Warning("MSA CSV path {Primary} not writable ({Message}); falling back to local {Fallback}.",
-                primaryDir, ex.Message, fallbackDir);
-            try
-            {
-                Directory.CreateDirectory(fallbackDir);
-                return fallbackDir;
-            }
-            catch (Exception ex2)
-            {
-                log.Error(ex2, "MSA CSV fallback directory {Dir} could not be created either.", fallbackDir);
                 return null;
             }
         }

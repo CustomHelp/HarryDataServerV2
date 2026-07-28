@@ -75,15 +75,20 @@ public sealed partial class SpsChannelViewModel : ObservableObject
         Sync(LastResponses, _responses);
     }
 
+    /// <summary>
+    /// Publish the ring buffer to the UI in <b>console order — oldest first, newest at the bottom</b>
+    /// (changed 2026-07-28 from newest-on-top so the cards use the same tail-follow mechanics as the log
+    /// tab: the view follows the newest line, scrolling up pauses it and a "▼ n new" overlay leads back).
+    /// </summary>
     private void Sync(ObservableCollection<string> target, Queue<string> source)
     {
         string[] snapshot;
         lock (_gate)
-            snapshot = source.ToArray();
+            snapshot = source.ToArray();   // Queue enumerates oldest → newest
 
         target.Clear();
-        for (var i = snapshot.Length - 1; i >= 0; i--) // newest on top
-            target.Add(snapshot[i]);
+        foreach (var line in snapshot)
+            target.Add(line);
     }
 
     // Keep the line essentially full (the UI trims with an ellipsis and shows the full text as a

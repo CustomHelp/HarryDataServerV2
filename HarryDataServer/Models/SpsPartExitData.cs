@@ -13,6 +13,13 @@ public enum PartResult
 }
 
 /// <summary>
+/// Result of one part-exit pipeline run: success for the PLC ACK plus the total processing time the
+/// orchestrator already measured. The duration is reused for the UI's "Last responses" line (and the
+/// 450 ms budget warning) — it is never appended to the telegram sent to the PLC.
+/// </summary>
+public readonly record struct PartExitOutcome(bool Success, long DurationMs);
+
+/// <summary>
 /// Parsed Part Exit telegram from SPS channel 2 (St160 packaging, CLAUDE.md section 5).
 /// Semicolon-separated fields in the documented order. Maps to one <c>dmcserial</c> row.
 /// </summary>
@@ -42,6 +49,13 @@ public sealed class SpsPartExitData
     public double? Humidity { get; init; }
 
     public PartResult Result { get; init; }
+
+    /// <summary>
+    /// Field 14 exactly as received. Kept so an unrecognised value (→ <see cref="PartResult.Unknown"/>)
+    /// can be reported verbatim instead of silently behaving like NG.
+    /// </summary>
+    public string ResultRaw { get; init; } = string.Empty;
+
     public string RawTelegram { get; init; } = string.Empty;
 
     public bool IsMsa => Mode is "MSA1" or "MSA3" or "LimitSample";
@@ -91,6 +105,7 @@ public sealed class SpsPartExitData
             Temperature = ParseDouble(f[12]),
             Humidity = ParseDouble(f[13]),
             Result = ParseResult(f[14]),
+            ResultRaw = f[14].Trim(),
             RawTelegram = telegram,
         };
     }

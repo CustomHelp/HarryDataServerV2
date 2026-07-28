@@ -89,7 +89,7 @@ public sealed class CollageService : ICollageService
         if (!_enabled || _layout is null)
             return true;
 
-        var serials = FormattedSerials(part);
+        var serials = SearchSerials(part);
         if (serials.Count == 0)
             return true;
 
@@ -148,20 +148,32 @@ public sealed class CollageService : ICollageService
         }
     }
 
-    /// <summary>Serials with "_" inserted after character 12 (SZID + trimmer, when present).</summary>
-    internal static List<string> FormattedSerials(SpsPartExitData part)
+    /// <summary>
+    /// The part's image search keys: the bare frame SZID and trimmer serial (when present), each
+    /// sanitised to the Field 1 form of a real filename (<see cref="SerialNumberHelper.ToImageSearchKey"/>).
+    ///
+    /// <para>
+    /// This used to insert a <c>'_'</c> after character 12 ("formatted serials", a V1 carry-over).
+    /// Real filenames written by the Keyence controllers contain <b>no</b> underscore — Field 1 is
+    /// the serial right-padded with <c>'0'</c> — so the inserted <c>'_'</c> made every
+    /// <c>filename.Contains(serial)</c> test fail: no collage source images were ever found and no
+    /// OK-part low-res image was ever cleaned up (live evidence 2026-07-28: searched
+    /// <c>270726160321_0031811</c>, file is <c>2707261603210031811000-…</c>).
+    /// </para>
+    /// </summary>
+    public static List<string> SearchSerials(SpsPartExitData part)
     {
         var list = new List<string>(2);
-        AddFormatted(list, part.Szid);
-        AddFormatted(list, part.VirtualSerial);
+        AddSearchKey(list, part.Szid);
+        AddSearchKey(list, part.VirtualSerial);
         return list;
     }
 
-    internal static void AddFormatted(List<string> list, string serial)
+    private static void AddSearchKey(List<string> list, string serial)
     {
-        if (string.IsNullOrWhiteSpace(serial))
-            return;
-        list.Add(serial.Length > 12 ? serial[..12] + "_" + serial[12..] : serial);
+        var key = SerialNumberHelper.ToImageSearchKey(serial);
+        if (key.Length > 0)
+            list.Add(key);
     }
 
     private static string Sanitize(string serial)

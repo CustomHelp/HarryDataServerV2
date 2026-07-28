@@ -49,7 +49,7 @@ public sealed class TcpSpsServer : ISpsServer
     public event EventHandler<SpsPartExitEventArgs>? PartExitReceived;
     public event Action<SpsChannel, bool, string>? ChannelActivity;
     public Func<string, string, string>? MsaRequestHandler { get; set; }
-    public Func<SpsPartExitData, Task<bool>>? PartExitHandler { get; set; }
+    public Func<SpsPartExitData, Task<PartExitOutcome>>? PartExitHandler { get; set; }
 
     public int ConnectionsOn(SpsChannel channel) => _connectionsByChannel.GetValueOrDefault(channel);
 
@@ -206,9 +206,11 @@ public sealed class TcpSpsServer : ISpsServer
                 // run the full part pipeline, then send the V1 ACK.
                 if (channel == SpsChannel.PartExit && PartExitHandler is { } partHandler)
                 {
-                    var ack = await HandlePartExitAckAsync(partHandler, text).ConfigureAwait(false);
-                    await WriteAsync(conn, Encoding.Latin1.GetBytes(ack), token).ConfigureAwait(false);
-                    ChannelActivity?.Invoke(channel, true, ack.TrimEnd('\r', '\n'));
+                    var (wire, display) = await HandlePartExitAckAsync(partHandler, text).ConfigureAwait(false);
+                    // The PLC gets `wire` byte-for-byte; `display` is the same text plus the
+                    // processing time and is used for the UI's "Last responses" list only.
+                    await WriteAsync(conn, Encoding.Latin1.GetBytes(wire), token).ConfigureAwait(false);
+                    ChannelActivity?.Invoke(channel, true, display);
                     continue;
                 }
 
@@ -358,32 +360,43 @@ public sealed class TcpSpsServer : ISpsServer
     /// <c>serial.PadRight(32,'0') + ";" + true|false + "\r"</c>.
     /// The terminator is a single CR — consistent with every other SPS channel
     /// (agreed with the PLC programmer 2026-07-02; V1 used CR+LF).
+    ///
+    /// <para>Returns both the <b>wire</b> telegram (sent to the PLC unchanged) and a <b>display</b>
+    /// variant with the orchestrator's measured processing time appended, e.g.
+    /// <c>2807…778;true (87 ms)</c>. The suffix exists for the UI's "Last responses" list only and is
+    /// never transmitted.</para>
     /// </summary>
-    private async Task<string> HandlePartExitAckAsync(Func<SpsPartExitData, Task<bool>> handler, string telegram)
+    private async Task<(string Wire, string Display)> HandlePartExitAckAsync(
+        Func<SpsPartExitData, Task<PartExitOutcome>> handler, string telegram)
     {
         var data = SpsPartExitData.TryParse(telegram);
         if (data is null)
         {
             _log.Warning("SPS PartExit: malformed telegram '{Telegram}'.", telegram);
-            return new string('0', 32) + ";false\r";
+            var malformed = new string('0', 32) + ";false\r";
+            return (malformed, malformed.TrimEnd('\r', '\n'));
         }
 
-        _log.Information("Part Exit: DMC={Dmc} SZID={Szid} order={Order} mode={Mode} result={Result}.",
-            data.Dmc, data.Szid, data.OrderName, data.Mode, data.Result);
+        // The RAW telegram is logged alongside the parsed fields: it is the only evidence that tells
+        // a server-side key defect apart from a PLC that already sends a decorated/empty field
+        // (e.g. an empty DMC/trimmer field, or a serial carrying a separator).
+        _log.Information("Part Exit: DMC={Dmc} SZID={Szid} order={Order} mode={Mode} result={Result} | raw='{Raw}'.",
+            data.Dmc, data.Szid, data.OrderName, data.Mode, data.Result, telegram);
 
-        bool success;
+        PartExitOutcome outcome;
         try
         {
-            success = await handler(data).ConfigureAwait(false);
+            outcome = await handler(data).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             _log.Error(ex, "Part exit orchestration failed for {Serial}.", data.Szid);
-            success = false;
+            outcome = new PartExitOutcome(false, 0);
         }
 
         var serial = (data.Szid ?? string.Empty).PadRight(32, '0');
-        return $"{serial};{(success ? "true" : "false")}\r";
+        var body = $"{serial};{(outcome.Success ? "true" : "false")}";
+        return (body + "\r", $"{body} ({outcome.DurationMs} ms)");
     }
 
     /// <summary>

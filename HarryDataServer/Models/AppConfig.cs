@@ -56,16 +56,18 @@ public sealed class CsvConfig
 {
     public string BasePath { get; init; } = string.Empty;
 
-    /// <summary>Root for the MSA/LimitSample summary CSV ([CSV] CSV_MSAPath, e.g. Y:\01_CSV_Evaluation).
-    /// The CSV lands in &lt;CSV_MSAPath&gt;\YYYY\MM\DD\&lt;BaseID&gt;\; empty → local fallback. It is deliberately
-    /// NOT under [MSA] ReferencePath, which stays pure configuration (the old MSA_Results tree there is
-    /// no longer written).</summary>
+    /// <summary>
+    /// Legacy root of the MSA summary CSV (<c>[CSV] CSV_MSAPath</c>, e.g. <c>Y:\01_CSV_Evaluation</c>).
+    /// <b>Nothing is written here any more</b> — the export was removed on 2026-07-28 and all MSA files
+    /// live under <c>[MSA] ReportPath</c>. The value is only still used as the retention root that ages
+    /// out the existing tree (<c>[Retention] CSV_Evaluation</c>); the key itself is reported as
+    /// deprecated at startup.
+    /// </summary>
     public string MsaPath { get; init; } = string.Empty;
 
     public string DiagnosticPath { get; init; } = string.Empty;
     public int DataSetsPerFile { get; init; } = 10000;
     public bool Save { get; init; } = true;
-    public bool MsaSave { get; init; } = true;
     public bool DiagnosticSave { get; init; } = true;
 }
 
@@ -90,10 +92,15 @@ public sealed class NasConfig
     public string HighResDiagnosticPath { get; init; } = string.Empty;
     public string HighResGoldenSamplePath { get; init; } = string.Empty;
 
-    /// <summary>Part-exit image handling: true = delete source images; false = backup then delete.</summary>
-    public bool DeletePictures { get; init; } = true;
+    // [NAS] DeletePictures was removed here on 2026-07-28: the OK-part image action follows
+    // [Collage] Collage_Generate ONLY (collage on → delete the originals, collage off → move them to
+    // BackupFolder). A still-present INI key is reported as deprecated at startup.
 
-    /// <summary>Root backup folder (used when DeletePictures = false). Structure: \YYYY\MM\DD\.</summary>
+    /// <summary>
+    /// Root backup folder — target for an OK part's low-res images when <b>no</b> collage is generated
+    /// (<c>[Collage] Collage_Generate=false</c>). Structure: <c>\YYYY\MM\DD\</c>. Aged out by
+    /// <c>[Retention] Images_Backup</c>.
+    /// </summary>
     public string BackupFolder { get; init; } = string.Empty;
 }
 

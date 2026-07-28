@@ -1,6 +1,7 @@
 <UserControl x:Class="HarryDataServer.Controls.ucLogControl"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ctl="clr-namespace:HarryDataServer.Controls">
     <!-- DataContext is the LogViewModel -->
     <DockPanel Margin="6">
         <!-- Toolbar -->
@@ -29,14 +30,23 @@
             </StackPanel>
         </StackPanel>
 
-        <ListBox ItemsSource="{Binding Entries}" FontFamily="Consolas" FontSize="12"
-                 ScrollViewer.ScrollChanged="OnScrollChanged"
-                 VirtualizingStackPanel.IsVirtualizing="True" VirtualizingStackPanel.VirtualizationMode="Recycling">
-            <ListBox.ItemTemplate>
-                <DataTemplate>
-                    <TextBlock Text="{Binding Text}" Foreground="{Binding Brush}" TextWrapping="NoWrap" />
-                </DataTemplate>
-            </ListBox.ItemTemplate>
-        </ListBox>
+        <!-- Console tail-follow + "▼ n new" overlay live entirely in TailScrollView (view mechanics). -->
+        <ctl:TailScrollView>
+            <ListBox ItemsSource="{Binding Entries}" FontFamily="Consolas" FontSize="12"
+                     VirtualizingStackPanel.IsVirtualizing="True" VirtualizingStackPanel.VirtualizationMode="Recycling">
+                <ListBox.ContextMenu>
+                    <!-- Clicking a line pauses the tail-follow, so the selection survives long enough
+                         to copy it; TailScrollView also re-selects the same line across each rebuild. -->
+                    <ContextMenu>
+                        <MenuItem Header="Copy line" InputGestureText="Ctrl+C" Click="OnCopyLine" />
+                    </ContextMenu>
+                </ListBox.ContextMenu>
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding Text}" Foreground="{Binding Brush}" TextWrapping="NoWrap" />
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </ctl:TailScrollView>
     </DockPanel>
 </UserControl>

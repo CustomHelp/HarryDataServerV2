@@ -594,17 +594,18 @@ ORDER BY evaluated_at, base_id, id;";
             var report = BuildReport(baseId, module, msaType, rows, results, verdict, verdictReason,
                 controllerWarnings, notes, runAt, msaCfg.ReferencePath, reportDir, legacyReferenceUsed);
 
-            // Per-run measurement summary CSV → [CSV] CSV_MSAPath (Y:), never the config folder (task E).
-            ExportCsv(baseId, module, msaType, results);
             // Report PDFs + RAW export + run images into the run folder's subfolders (task B/C).
             // MSA3 is one study report; LimitSample/MSA1 get one PDF pair PER PART (task B4).
+            // NOTE: the separate MSA summary CSV under [CSV] CSV_MSAPath was REMOVED (2026-07-28) —
+            // <ReportPath> now holds everything file-based (PDF + RAW + IMG), the numbers additionally
+            // live in msa_results. The RAW export below is the machine-readable form.
             if (msaType == MsaType.Msa3)
                 GeneratePdf(report);
             else
                 GeneratePerPartPdfs(report, results, msaType);
             await ExportRawDataAsync(conn, baseId, module, msaType,
                 reportDir is null ? null : Path.Combine(reportDir, MsaResultLayout.RawSubfolder), ct).ConfigureAwait(false);
-            CopyRunImages(baseId, reportDir is null ? null : Path.Combine(reportDir, MsaResultLayout.ImgSubfolder));
+            MoveRunImages(baseId, reportDir is null ? null : Path.Combine(reportDir, MsaResultLayout.ImgSubfolder));
 
             // Map the verdict to the PLC word (never a silent OK): Pass→OK, Fail→NG, Invalid→Error;<reason>.
             var word = verdict switch
@@ -1214,52 +1215,11 @@ VALUES
         await tx.CommitAsync(ct).ConfigureAwait(false);
     }
 
-    private void ExportCsv(string baseId, string module, MsaType msaType, List<MsaMeasurementResult> results)
-    {
-        var csv = _config.Config.Csv;
-        if (!csv.MsaSave)
-            return;
-
-        try
-        {
-            // Task E: the MSA summary CSV goes under [CSV] CSV_MSAPath (e.g. Y:\01_CSV_Evaluation),
-            // NOT under [MSA] ReferencePath (which stays pure configuration). The date+BaseID are already
-            // in the path, so the writer does not add its own YYYY\MM\DD level.
-            if (string.IsNullOrWhiteSpace(csv.MsaPath))
-                _log.Warning("MSA CSV: [CSV] CSV_MSAPath is not set — writing to the local fallback. " +
-                             "Set it (e.g. Y:\\01_CSV_Evaluation) to collect MSA CSVs centrally.");
-            var csvDir = MsaResultLayout.EnsureWritableCsvDir(csv.MsaPath, _config.Config.Msa.ReportFallbackPath, baseId, _log);
-            if (csvDir is null)
-                return;
-            _log.Debug("MSA CSV for BaseID {Base} → {Dir} (the old MSA_References\\MSA_Results tree is no longer written — safe to archive/delete).",
-                baseId, csvDir);
-            using var writer = new CsvFileWriter(csvDir, int.MaxValue, dateSubfolders: false, _log);
-            // Filename label: module + type (CsvFileWriter prepends the DDMMYY_HHMMSS stamp, SOW §5.1.2).
-            writer.Configure(
-                new[] { "BaseID", "Module", "Controller", "MsaType", "DisplayName", "n", "Mean", "StdDev",
-                        "Reference", "Tolerance", "Cg", "Cgk", "PctTolerance", "Criterion", "Passed", "Reason" },
-                $"MSA_{module}_{msaType.ToDbString()}");
-
-            foreach (var r in results)
-            {
-                writer.WriteRow(new[]
-                {
-                    baseId, module, r.Controller, msaType.ToDbString(), r.DisplayName,
-                    r.N.ToString(CultureInfo.InvariantCulture),
-                    Num(r.Mean), Num(r.StdDev), Num(r.ReferenceValue), Num(r.Tolerance),
-                    Num(r.Cg), Num(r.Cgk), Num(r.PctTolerance),
-                    r.Criterion, r.Passed ? "1" : "0", r.Reason,
-                });
-            }
-            writer.Flush();
-        }
-        catch (Exception ex)
-        {
-            _log.Error(ex, "Failed to write MSA CSV for BaseID {Base}.", baseId);
-        }
-    }
-
-    private static string? Num(double? v) => v?.ToString("0.####", CultureInfo.InvariantCulture);
+    // The per-run MSA summary CSV (formerly ExportCsv → [CSV] CSV_MSAPath / Y:\01_CSV_Evaluation) was
+    // REMOVED on 2026-07-28: [MSA] ReportPath (X:) is now the single file-based MSA location — PDF
+    // reports, the Minitab RAW export and the run images — and every number is in msa_results as well.
+    // The keys [CSV] CSVMSA_Save / CSV_MSAPath are deprecated (a WARNING is logged when they are still
+    // set, see IniConfigManager.ParseRetention). Existing files under Y:\01 are left untouched.
 
     /// <summary>
     /// Raw-data export for the customer's Minitab analysis (task C): one row per measured value in
@@ -1339,53 +1299,27 @@ ORDER BY m.controller_name, m.dmc, m.loop_number, md.display_name;";
     }
 
     /// <summary>
-    /// COPY this run's images from the GoldenSample NAS input folder into the run's IMG folder
-    /// (task C). Copies (never moves) so the NAS originals stay untouched. A run's images are those
-    /// whose filename Field 1 starts with the 14-char BaseID (the loop counter + padding follow).
-    /// Missing/unmatched images are NOT a run error — only a log note ("n found / m copied").
+    /// MOVE this run's images out of the GoldenSample NAS input folder into the run's IMG folder.
+    ///
+    /// <para><b>Target concept (Philipp, 2026-07-28):</b> <c>05_High_Resolution_GoldenSample\Input</c> is
+    /// a <b>transit buffer</b>, not an archive — a finished MSA run takes its images with it, and
+    /// whatever stays behind (aborted runs, M1X production images) is aged out by
+    /// <c>[Retention] Images_InputLeftovers</c>. That is why this moves instead of copies (it used to
+    /// copy, which left every run's originals in the transit folder forever).</para>
+    ///
+    /// <para>A run's images are those whose filename Serial1 starts with the 14-char BaseID (the loop
+    /// counter + padding follow). The move crosses the drive boundary (Z: → X:), so it is
+    /// copy → size-verify → delete. If a single image cannot be moved it is logged as a WARNING and the
+    /// <b>original is left in place</b> — the retention sweep removes it later; the run is never failed.
+    /// Missing/unmatched images are not a run error either — only a log note ("n found / n moved").</para>
     /// </summary>
-    private void CopyRunImages(string baseId, string? imgDir)
+    private void MoveRunImages(string baseId, string? imgDir)
     {
         if (string.IsNullOrWhiteSpace(imgDir))
             return;
 
-        var goldenSample = _config.Config.Nas.HighResGoldenSamplePath;
-        var src = ImageFileName.SortedRoot(goldenSample);
-        if (src is null || !Directory.Exists(src))
-        {
-            _log.Information("MSA images for BaseID {Base}: GoldenSample source '{Src}' not available — 0 copied.",
-                baseId, goldenSample);
-            return;
-        }
-
-        var found = 0;
-        var copied = 0;
-        try
-        {
-            foreach (var file in Directory.EnumerateFiles(src, "*", SearchOption.AllDirectories))
-            {
-                if (!ImageFileName.MatchesBaseId(Path.GetFileName(file), baseId))
-                    continue;
-                found++;
-                try
-                {
-                    Directory.CreateDirectory(imgDir);
-                    File.Copy(file, Path.Combine(imgDir, Path.GetFileName(file)), overwrite: true);
-                    copied++;
-                }
-                catch (Exception ex)
-                {
-                    _log.Debug("Could not copy MSA image {File}: {Message}", file, ex.Message);
-                }
-            }
-
-            _log.Information("MSA images for BaseID {Base}: {Found} found, {Copied} copied into {Dir}.",
-                baseId, found, copied, imgDir);
-        }
-        catch (Exception ex)
-        {
-            _log.Error(ex, "Failed to copy run images for BaseID {Base}.", baseId);
-        }
+        // The move rule itself lives in MsaRunImages so it is unit-testable on its own.
+        MsaRunImages.Move(_config.Config.Nas.HighResGoldenSamplePath, baseId, imgDir, _log);
     }
 
     /// <summary>Generate the two MSA PDF reports (SOW §3.2.1). Best-effort: never fails the evaluation.</summary>

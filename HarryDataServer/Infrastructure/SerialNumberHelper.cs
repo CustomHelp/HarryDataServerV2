@@ -95,6 +95,44 @@ public static class SerialNumberHelper
     /// </summary>
     public static string NormalizeTrimmer(string? value) => NormalizeTo(value, _trimmerLength);
 
+    /// <summary>
+    /// Sanitise a serial into an <b>image-filename search key</b> (the Field 1 prefix used by every
+    /// image search: collage source lookup, OK-part cleanup, DE purge).
+    ///
+    /// <para>
+    /// Field 1 of a real filename is the serial right-padded with <c>'0'</c> and contains
+    /// <b>no separators at all</b> (confirmed on the live line 2026-07-28, e.g.
+    /// <c>2707261603210031811000-000…0-1-M50_ST140_KF1-1-&amp;Cam1Img.bmp</c>). So the only correct
+    /// key is the bare serial. This drops every character that cannot occur in Field 1 —
+    /// whitespace and separators such as <c>'_'</c> / <c>'-'</c> — and caps to
+    /// <see cref="SerialField.MaxLength"/>.
+    /// </para>
+    ///
+    /// <para>
+    /// It deliberately does <b>not</b> trim trailing <c>'0'</c>: the caller passes a serial that is
+    /// already normalised to its KIND length (frame 19 via <see cref="Normalize"/>, trimmer 13 via
+    /// <see cref="NormalizeTrimmer"/>), and shortening it further would let the prefix spill onto an
+    /// adjacent serial that differs only in a late character.
+    /// </para>
+    /// </summary>
+    public static string ToImageSearchKey(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return string.Empty;
+
+        var buffer = new char[Math.Min(value.Length, SerialField.MaxLength)];
+        var length = 0;
+        foreach (var c in value)
+        {
+            if (!char.IsLetterOrDigit(c))
+                continue;
+            if (length == buffer.Length)
+                break;
+            buffer[length++] = c;
+        }
+        return new string(buffer, 0, length);
+    }
+
     private static string NormalizeTo(string? value, int meaningfulLength)
     {
         if (string.IsNullOrEmpty(value))

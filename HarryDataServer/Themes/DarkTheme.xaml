@@ -1,6 +1,7 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-                    xmlns:conv="clr-namespace:HarryDataServer.Converters">
+                    xmlns:conv="clr-namespace:HarryDataServer.Converters"
+                    xmlns:ctl="clr-namespace:HarryDataServer.Controls">
 
     <!-- ===== Converters ===== -->
     <conv:PassToBrushConverter x:Key="PassToBrush" />
@@ -253,6 +254,40 @@
                         </Border.Resources>
                         <ContentPresenter />
                     </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ===== TailScrollView: console tail-follow wrapper with the "▼ n new" overlay ===== -->
+    <!-- Implicit style (keyed by the exact type) — applies wherever a TailScrollView is used. -->
+    <Style TargetType="{x:Type ctl:TailScrollView}">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type ctl:TailScrollView}">
+                    <Grid>
+                        <!-- The wrapped list fills the host; the overlay floats above its bottom-right. -->
+                        <ContentPresenter />
+                        <Button x:Name="PART_JumpButton"
+                                Visibility="Collapsed"
+                                HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                Margin="0,0,18,10" Padding="8,3"
+                                MinWidth="0" MinHeight="0" FontSize="11"
+                                Focusable="False"
+                                Background="{DynamicResource Accent}"
+                                Foreground="{DynamicResource TextBrush}"
+                                BorderBrush="{DynamicResource AccentLight}"
+                                ToolTip="Jump to the newest entry and resume following"
+                                Content="{Binding NewCount, RelativeSource={RelativeSource TemplatedParent},
+                                                  StringFormat='▼ {0} new'}" />
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <!-- Shown only while following is paused AND something new actually arrived
+                             (a "▼ 0 new" badge would be pure noise). -->
+                        <Trigger Property="IsJumpAvailable" Value="True">
+                            <Setter TargetName="PART_JumpButton" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>

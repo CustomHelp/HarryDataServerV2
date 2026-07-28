@@ -33,19 +33,20 @@ public sealed class CollageComposer
         bool Success, string? OutputPath, IReadOnlyList<string> UsedSourceFiles, int Placed, int Missing);
 
     /// <summary>
-    /// Build the collage for one part. <paramref name="formattedSerials"/> are the
-    /// serials with "_" inserted after char 12 (SZID and/or TrimmerSerial). Each image
-    /// slot matches a *.bmp whose filename contains a serial AND all KeyName keywords.
+    /// Build the collage for one part. <paramref name="searchSerials"/> are the part's bare serials
+    /// (SZID and/or TrimmerSerial) — they are sanitised to the filename Field 1 form here, right
+    /// before the search. Each image slot matches a *.bmp whose filename contains a serial AND all
+    /// KeyName keywords.
     /// <paramref name="maxFileSizeKb"/> caps the JPEG output size (SOW §5.2.2); ≤ 0 disables the cap.
     /// </summary>
     public CollageResult Compose(
         CollageLayout layout,
-        IReadOnlyList<string> formattedSerials,
+        IReadOnlyList<string> searchSerials,
         string sourceDir,
         string outputPath,
         int maxFileSizeKb)
     {
-        var candidates = FindCandidateFiles(formattedSerials, sourceDir);
+        var candidates = FindCandidateFiles(searchSerials, sourceDir);
 
         using var canvas = new Bitmap(layout.CanvasWidth, layout.CanvasHeight, PixelFormat.Format24bppRgb);
         using (var g = Graphics.FromImage(canvas))
@@ -163,16 +164,23 @@ public sealed class CollageComposer
         ImageCodecInfo.GetImageEncoders().First(c => c.FormatID == ImageFormat.Jpeg.Guid);
 
     /// <summary>
-    /// Find all *.bmp under the source whose filename contains one of the formatted
-    /// serials (serial with "_" after char 12). Searched recursively.
+    /// Find all *.bmp under the source belonging to the part. The serials are sanitised to the
+    /// filename Serial1 form (<see cref="SerialNumberHelper.ToImageSearchKey"/>) and matched
+    /// <b>field-accurately as a prefix of Serial1</b> via <see cref="ImageFileName"/> — not as a
+    /// substring of the whole name (V1 semantics), which in MSA mode could hit the DMC in Serial2.
+    /// MSA images are never used as a collage source. Searched recursively.
     /// </summary>
-    private static List<string> FindCandidateFiles(IReadOnlyList<string> formattedSerials, string sourceDir)
+    private static List<string> FindCandidateFiles(IReadOnlyList<string> searchSerials, string sourceDir)
     {
         var result = new List<string>();
         if (string.IsNullOrWhiteSpace(sourceDir) || !Directory.Exists(sourceDir))
             return result;
 
-        var serials = formattedSerials.Where(s => !string.IsNullOrWhiteSpace(s)).ToList();
+        var serials = searchSerials
+            .Select(SerialNumberHelper.ToImageSearchKey)
+            .Where(s => s.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
         if (serials.Count == 0)
             return result;
 
@@ -180,8 +188,10 @@ public sealed class CollageComposer
         {
             foreach (var file in Directory.EnumerateFiles(sourceDir, "*.bmp", SearchOption.AllDirectories))
             {
-                var name = Path.GetFileName(file);
-                if (serials.Any(s => name.Contains(s, StringComparison.OrdinalIgnoreCase)))
+                var parsed = ImageFileName.TryParse(Path.GetFileName(file));
+                if (parsed is null || parsed.IsMsa)
+                    continue;
+                if (serials.Any(parsed.MatchesSerial1Prefix))
                     result.Add(file);
             }
         }

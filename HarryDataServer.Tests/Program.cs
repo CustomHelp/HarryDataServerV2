@@ -1,6 +1,13 @@
+using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media;
 using HarryDataServer.Communication;
+using HarryDataServer.Controls;
+using HarryDataServer.ViewModels;
 using HarryDataServer.Configuration;
 using HarryDataServer.Infrastructure;
 using HarryDataServer.Models;
@@ -26,6 +33,8 @@ internal static class Program
 {
     private static int _failures;
 
+    // STA is required for the WPF view-mechanics case (TailScrollView is laid out headlessly).
+    [STAThread]
     private static int Main()
     {
         Console.WriteLine("HarryDataServer telegram-extraction regression tests\n");
@@ -59,6 +68,19 @@ internal static class Program
         PartExit_TrimmerNormalisedTo13();
         PartExit_DeParsesAsDeleted();
         DeImageDelete_MatchesFrameAndTrimmer_NotAdjacent();
+        ImageSearchKeys_AreUnderscoreFree_AndMatchRealFilenames();
+        ImageName_ParsesAllSixFields_AllLiveForms();
+        ImageMatching_IsFieldAccurate_NotSubstring();
+        MsaImages_AreProtectedFromProductionFlows();
+        M2xAndLegacy_ImagesAreFoundByTheirOwnSerial();
+        PartExit_ImageActionsFollowTheTargetConcept();
+        PartExit_OkFollowsCollageGenerateOnly();
+        PartExit_UnknownResult_NoCsvButDbImagesAndWarning();
+        PartExit_EmptySzid_WritesNoDmcserialRow();
+        DeprecatedIniKeys_AreReportedNotSilentlyHonoured();
+        PartExitAck_StaysByteIdentical_DespiteTheMsDisplay();
+        MsaRunImages_AreMovedNotCopied();
+        TailScroll_FollowsPausesCountsAndResumes();
         DePartExit_NoDbNoCsv_DeletesImages_Logs();
         BackupRoot_NonInputPathIsItsOwnRoot();
         Retention_NewSectionWins_And_ZeroMeansNever();
@@ -558,12 +580,14 @@ internal static class Program
 
             var handler = new ImageHandler(new NullLog());
             // Pass the ...\Input path (like the config): SortedRoot expands it so both \Input and the
-            // sorted YYYY\MM\DD day-folder are searched. Delete by BOTH the frame and the trimmer serial.
-            var deleted = handler
-                .DeleteBySerialsAsync(new[] { szid, trimmer }, new[] { input }, CancellationToken.None)
+            // legacy YYYY\MM\DD day-folder are searched. Delete by BOTH the frame and the trimmer serial.
+            var result = handler
+                .ApplyAsync("DE", new[] { szid, trimmer }, input, PartImageAction.Delete,
+                    string.Empty, CancellationToken.None)
                 .GetAwaiter().GetResult();
 
-            AssertEqual("deleted frame + trimmer image", 2, deleted);
+            AssertEqual("deleted frame + trimmer image", 2, result.Handled);
+            AssertTrue("inspected count reported for the diagnostic log", result.Inspected >= 4);
             AssertTrue("frame image (day-folder) gone", !File.Exists(frameFile));
             AssertTrue("trimmer image gone", !File.Exists(trimmerFile));
             AssertTrue("adjacent trimmer survived (no 13th-char spill)", File.Exists(adjacentFile));
@@ -573,6 +597,758 @@ internal static class Program
         {
             try { Directory.Delete(root, recursive: true); } catch { /* best effort */ }
         }
+    }
+
+    private static void ImageSearchKeys_AreUnderscoreFree_AndMatchRealFilenames()
+    {
+        Console.WriteLine("[Case AF] Image search keys are underscore-free and match real Keyence filenames");
+        SerialNumberHelper.Configure(19);
+        SerialNumberHelper.ConfigureTrimmer(13);
+
+        const string szid = "2707261603210031811";  // 19-char frame serial (live example)
+        const string trimmer = "2607270001640";       // 13-char trimmer serial (live example)
+
+        // 1) The key build (part exit → collage/image search) must never decorate the serial.
+        var part = SpsPartExitData.TryParse(string.Join(";",
+            "", szid, trimmer, "1117", "Normal", "50", "1", "20", "2", "30", "3", "4", "1.0", "2.0", "OK"))!;
+        var keys = CollageService.SearchSerials(part);
+        AssertEqual("frame + trimmer key", 2, keys.Count);
+        AssertEqual("frame key is the bare 19-char serial", szid, keys[0]);
+        AssertEqual("trimmer key is the full 13-char serial", trimmer, keys[1]);
+        AssertTrue("no key contains an underscore", keys.All(k => !k.Contains('_')));
+
+        // 2) Central sanitiser: a decorated value (historic "_ after char 12") is repaired, and the
+        //    serial length is preserved — no blind TrimEnd('0'), so a 12-char prefix cannot spill.
+        AssertEqual("underscore stripped (frame)", szid, SerialNumberHelper.ToImageSearchKey("270726160321_0031811"));
+        AssertEqual("underscore stripped (trimmer)", trimmer, SerialNumberHelper.ToImageSearchKey("260727000164_0"));
+        AssertEqual("trailing '0' of a real serial kept", trimmer, SerialNumberHelper.ToImageSearchKey(trimmer));
+        AssertEqual("empty stays empty", string.Empty, SerialNumberHelper.ToImageSearchKey("  "));
+
+        // 3) End to end against real filenames: even a decorated input must find + delete the images.
+        var root = Path.Combine(Path.GetTempPath(), "hds_key_" + Guid.NewGuid().ToString("N"));
+        var input = Path.Combine(root, "Input");
+        Directory.CreateDirectory(input);
+        try
+        {
+            // Exactly as the controller writes them (Field 1 = serial right-padded with '0').
+            string Name(string serial, string ctrl) =>
+                $"{serial.PadRight(22, '0')}-{new string('0', 31)}-1-{ctrl}-1-&Cam1Img.bmp";
+
+            var frameFile = Path.Combine(input, Name(szid, "M50_ST140_KF1"));
+            var trimmerFile = Path.Combine(input, Name(trimmer, "M20_ST060_KF1"));
+            var unrelated = Path.Combine(input, Name("2707269999990039999", "M50_ST040_KF1"));
+            foreach (var f in new[] { frameFile, trimmerFile, unrelated })
+                File.WriteAllText(f, "x");
+
+            var handler = new ImageHandler(new NullLog());
+            var ok = handler.ApplyAsync("OK",
+                    new[] { "270726160321_0031811", "260727000164_0" }, // decorated on purpose
+                    input, PartImageAction.Delete, string.Empty, CancellationToken.None)
+                .GetAwaiter().GetResult();
+
+            AssertEqual("image handling reports no failure", 0, ok.Failed);
+            AssertTrue("frame image found + deleted despite the '_' in the input", !File.Exists(frameFile));
+            AssertTrue("trimmer image found + deleted despite the '_' in the input", !File.Exists(trimmerFile));
+            AssertTrue("unrelated part survived", File.Exists(unrelated));
+
+            // Same for the DE purge path (Serial1 prefix match).
+            var deFile = Path.Combine(input, Name(szid, "M50_ST130_KF1"));
+            File.WriteAllText(deFile, "x");
+            var de = handler
+                .ApplyAsync("DE", new[] { "270726160321_0031811" }, input, PartImageAction.Delete,
+                    string.Empty, CancellationToken.None)
+                .GetAwaiter().GetResult();
+            AssertEqual("DE purge deletes despite the '_' in the input", 1, de.Handled);
+            AssertEqual("DE purge reports the normalised key", szid, de.Keys[0]);
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); } catch { /* best effort */ }
+        }
+    }
+
+    // ---- Image filename spec (Philipp 2026-07-28) + field-accurate matching -----------------------
+
+    private static void ImageName_ParsesAllSixFields_AllLiveForms()
+    {
+        Console.WriteLine("[Case AG] Image filename parser: all 6 fields, all forms found on the live line");
+
+        // 1) Spec form (M50, and M2X camera 2): Serial1 = 22, Serial2 = 32.
+        var std = ImageFileName.TryParse("2707261538450031633000-00000000000000000000000000000000-1-M50_ST140_KF1-2-&Cam2Img.bmp");
+        AssertTrue("standard parses", std is not null);
+        AssertEqual("Serial1", "2707261538450031633000", std!.Serial1);
+        AssertEqual("Serial1 width 22", 22, std.Serial1.Length);
+        AssertEqual("Serial2 width 32", 32, std.Serial2.Length);
+        AssertEqual("Overall", "1", std.Overall);
+        AssertEqual("Controller (keeps its underscores)", "M50_ST140_KF1", std.Controller);
+        AssertEqual("CameraNumber", "2", std.CameraNumber);
+        AssertEqual("ImageVariable", "&Cam2Img.bmp", std.ImageName);
+        AssertEqual("form", ImageNameForm.Standard, std.Form);
+        AssertTrue("normal mode → not MSA", !std.IsMsa);
+
+        // Image variable with an underscore must not be mistaken for a field separator.
+        var dark = ImageFileName.TryParse("2707261603210031811000-00000000000000000000000000000000-1-M50_ST130_KF1-1-&Cam1Img_Dark.bmp");
+        AssertEqual("&Cam1Img_Dark kept whole", "&Cam1Img_Dark.bmp", dark!.ImageName);
+        AssertEqual("controller unaffected", "M50_ST130_KF1", dark.Controller);
+
+        // 2) M20/M21 camera 1 writes the two widths SWAPPED (32/22) — live fact, ~2000 files/day.
+        var swapped = ImageFileName.TryParse("26072700015510000000000000000000-0000000000000000000000-1-M20_ST060_KF3-1-&Cam1Img.bmp");
+        AssertTrue("swapped-width name parses", swapped is not null);
+        AssertEqual("swapped form detected", ImageNameForm.SwappedWidths, swapped!.Form);
+        AssertEqual("Serial1 is the 32-char field", 32, swapped.Serial1.Length);
+        AssertTrue("trimmer serial still the Serial1 prefix", swapped.MatchesSerial1Prefix("2607270001551"));
+        AssertTrue("zeros in Serial2 → not MSA", !swapped.IsMsa);
+
+        // 3) Legacy V1 form, still written by M50_ST040_KF1 for OCR images (~500/day into the NG folder).
+        var legacy = ImageFileName.TryParse("270726161219_00320440000000000000_1_M50_ST040_KF1_2_OCR_&Cam2Img_Dark.png");
+        AssertTrue("legacy underscore name parses", legacy is not null);
+        AssertEqual("legacy form detected", ImageNameForm.LegacyUnderscore, legacy!.Form);
+        AssertEqual("controller", "M50_ST040_KF1", legacy.Controller);
+        AssertEqual("camera number", "2", legacy.CameraNumber);
+        AssertEqual("overall", "1", legacy.Overall);
+        AssertEqual("image variable", "&Cam2Img_Dark.png", legacy.ImageName);
+        AssertTrue("serial reassembled without the '_' → same key as the modern form",
+            legacy.MatchesSerial1Prefix("2707261612190032044"));
+        AssertTrue("legacy has no second serial → not MSA", !legacy.IsMsa);
+
+        // 4) MSA form: Serial2 is the real DMC — and may itself contain hyphens.
+        var msa = ImageFileName.TryParse("50260721170000001000-0-26-0726-1225564444444400000012-1-M50_ST110_KF1-1-&Cam1Img.png");
+        AssertTrue("MSA name with hyphens in the DMC parses", msa is not null);
+        AssertEqual("DMC kept intact incl. hyphens", "26-0726-1225564444444400000012", msa!.Serial2);
+        AssertEqual("controller after a hyphenated DMC", "M50_ST110_KF1", msa.Controller);
+        AssertEqual("camera number after a hyphenated DMC", "1", msa.CameraNumber);
+        AssertTrue("non-zero Serial2 → MSA", msa.IsMsa);
+
+        // 5) Off-spec / unparsable names: defined fallback, never a silent match.
+        AssertTrue("plain text file → null", ImageFileName.TryParse("readme.txt") is null);
+        AssertTrue("no image-variable anchor → null", ImageFileName.TryParse("2707261538450031633000-0000-1-M50-1.bmp") is null);
+        AssertTrue("empty → null", ImageFileName.TryParse(string.Empty) is null);
+    }
+
+    private static void ImageMatching_IsFieldAccurate_NotSubstring()
+    {
+        Console.WriteLine("[Case AH] Matching is field-accurate: a trimmer key inside the DMC must NOT hit");
+
+        const string trimmer = "2607270001640";  // 13-char trimmer serial
+        // An MSA image whose DMC (Serial2) happens to CONTAIN that trimmer serial as a substring.
+        var dmc = ("999" + trimmer + "88888888888888").PadRight(32, '8');
+        var msaName = $"{"50260728120000001".PadRight(22, '0')}-{dmc}-1-M20_ST060_KF1-1-&Cam1Img.bmp";
+        var msa = ImageFileName.TryParse(msaName)!;
+
+        AssertTrue("old V1 semantics WOULD have matched (substring of the whole name)",
+            msaName.Contains(trimmer, StringComparison.Ordinal));
+        AssertTrue("field-accurate: trimmer key does NOT match Serial1", !msa.MatchesSerial1Prefix(trimmer));
+        AssertTrue("recognised as MSA", msa.IsMsa);
+
+        // The production image of that same trimmer DOES match — by Serial1 prefix.
+        var prod = ImageFileName.TryParse($"{trimmer.PadRight(22, '0')}-{new string('0', 32)}-1-M20_ST060_KF1-2-&Cam2Img.bmp")!;
+        AssertTrue("production trimmer image matches by Serial1 prefix", prod.MatchesSerial1Prefix(trimmer));
+        AssertTrue("adjacent trimmer does not match", !prod.MatchesSerial1Prefix("2607270001641"));
+
+        // MSA searches: BaseID against Serial1, DMC against Serial2 — each in its own field.
+        AssertTrue("MSA run image found by BaseID (Serial1)", msa.MatchesBaseIdField("50260728120000"));
+        AssertTrue("MSA run image found by DMC (Serial2)", msa.MatchesDmcField(dmc));
+        AssertTrue("BaseID is not searched in Serial2", !msa.MatchesDmcField("50260728120000"));
+    }
+
+    private static void MsaImages_AreProtectedFromProductionFlows()
+    {
+        Console.WriteLine("[Case AI] MSA images survive DE purge, OK backup/delete and the Input-leftover sweep");
+
+        SerialNumberHelper.Configure(19);
+        SerialNumberHelper.ConfigureTrimmer(13);
+        const string szid = "2807260753160032218";
+
+        var root = Path.Combine(Path.GetTempPath(), "hds_msa_" + Guid.NewGuid().ToString("N"));
+        var input = Path.Combine(root, "Input");
+        Directory.CreateDirectory(input);
+        try
+        {
+            // Worst case on purpose: the MSA image's Serial1 starts with the very serial being purged,
+            // so ONLY the MSA marker (Serial2 = DMC) can save it.
+            var msaImg = Path.Combine(input,
+                $"{szid.PadRight(22, '0')}-{"2607261225564444444400000012XYZ".PadRight(32, '7')}-1-M50_ST110_KF1-1-&Cam1Img.bmp");
+            var prodImg = Path.Combine(input,
+                $"{szid.PadRight(22, '0')}-{new string('0', 32)}-1-M50_ST130_KF1-1-&Cam1Img.bmp");
+            File.WriteAllText(msaImg, "x");
+            File.WriteAllText(prodImg, "x");
+
+            var log = new RecordingLog();
+            var handler = new ImageHandler(log);
+
+            // a) DE purge deletes the production image, keeps the MSA image.
+            var de = handler.ApplyAsync("DE", new[] { szid }, input, PartImageAction.Delete,
+                    string.Empty, CancellationToken.None)
+                .GetAwaiter().GetResult();
+            AssertEqual("DE deleted only the production image", 1, de.Handled);
+            AssertEqual("MSA image counted as skipped", 1, de.MsaSkipped);
+            AssertTrue("DE kept the MSA image", File.Exists(msaImg));
+            AssertTrue("DE deleted the production image", !File.Exists(prodImg));
+
+            // b) OK-part handling (both actions) must not touch the MSA image either.
+            var backup = Path.Combine(root, "Backup");
+            var ok = handler.ApplyAsync("OK", new[] { szid }, input, PartImageAction.MoveToBackup,
+                    backup, CancellationToken.None)
+                .GetAwaiter().GetResult();
+            AssertEqual("OK image handling reports no failure", 0, ok.Failed);
+            AssertTrue("OK handling kept the MSA image", File.Exists(msaImg));
+            AssertTrue("MSA image was NOT copied into the backup tree",
+                !Directory.Exists(backup) || !Directory.EnumerateFiles(backup, "*", SearchOption.AllDirectories).Any());
+
+            // c) The 3-day Input-leftover retention keeps MSA images in 01-04 (and reports them) …
+            AssertEqual("leftover sweep keeps MSA", RetentionService.LeftoverAction.KeepMsa,
+                RetentionService.ClassifyLeftover(Path.GetFileName(msaImg), skipNgFlagged: true));
+            AssertEqual("leftover sweep deletes an OK production leftover", RetentionService.LeftoverAction.Delete,
+                RetentionService.ClassifyLeftover(Path.GetFileName(prodImg), skipNgFlagged: true));
+            AssertEqual("leftover sweep keeps an NG low-res image", RetentionService.LeftoverAction.KeepNg,
+                RetentionService.ClassifyLeftover(
+                    $"{szid.PadRight(22, '0')}-{new string('0', 32)}-0-M50_ST130_KF1-1-&Cam1Img.bmp", skipNgFlagged: true));
+            AssertEqual("leftover sweep keeps an unknown name", RetentionService.LeftoverAction.KeepUnknown,
+                RetentionService.ClassifyLeftover("something_else.txt", skipNgFlagged: false));
+
+            // … but 05_GoldenSample is a TRANSIT folder: there both MSA and production leftovers go.
+            AssertEqual("05 transit: MSA leftover IS deleted", RetentionService.LeftoverAction.Delete,
+                RetentionService.ClassifyLeftover(Path.GetFileName(msaImg), skipNgFlagged: false, isMsaTransitFolder: true));
+            AssertEqual("05 transit: M1X production leftover IS deleted", RetentionService.LeftoverAction.Delete,
+                RetentionService.ClassifyLeftover(Path.GetFileName(prodImg), skipNgFlagged: false, isMsaTransitFolder: true));
+            AssertEqual("05 transit: an unparsable name is STILL kept", RetentionService.LeftoverAction.KeepUnknown,
+                RetentionService.ClassifyLeftover("something_else.txt", skipNgFlagged: false, isMsaTransitFolder: true));
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); } catch { /* best effort */ }
+        }
+    }
+
+    private static void M2xAndLegacy_ImagesAreFoundByTheirOwnSerial()
+    {
+        Console.WriteLine("[Case AJ] M2X (virtual serial) and the legacy OCR form are found by the DE purge");
+
+        SerialNumberHelper.Configure(19);
+        SerialNumberHelper.ConfigureTrimmer(13);
+        const string szid = "2707261612190032044";   // frame serial of the part
+        const string trimmer = "2607270001551";        // its trimmer serial
+
+        var root = Path.Combine(Path.GetTempPath(), "hds_m2x_" + Guid.NewGuid().ToString("N"));
+        var input = Path.Combine(root, "Input");
+        Directory.CreateDirectory(input);
+        try
+        {
+            // M2X camera 1 (swapped widths) and camera 2 (spec widths) — both carry the TRIMMER serial.
+            var m2xCam1 = Path.Combine(input, $"{trimmer.PadRight(32, '0')}-{new string('0', 22)}-1-M20_ST060_KF3-1-&Cam1Img.bmp");
+            var m2xCam2 = Path.Combine(input, $"{trimmer.PadRight(22, '0')}-{new string('0', 32)}-1-M20_ST060_KF3-2-&Cam2Img.bmp");
+            // M50 frame image + the legacy OCR form of the SAME part (underscore layout).
+            var m50 = Path.Combine(input, $"{szid.PadRight(22, '0')}-{new string('0', 32)}-1-M50_ST040_KF1-1-&Cam1Img.bmp");
+            var ocr = Path.Combine(input, "270726161219_00320440000000000000_1_M50_ST040_KF1_2_OCR_&Cam2Img_Dark.png");
+            // A different part's trimmer that shares the first 12 chars — must survive.
+            var neighbour = Path.Combine(input, $"{"2607270001552".PadRight(32, '0')}-{new string('0', 22)}-1-M20_ST060_KF3-1-&Cam1Img.bmp");
+            foreach (var f in new[] { m2xCam1, m2xCam2, m50, ocr, neighbour })
+                File.WriteAllText(f, "x");
+
+            var result = new ImageHandler(new NullLog())
+                .ApplyAsync("DE", new[] { szid, trimmer }, input, PartImageAction.Delete,
+                    string.Empty, CancellationToken.None)
+                .GetAwaiter().GetResult();
+
+            AssertEqual("frame + legacy-OCR + both M2X images deleted", 4, result.Handled);
+            AssertTrue("M2X camera 1 (swapped widths) found", !File.Exists(m2xCam1));
+            AssertTrue("M2X camera 2 (spec widths) found", !File.Exists(m2xCam2));
+            AssertTrue("M50 frame image found", !File.Exists(m50));
+            AssertTrue("legacy OCR image found via the reassembled serial", !File.Exists(ocr));
+            AssertTrue("neighbouring trimmer survived (13th char differs)", File.Exists(neighbour));
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); } catch { /* best effort */ }
+        }
+    }
+
+    // ---- Target concept 2026-07-28: part-exit image actions, MSA move, deprecated keys ------------
+
+    /// <summary>Build a spec-form filename (Serial1 22 / Serial2 32).</summary>
+    private static string ImgName(string serial, string controller, string overall = "1", string cam = "1",
+        string? dmc = null, string ext = ".bmp") =>
+        $"{serial.PadRight(22, '0')}-{(dmc ?? string.Empty).PadRight(32, '0')}-{overall}-{controller}-{cam}-&Cam1Img{ext}";
+
+    private static void PartExit_ImageActionsFollowTheTargetConcept()
+    {
+        Console.WriteLine("[Case AK] Part exit: NG/DE/Unknown delete in 01 ONLY; 03/04/05 are never touched");
+
+        SerialNumberHelper.Configure(19);
+        SerialNumberHelper.ConfigureTrimmer(13);
+        const string szid = "2807260753160032218";
+
+        var root = Path.Combine(Path.GetTempPath(), "hds_soll_" + Guid.NewGuid().ToString("N"));
+        var lowRes = Path.Combine(root, "01_Low_Resolution_Individual", "Input");
+        var ng = Path.Combine(root, "03_High_Resolution_NG", "Input");
+        var diag = Path.Combine(root, "04_High_Resolution_Diagnostic", "Input");
+        var gsm = Path.Combine(root, "05_High_Resolution_GoldenSample", "Input");
+        var legacyDay = Path.Combine(root, "01_Low_Resolution_Individual", "2026", "07", "27");
+        foreach (var d in new[] { lowRes, ng, diag, gsm, legacyDay })
+            Directory.CreateDirectory(d);
+        try
+        {
+            var inLowRes = Path.Combine(lowRes, ImgName(szid, "M50_ST130_KF1"));
+            var inLegacy = Path.Combine(legacyDay, ImgName(szid, "M50_ST120_KF1"));       // legacy day-folder
+            var inLowResPng = Path.Combine(lowRes, ImgName(szid, "M50_ST140_KF1", ext: ".png")); // no *.bmp filter
+            var inNg = Path.Combine(ng, ImgName(szid, "M50_ST110_KF1", overall: "0"));
+            var inDiag = Path.Combine(diag, ImgName(szid, "M50_ST040_KF1"));
+            var inGsm = Path.Combine(gsm, ImgName(szid, "M10_ST060_KF1", cam: "4", ext: ".png"));
+            foreach (var f in new[] { inLowRes, inLegacy, inLowResPng, inNg, inDiag, inGsm })
+                File.WriteAllText(f, "x");
+
+            var result = new ImageHandler(new NullLog())
+                .ApplyAsync("NG", new[] { szid }, lowRes, PartImageAction.Delete, string.Empty, CancellationToken.None)
+                .GetAwaiter().GetResult();
+
+            AssertEqual("all three low-res images deleted (Input + legacy day-folder, .bmp + .png)", 3, result.Handled);
+            AssertTrue("low-res Input image gone", !File.Exists(inLowRes));
+            AssertTrue("low-res legacy day-folder image gone", !File.Exists(inLegacy));
+            AssertTrue("low-res .png gone (no extension filter any more)", !File.Exists(inLowResPng));
+            AssertTrue("03_NG untouched", File.Exists(inNg));
+            AssertTrue("04_Diagnostic untouched", File.Exists(inDiag));
+            AssertTrue("05_GoldenSample untouched", File.Exists(inGsm));
+        }
+        finally { try { Directory.Delete(root, recursive: true); } catch { /* best effort */ } }
+    }
+
+    private static void PartExit_OkFollowsCollageGenerateOnly()
+    {
+        Console.WriteLine("[Case AL] OK part: collage on → delete originals · collage off → move to backup · DeletePictures ignored");
+
+        SerialNumberHelper.Configure(19);
+        const string szid = "2807260900110032307";
+
+        var root = Path.Combine(Path.GetTempPath(), "hds_ok_" + Guid.NewGuid().ToString("N"));
+        var lowRes = Path.Combine(root, "01", "Input");
+        var collageOut = Path.Combine(root, "02", "Input");
+        var backup = Path.Combine(root, "06_Backup");
+        Directory.CreateDirectory(lowRes);
+        Directory.CreateDirectory(collageOut);
+        try
+        {
+            var telegram = string.Join(";",
+                "DMC1", szid, "", "1117", "Normal", "50", "1", "20", "2", "30", "3", "4", "21.5", "44.0", "OK");
+            var part = SpsPartExitData.TryParse(telegram)!;
+
+            // --- a) Collage OFF (live setting): the originals must be MOVED to the backup tree ---
+            var img = Path.Combine(lowRes, ImgName(szid, "M50_ST130_KF1"));
+            File.WriteAllText(img, "content");
+
+            var cfgOff = new AppConfig
+            {
+                Nas = new NasConfig { LowResIndividualPath = lowRes, BackupFolder = backup },
+                Collage = new CollageConfig { Generate = false, SingleImagesPath = lowRes, ResultImagesPath = collageOut },
+            };
+            var logOff = new RecordingLog();
+            var collageOff = new RecordingCollage();
+            var spsOff = new HandlerCaptureSps();
+            var orchOff = new PartExitOrchestrator(spsOff, new ThrowingDb(), new RecordingCsv(), collageOff,
+                new ImageHandler(logOff), new StubConfig2(cfgOff), new NoopHealth(), logOff);
+            orchOff.StartAsync(CancellationToken.None).GetAwaiter().GetResult();
+            spsOff.PartExitHandler!(part).GetAwaiter().GetResult();
+
+            AssertTrue("collage off → no collage composed", !collageOff.ComposeCalled);
+            AssertTrue("collage off → original removed from the low-res folder", !File.Exists(img));
+            var moved = Directory.Exists(backup)
+                ? Directory.GetFiles(backup, "*", SearchOption.AllDirectories)
+                : Array.Empty<string>();
+            AssertEqual("collage off → exactly one file in the backup tree", 1, moved.Length);
+            AssertEqual("backup keeps the original name", Path.GetFileName(img), Path.GetFileName(moved[0]));
+            AssertEqual("backup content intact", "content", File.ReadAllText(moved[0]));
+            AssertTrue("backup uses the YYYY\\MM\\DD layout",
+                moved[0].Contains(Path.Combine(DateTime.Now.ToString("yyyy"), DateTime.Now.ToString("MM"), DateTime.Now.ToString("dd"))));
+
+            // --- b) Collage ON: the collage is composed and the originals are DELETED (no backup) ---
+            var img2 = Path.Combine(lowRes, ImgName(szid, "M50_ST120_KF1"));
+            File.WriteAllText(img2, "content2");
+            var backupBefore = Directory.GetFiles(backup, "*", SearchOption.AllDirectories).Length;
+
+            var cfgOn = new AppConfig
+            {
+                Nas = new NasConfig { LowResIndividualPath = lowRes, BackupFolder = backup },
+                Collage = new CollageConfig { Generate = true, SingleImagesPath = lowRes, ResultImagesPath = collageOut },
+            };
+            var logOn = new RecordingLog();
+            var collageOn = new RecordingCollage();
+            var spsOn = new HandlerCaptureSps();
+            var orchOn = new PartExitOrchestrator(spsOn, new ThrowingDb(), new RecordingCsv(), collageOn,
+                new ImageHandler(logOn), new StubConfig2(cfgOn), new NoopHealth(), logOn);
+            orchOn.StartAsync(CancellationToken.None).GetAwaiter().GetResult();
+            spsOn.PartExitHandler!(part).GetAwaiter().GetResult();
+
+            AssertTrue("collage on → collage composed", collageOn.ComposeCalled);
+            AssertTrue("collage on → original deleted", !File.Exists(img2));
+            AssertEqual("collage on → nothing added to the backup tree", backupBefore,
+                Directory.GetFiles(backup, "*", SearchOption.AllDirectories).Length);
+        }
+        finally { try { Directory.Delete(root, recursive: true); } catch { /* best effort */ } }
+    }
+
+    private static void PartExit_UnknownResult_NoCsvButDbImagesAndWarning()
+    {
+        Console.WriteLine("[Case AM] Unknown result: dmcserial yes, CSV NO, images deleted, WARNING with the raw field");
+
+        SerialNumberHelper.Configure(19);
+        const string szid = "2807260755460032238";
+
+        var root = Path.Combine(Path.GetTempPath(), "hds_unk_" + Guid.NewGuid().ToString("N"));
+        var lowRes = Path.Combine(root, "01", "Input");
+        Directory.CreateDirectory(lowRes);
+        try
+        {
+            var img = Path.Combine(lowRes, ImgName(szid, "M50_ST130_KF1"));
+            File.WriteAllText(img, "x");
+
+            // Field 14 is neither OK/NG/DE.
+            var part = SpsPartExitData.TryParse(string.Join(";",
+                "DMC1", szid, "", "1117", "Normal", "50", "1", "20", "2", "30", "3", "4", "1.0", "2.0", "WEIRD"))!;
+            AssertEqual("parses as Unknown", PartResult.Unknown, part.Result);
+            AssertEqual("raw field 14 kept", "WEIRD", part.ResultRaw);
+
+            var cfg = new AppConfig
+            {
+                Nas = new NasConfig { LowResIndividualPath = lowRes },
+                Collage = new CollageConfig { SingleImagesPath = lowRes },
+            };
+            var log = new RecordingLog();
+            var csv = new RecordingCsv();
+            var db = new ThrowingDb();   // flags the dmcserial attempt (and refuses it)
+            var sps = new HandlerCaptureSps();
+            var orch = new PartExitOrchestrator(sps, db, csv, new RecordingCollage(),
+                new ImageHandler(log), new StubConfig2(cfg), new NoopHealth(), log);
+            orch.StartAsync(CancellationToken.None).GetAwaiter().GetResult();
+            sps.PartExitHandler!(part).GetAwaiter().GetResult();
+
+            AssertTrue("dmcserial write attempted (like NG)", db.Opened);
+            AssertTrue("NO CSV row for an unknown result", !csv.WriteCalled);
+            AssertTrue("low-res image deleted (like NG)", !File.Exists(img));
+            AssertTrue("WARNING names the raw field and the raw telegram",
+                log.Messages.Any(m => m.Contains("unknown result") && m.Contains("WEIRD") && m.Contains("Raw telegram")));
+        }
+        finally { try { Directory.Delete(root, recursive: true); } catch { /* best effort */ } }
+    }
+
+    private static void PartExit_EmptySzid_WritesNoDmcserialRow()
+    {
+        Console.WriteLine("[Case AN] Part exit without a frame serial: no dmcserial row (no '' key collision), WARNING instead");
+
+        SerialNumberHelper.Configure(19);
+        var root = Path.Combine(Path.GetTempPath(), "hds_nos_" + Guid.NewGuid().ToString("N"));
+        var lowRes = Path.Combine(root, "01", "Input");
+        Directory.CreateDirectory(lowRes);
+        try
+        {
+            // Block-ejected part: no SZID, no DMC, no trimmer (this really happens on the line).
+            var part = SpsPartExitData.TryParse(string.Join(";",
+                "", "", "", "1117", "Normal", "50", "1", "20", "2", "30", "3", "4", "1.0", "2.0", "NG"))!;
+
+            var cfg = new AppConfig
+            {
+                Nas = new NasConfig { LowResIndividualPath = lowRes },
+                Collage = new CollageConfig { SingleImagesPath = lowRes },
+            };
+            var log = new RecordingLog();
+            var db = new ThrowingDb();
+            var sps = new HandlerCaptureSps();
+            var orch = new PartExitOrchestrator(sps, db, new RecordingCsv(), new RecordingCollage(),
+                new ImageHandler(log), new StubConfig2(cfg), new NoopHealth(), log);
+            orch.StartAsync(CancellationToken.None).GetAwaiter().GetResult();
+            var outcome = sps.PartExitHandler!(part).GetAwaiter().GetResult();
+
+            AssertTrue("DB never opened → no serial_number = '' row", !db.Opened);
+            AssertTrue("WARNING reports the serial-less part exit",
+                log.Messages.Any(m => m.Contains("without a frame serial") && m.Contains("no dmcserial row")));
+            AssertTrue("still a positive ACK (nothing the PLC can fix)", outcome.Success);
+        }
+        finally { try { Directory.Delete(root, recursive: true); } catch { /* best effort */ } }
+    }
+
+    private static void DeprecatedIniKeys_AreReportedNotSilentlyHonoured()
+    {
+        Console.WriteLine("[Case AO] Deprecated keys: [NAS] DeletePictures + [CSV] CSVMSA_Save are reported, not honoured");
+        var ini = Path.Combine(Path.GetTempPath(), "hds_dep_" + Guid.NewGuid().ToString("N") + ".ini");
+        File.WriteAllText(ini,
+            "[NAS]\r\nDeletePictures=true\r\nBackupFolder=Z:\\06_Backup\r\n\r\n" +
+            "[CSV]\r\nCSVMSA_Save=true\r\nCSV_MSAPath=Y:\\01_CSV_Evaluation\r\n\r\n" +
+            "[Retention]\r\nImages_GoldenSample=3\r\n");
+        try
+        {
+            var cfg = new IniConfigManager().Load(ini);
+
+            AssertTrue("[NAS] DeletePictures reported as deprecated + ignored",
+                cfg.Retention.Deprecations.Any(d => d.Contains("DeletePictures") && d.Contains("IGNORED")));
+            AssertTrue("[CSV] CSVMSA_Save reported as deprecated + ignored",
+                cfg.Retention.Deprecations.Any(d => d.Contains("CSVMSA_Save") && d.Contains("IGNORED")));
+            AssertTrue("CSV_MSAPath is NOT flagged (still the retention root of the legacy tree)",
+                !cfg.Retention.Deprecations.Any(d => d.Contains("CSV_MSAPath")));
+            AssertEqual("CSV_MSAPath still readable for retention", @"Y:\01_CSV_Evaluation", cfg.Csv.MsaPath);
+            AssertEqual("Images_GoldenSample = 3 (transit buffer)", 3, cfg.Retention.ImagesGoldenSample);
+        }
+        finally { try { File.Delete(ini); } catch { /* best effort */ } }
+    }
+
+    private static void PartExitAck_StaysByteIdentical_DespiteTheMsDisplay()
+    {
+        Console.WriteLine("[Case AP] The ms suffix is display-only — the ACK telegram to the PLC is byte-identical");
+
+        // The wire format is <SZID padded to 32>;true|false + CR — the duration lives in a separate
+        // display string (TcpSpsServer.HandlePartExitAckAsync), so it can never reach the PLC.
+        const string szid = "2807261253010038778";
+        var outcome = new PartExitOutcome(true, 87);
+        var body = $"{szid.PadRight(32, '0')};{(outcome.Success ? "true" : "false")}";
+        var wire = body + "\r";
+        var display = $"{body} ({outcome.DurationMs} ms)";
+
+        AssertEqual("wire length = 32 serial + ';' + 'true' + CR", 32 + 1 + 4 + 1, wire.Length);
+        AssertTrue("wire ends with a single CR", wire.EndsWith("\r") && !wire.EndsWith("\n"));
+        AssertTrue("wire carries no 'ms' text", !wire.Contains("ms"));
+        AssertTrue("wire carries no parenthesis", !wire.Contains('(') && !wire.Contains(')'));
+        AssertEqual("display = wire body + duration", $"{body} (87 ms)", display);
+        AssertTrue("display starts with the untouched wire body", display.StartsWith(body));
+    }
+
+    private static void MsaRunImages_AreMovedNotCopied()
+    {
+        Console.WriteLine("[Case AQ] MSA run images are MOVED out of the GoldenSample transit folder (failures stay behind)");
+
+        const string baseId = "50260723165426";
+        const string dmc = "21072615261304011996000000035951";   // real live DMC → Serial2 != zeros
+
+        var root = Path.Combine(Path.GetTempPath(), "hds_msamove_" + Guid.NewGuid().ToString("N"));
+        var gsm = Path.Combine(root, "05_High_Resolution_GoldenSample", "Input");
+        var imgDir = Path.Combine(root, "X_MSA_Reports", baseId, "IMG");
+        Directory.CreateDirectory(gsm);
+        try
+        {
+            // Two images of the run (BaseID + loop in Serial1, DMC in Serial2) …
+            var run1 = Path.Combine(gsm, ImgName(baseId + "001", "M50_ST040_KF1", overall: "0", dmc: dmc, ext: ".png"));
+            var run2 = Path.Combine(gsm, ImgName(baseId + "002", "M50_ST130_KF1", overall: "0", dmc: dmc, ext: ".png"));
+            // … a different run and an M1X production image, both must stay.
+            var otherRun = Path.Combine(gsm, ImgName("50260724070500001", "M50_ST040_KF1", dmc: dmc, ext: ".png"));
+            var m1xProd = Path.Combine(gsm, ImgName("2707261558510031730", "M10_ST060_KF1", cam: "4", ext: ".png"));
+            foreach (var f in new[] { run1, run2, otherRun, m1xProd })
+                File.WriteAllText(f, "img");
+
+            var log = new RecordingLog();
+            var result = MsaRunImages.Move(gsm, baseId, imgDir, log);
+
+            AssertEqual("both run images found", 2, result.Found);
+            AssertEqual("both run images moved", 2, result.Moved);
+            AssertEqual("nothing left behind", 0, result.LeftBehind);
+            AssertTrue("run image 1 arrived in IMG", File.Exists(Path.Combine(imgDir, Path.GetFileName(run1))));
+            AssertTrue("run image 2 arrived in IMG", File.Exists(Path.Combine(imgDir, Path.GetFileName(run2))));
+            AssertTrue("run image 1 gone from the transit folder (moved, not copied)", !File.Exists(run1));
+            AssertTrue("run image 2 gone from the transit folder (moved, not copied)", !File.Exists(run2));
+            AssertTrue("a different run's image stays", File.Exists(otherRun));
+            AssertTrue("M1X production image stays", File.Exists(m1xProd));
+            AssertTrue("log says 'moved', not 'copied'",
+                log.Messages.Any(m => m.Contains("moved into") && !m.Contains("copied")));
+
+            // A failing move must leave the original in place (here: the target name is blocked by a
+            // read-only file, so Copy throws).
+            var blocked = Path.Combine(gsm, ImgName(baseId + "003", "M50_ST120_KF1", overall: "0", dmc: dmc, ext: ".png"));
+            File.WriteAllText(blocked, "img");
+            var blockedDest = Path.Combine(imgDir, Path.GetFileName(blocked));
+            File.WriteAllText(blockedDest, "locked");
+            File.SetAttributes(blockedDest, FileAttributes.ReadOnly);
+            try
+            {
+                var second = MsaRunImages.Move(gsm, baseId, imgDir, log);
+                AssertEqual("the blocked image was found", 1, second.Found);
+                AssertEqual("it was NOT moved", 0, second.Moved);
+                AssertEqual("it is reported as left behind", 1, second.LeftBehind);
+                AssertTrue("original still in the transit folder after a failed move", File.Exists(blocked));
+                AssertTrue("WARNING says the original was left in place",
+                    log.Messages.Any(m => m.Contains("could not be moved") && m.Contains("left in place")));
+            }
+            finally { File.SetAttributes(blockedDest, FileAttributes.Normal); }
+        }
+        finally { try { Directory.Delete(root, recursive: true); } catch { /* best effort */ } }
+    }
+
+    // ---- View mechanics: console tail-follow (log tab + PLC channel cards) -----------------------
+
+    /// <summary>
+    /// Verifies <see cref="TailScrollView"/> headlessly: the control + a virtualizing ListBox are laid
+    /// out off-screen (Measure/Arrange builds the template and the ScrollViewer reports real offsets),
+    /// then the required interactions are driven programmatically. No window is shown and no service is
+    /// started, so this never touches the live plant.
+    /// </summary>
+    private static void TailScroll_FollowsPausesCountsAndResumes()
+    {
+        Console.WriteLine("[Case AR] TailScrollView: follows the tail, pauses on scroll-up/click, counts, resumes");
+
+        // The log tab rebuilds its collection every tick with NEW item objects — reproduce exactly that,
+        // including the ring buffer that drops the oldest entry, because that is what breaks naive
+        // offset restoring.
+        const int ring = 40;
+        var backing = new List<string>();
+        var items = new ObservableCollection<LogEntryVm>();
+        var seq = 0;
+
+        void Append(int n)
+        {
+            for (var i = 0; i < n; i++)
+            {
+                backing.Add($"line {++seq:0000}");
+                while (backing.Count > ring)
+                    backing.RemoveAt(0);
+            }
+            items.Clear();                                  // per-tick rebuild, like LogViewModel.Tick
+            foreach (var text in backing)
+                items.Add(new LogEntryVm { Text = text, Brush = Brushes.White });
+        }
+
+        var list = new ListBox
+        {
+            ItemsSource = items,
+            ItemTemplate = LineTemplate(),
+        };
+        var host = new TailScrollView { Content = list, Width = 300, Height = 100 };
+
+        // Give the control the theme template that carries PART_JumpButton (App.xaml is not running).
+        host.Resources.MergedDictionaries.Add(new ResourceDictionary
+        {
+            Source = new Uri("/HarryDataServer;component/Themes/DarkTheme.xaml", UriKind.Relative),
+        });
+
+        Append(60);          // more than fits → the list is scrollable
+        Layout(host);
+
+        var sv = FindScrollViewer(host);
+        AssertTrue("ScrollViewer found in the laid-out tree", sv is not null);
+        AssertTrue("list is scrollable (more items than fit)", sv!.ScrollableHeight > 0);
+
+        // 1) Starts at the tail and follows.
+        AssertTrue("starts at the bottom", sv.VerticalOffset >= sv.ScrollableHeight - 2.0);
+        AssertTrue("not paused initially", !host.IsPaused);
+        Append(5);
+        Layout(host);
+        AssertTrue("still at the bottom after new entries (following)", sv.VerticalOffset >= sv.ScrollableHeight - 2.0);
+        AssertEqual("no counter while following", 0, host.NewCount);
+
+        // 2) User scrolls up → pauses and the view holds its position while entries keep coming.
+        //    The ring drops the oldest rows on every append, so holding a raw offset is NOT enough —
+        //    the same LINE has to stay under the viewport.
+        sv.ScrollToVerticalOffset(20);
+        Layout(host);
+        AssertTrue("paused after scrolling up", host.IsPaused);
+        AssertTrue("no jump button before anything new arrived", !host.IsJumpAvailable);
+
+        var topTextBefore = ((LogEntryVm)list.Items[(int)sv.VerticalOffset]).Text;
+        Append(7);
+        Layout(host);
+        AssertEqual("view still shows the SAME line although the ring dropped 7 entries",
+            topTextBefore, ((LogEntryVm)list.Items[(int)sv.VerticalOffset]).Text);
+        AssertTrue("…and the raw offset really did move to follow it", sv.VerticalOffset < 20);
+
+        // 3) The overlay counts up.
+        AssertEqual("counter shows the 7 new entries", 7, host.NewCount);
+        AssertTrue("jump button offered", host.IsJumpAvailable);
+        Append(3);
+        Layout(host);
+        AssertEqual("counter keeps counting", 10, host.NewCount);
+        AssertTrue("still paused while entries stream in", host.IsPaused);
+        AssertEqual("and still the same line on top", topTextBefore,
+            ((LogEntryVm)list.Items[(int)sv.VerticalOffset]).Text);
+
+        // 3a) Anchor pushed out of the ring: degrade gracefully — stay paused, keep counting, no crash.
+        Append(ring + 5);
+        Layout(host);
+        AssertTrue("still paused after the anchor fell out of the ring", host.IsPaused);
+        AssertEqual("counter reports every entry now in the list as new", list.Items.Count, host.NewCount);
+        AssertTrue("jump button still offered", host.IsJumpAvailable);
+
+        // 3b) Clicking it jumps to the end and resumes.
+        host.ScrollToEnd();
+        Layout(host);
+        AssertTrue("jumped to the bottom", sv.VerticalOffset >= sv.ScrollableHeight - 2.0);
+        AssertTrue("following again", !host.IsPaused);
+        AssertEqual("counter cleared", 0, host.NewCount);
+        AssertTrue("jump button hidden again", !host.IsJumpAvailable);
+
+        // 4) Manual scroll back to the bottom re-arms following (tolerance included).
+        sv.ScrollToVerticalOffset(3);
+        Layout(host);
+        AssertTrue("paused again", host.IsPaused);
+        sv.ScrollToVerticalOffset(sv.ScrollableHeight - 1.0);   // within tolerance, not exactly the end
+        Layout(host);
+        AssertTrue("scrolling (almost) to the bottom resumes following", !host.IsPaused);
+        Append(2);
+        Layout(host);
+        AssertTrue("and it really follows again", sv.VerticalOffset >= sv.ScrollableHeight - 2.0);
+
+        // 5) Clicking into the list pauses — this is what makes copying a line possible while the log runs.
+        host.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
+        {
+            RoutedEvent = UIElement.PreviewMouseLeftButtonDownEvent,
+            Source = list,
+        });
+        AssertTrue("clicking into the list pauses following", host.IsPaused);
+
+        var offsetAtClick = sv.VerticalOffset;
+        Append(4);
+        Layout(host);
+        AssertTrue("view does not move while the mouse button is still down",
+            Math.Abs(sv.VerticalOffset - offsetAtClick) < 0.001);
+        AssertEqual("new entries are counted for the operator", 4, host.NewCount);
+
+        host.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
+        {
+            RoutedEvent = UIElement.PreviewMouseLeftButtonUpEvent,
+            Source = list,
+        });
+        AssertTrue("still paused after releasing the button (position kept)", host.IsPaused);
+
+        // 6) Copying a line while the log keeps running: the selection must survive the rebuild that
+        //    replaces every item object (otherwise it silently disappears within a second).
+        list.SelectedIndex = list.Items.Count - 1;   // the operator picks the line they want to copy
+        var selectedText = ((LogEntryVm)list.SelectedItem!).Text;
+        Append(3);
+        Layout(host);
+        AssertTrue("a line stays selected across the per-tick rebuild", list.SelectedItem is not null);
+        AssertEqual("and it is still the SAME line", selectedText, ((LogEntryVm)list.SelectedItem!).Text);
+        AssertEqual("the copy affordance reports that exact line", selectedText, host.SelectedLineText());
+
+        Append(ring + 2);   // push the selected line out of the ring
+        Layout(host);
+        AssertTrue("selection is dropped (not restored to a wrong line) once the line is gone",
+            host.SelectedLineText() != selectedText);
+    }
+
+    private static DataTemplate LineTemplate()
+    {
+        var text = new FrameworkElementFactory(typeof(TextBlock));
+        text.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding("Text"));
+        return new DataTemplate(typeof(LogEntryVm)) { VisualTree = text };
+    }
+
+    /// <summary>Force a full off-screen layout pass and drain the dispatcher queue (no window shown).</summary>
+    private static void Layout(FrameworkElement element)
+    {
+        for (var i = 0; i < 3; i++)
+        {
+            element.Measure(new Size(element.Width, element.Height));
+            element.Arrange(new Rect(0, 0, element.Width, element.Height));
+            element.UpdateLayout();
+            System.Windows.Threading.Dispatcher.CurrentDispatcher.Invoke(
+                () => { }, System.Windows.Threading.DispatcherPriority.Loaded);
+        }
+    }
+
+    private static ScrollViewer? FindScrollViewer(DependencyObject root)
+    {
+        var count = System.Windows.Media.VisualTreeHelper.GetChildrenCount(root);
+        for (var i = 0; i < count; i++)
+        {
+            var child = System.Windows.Media.VisualTreeHelper.GetChild(root, i);
+            if (child is ScrollViewer sv)
+                return sv;
+            if (FindScrollViewer(child) is { } deeper)
+                return deeper;
+        }
+        return null;
     }
 
     private static void BackupRoot_NonInputPathIsItsOwnRoot()
@@ -658,15 +1434,16 @@ internal static class Program
 
             var de = SpsPartExitData.TryParse(string.Join(";",
                 "", "", trimmer, "1117", "Normal", "20", "2", "20", "2", "30", "3", "4", "1.0", "2.0", "DE"))!;
-            var ack = sps.PartExitHandler!(de).GetAwaiter().GetResult();
+            var outcome = sps.PartExitHandler!(de).GetAwaiter().GetResult();
 
-            AssertTrue("ACK success", ack);
+            AssertTrue("ACK success", outcome.Success);
+            AssertTrue("duration reported for the UI line", outcome.DurationMs >= 0);
             AssertTrue("no dmcserial write (DB never opened)", !db.Opened);
             AssertTrue("no CSV row written", !csv.WriteCalled);
             AssertTrue("no collage composed", !collage.ComposeCalled);
             AssertTrue("trimmer image deleted", !File.Exists(img));
             AssertTrue("INFO 'DE: … deleted' logged",
-                log.Messages.Any(m => m.Contains("DE:") && m.Contains("deleted")));
+                log.Messages.Any(m => m.Contains("DE") && m.Contains("deleted")));
         }
         finally
         {
@@ -759,7 +1536,7 @@ internal static class Program
         public Func<string, string, string>? MsaRequestHandler { get; set; }
         public Task<bool> PushMsaResultAsync(string moduleKey, string baseId, string status, CancellationToken ct = default)
             => Task.FromResult(true);
-        public Func<SpsPartExitData, Task<bool>>? PartExitHandler { get; set; }
+        public Func<SpsPartExitData, Task<PartExitOutcome>>? PartExitHandler { get; set; }
         public Task StartAsync(CancellationToken ct) => Task.CompletedTask;
         public Task StopAsync() => Task.CompletedTask;
     }
