@@ -1,0 +1,286 @@
+{
+  "camera": "M50_ST130_KF1",
+  "signal_word": "Settings",
+  "settings": [
+    {
+      "telegram_place": 3,
+      "setting_name": "Anode_Defect_Blob_Min",
+      "parameter_set": 1,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 4,
+      "setting_name": "Anode_Defect_Blob_Max",
+      "parameter_set": 1,
+      "limit_type": "Max",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 5,
+      "setting_name": "Anode_Defect_NM_GA_Min",
+      "parameter_set": 2,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 6,
+      "setting_name": "Anode_Defect_NM_GA_Max",
+      "parameter_set": 2,
+      "limit_type": "Max",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 7,
+      "setting_name": "Anode_Defect_NM_TA_Min",
+      "parameter_set": 3,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 8,
+      "setting_name": "Anode_Defect_NM_TA_Max",
+      "parameter_set": 3,
+      "limit_type": "Max",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 9,
+      "setting_name": "Anode_Defect_SH_GA_Min",
+      "parameter_set": 4,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 10,
+      "setting_name": "Anode_Defect_SH_GA_Max",
+      "parameter_set": 4,
+      "limit_type": "Max",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 11,
+      "setting_name": "Anode_Defect_SH_TA_Min",
+      "parameter_set": 5,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 12,
+      "setting_name": "Anode_Defect_SH_TA_Max",
+      "parameter_set": 5,
+      "limit_type": "Max",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 13,
+      "setting_name": "Blade_Cosmetic_Min",
+      "parameter_set": 6,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 14,
+      "setting_name": "Blade_Cosmetic_Max",
+      "parameter_set": 6,
+      "limit_type": "Max",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 15,
+      "setting_name": "HardCap_Defect_Min",
+      "parameter_set": 7,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 16,
+      "setting_name": "HardCap_Defect_Max",
+      "parameter_set": 7,
+      "limit_type": "Max",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 17,
+      "setting_name": "HardGuard_Defect_Min",
+      "parameter_set": 8,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 18,
+      "setting_name": "HardGuard_Defect_Max",
+      "parameter_set": 8,
+      "limit_type": "Max",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 19,
+      "setting_name": "Lubra_Gap_Min",
+      "parameter_set": 9,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 20,
+      "setting_name": "Lubra_Gap_Max",
+      "parameter_set": 9,
+      "limit_type": "Max",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 21,
+      "setting_name": "Lubra_Length_Min",
+      "parameter_set": 10,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 22,
+      "setting_name": "Lubra_Length_Max",
+      "parameter_set": 10,
+      "limit_type": "Max",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 23,
+      "setting_name": "Lubra_Dark_Spots_Min",
+      "parameter_set": 11,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 24,
+      "setting_name": "Lubra_Dark_Spots_Max",
+      "parameter_set": 11,
+      "limit_type": "Max",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 25,
+      "setting_name": "Lubra_Presence_Min",
+      "parameter_set": 12,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 26,
+      "setting_name": "Lubra_Presence_Max",
+      "parameter_set": 12,
+      "limit_type": "Max",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 27,
+      "setting_name": "Lubra_White_Spots_Min",
+      "parameter_set": 13,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 28,
+      "setting_name": "Lubra_White_Spots_Max",
+      "parameter_set": 13,
+      "limit_type": "Max",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 29,
+      "setting_name": "Lubra_Mouse_Bites_Bot_Min",
+      "parameter_set": 14,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 30,
+      "setting_name": "Lubra_Mouse_Bites_Bot_Max",
+      "parameter_set": 14,
+      "limit_type": "Max",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 33,
+      "setting_name": "Lubra_Defect_NM_Min",
+      "parameter_set": 15,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 34,
+      "setting_name": "Lubra_Defect_NM_Max",
+      "parameter_set": 15,
+      "limit_type": "Max",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 35,
+      "setting_name": "Lubra_Defect_SH_Min",
+      "parameter_set": 16,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 36,
+      "setting_name": "Lubra_Defect_SH_Max",
+      "parameter_set": 16,
+      "limit_type": "Max",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 31,
+      "setting_name": "Lubra_Mouse_Bites_Top_Min",
+      "parameter_set": 17,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 32,
+      "setting_name": "Lubra_Mouse_Bites_Top_Max",
+      "parameter_set": 17,
+      "limit_type": "Max",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 37,
+      "setting_name": "HardCap_Blob_Min",
+      "parameter_set": 18,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 38,
+      "setting_name": "HardCap_Blob_Max",
+      "parameter_set": 18,
+      "limit_type": "Max",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 39,
+      "setting_name": "HardGuard_Blob_Min",
+      "parameter_set": 19,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 40,
+      "setting_name": "HardGuard_Blob_Max",
+      "parameter_set": 19,
+      "limit_type": "Max",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 41,
+      "setting_name": "Fin_Discolor_Min",
+      "parameter_set": 20,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 42,
+      "setting_name": "Fin_Discolor_Max",
+      "parameter_set": 20,
+      "limit_type": "Max",
+      "format": "Float"
+    }
+  ]
+}

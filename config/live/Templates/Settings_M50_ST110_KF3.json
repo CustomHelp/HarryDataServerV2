@@ -1,0 +1,328 @@
+{
+  "camera": "M50_ST110_KF3",
+  "signal_word": "Settings",
+  "settings": [
+    {
+      "telegram_place": 3,
+      "setting_name": "Anode_Height_Min",
+      "parameter_set": 1,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 4,
+      "setting_name": "Anode_Height_Max",
+      "parameter_set": 1,
+      "limit_type": "Max",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 5,
+      "setting_name": "Blade_Angle_B1_Min",
+      "parameter_set": 2,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 6,
+      "setting_name": "Blade_Angle_B1_Max",
+      "parameter_set": 2,
+      "limit_type": "Max",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 7,
+      "setting_name": "Blade_Angle_B2_Min",
+      "parameter_set": 3,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 8,
+      "setting_name": "Blade_Angle_B2_Max",
+      "parameter_set": 3,
+      "limit_type": "Max",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 9,
+      "setting_name": "Blade_Angle_B3_Min",
+      "parameter_set": 4,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 10,
+      "setting_name": "Blade_Angle_B3_Max",
+      "parameter_set": 4,
+      "limit_type": "Max",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 11,
+      "setting_name": "Blade_Angle_B4_Min",
+      "parameter_set": 5,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 12,
+      "setting_name": "Blade_Angle_B4_Max",
+      "parameter_set": 5,
+      "limit_type": "Max",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 13,
+      "setting_name": "Blade_Angle_B5_Min",
+      "parameter_set": 6,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 14,
+      "setting_name": "Blade_Angle_B5_Max",
+      "parameter_set": 6,
+      "limit_type": "Max",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 15,
+      "setting_name": "Blade_Count_Min",
+      "parameter_set": 7,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 16,
+      "setting_name": "Blade_Count_Max",
+      "parameter_set": 7,
+      "limit_type": "Max",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 17,
+      "setting_name": "Blade_Dist_GUB1_Min",
+      "parameter_set": 8,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 18,
+      "setting_name": "Blade_Dist_GUB1_Max",
+      "parameter_set": 8,
+      "limit_type": "Max",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 19,
+      "setting_name": "Blade_Dist_B1B2_Min",
+      "parameter_set": 9,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 20,
+      "setting_name": "Blade_Dist_B1B2_Max",
+      "parameter_set": 9,
+      "limit_type": "Max",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 21,
+      "setting_name": "Blade_Dist_B2B3_Min",
+      "parameter_set": 10,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 22,
+      "setting_name": "Blade_Dist_B2B3_Max",
+      "parameter_set": 10,
+      "limit_type": "Max",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 23,
+      "setting_name": "Blade_Dist_B3B4_Min",
+      "parameter_set": 11,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 24,
+      "setting_name": "Blade_Dist_B3B4_Max",
+      "parameter_set": 11,
+      "limit_type": "Max",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 25,
+      "setting_name": "Blade_Dist_B4B5_Min",
+      "parameter_set": 12,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 26,
+      "setting_name": "Blade_Dist_B4B5_Max",
+      "parameter_set": 12,
+      "limit_type": "Max",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 27,
+      "setting_name": "Blade_Dist_B5CA_Min",
+      "parameter_set": 13,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 28,
+      "setting_name": "Blade_Dist_B5CA_Max",
+      "parameter_set": 13,
+      "limit_type": "Max",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 29,
+      "setting_name": "Blade_Exposure_B1_Min",
+      "parameter_set": 14,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 30,
+      "setting_name": "Blade_Exposure_B1_Max",
+      "parameter_set": 14,
+      "limit_type": "Max",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 31,
+      "setting_name": "Blade_Exposure_B2_Min",
+      "parameter_set": 15,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 32,
+      "setting_name": "Blade_Exposure_B2_Max",
+      "parameter_set": 15,
+      "limit_type": "Max",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 33,
+      "setting_name": "Blade_Exposure_B3_Min",
+      "parameter_set": 16,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 34,
+      "setting_name": "Blade_Exposure_B3_Max",
+      "parameter_set": 16,
+      "limit_type": "Max",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 35,
+      "setting_name": "Blade_Exposure_B4_Min",
+      "parameter_set": 17,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 36,
+      "setting_name": "Blade_Exposure_B4_Max",
+      "parameter_set": 17,
+      "limit_type": "Max",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 37,
+      "setting_name": "Blade_Exposure_B5_Min",
+      "parameter_set": 18,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 38,
+      "setting_name": "Blade_Exposure_B5_Max",
+      "parameter_set": 18,
+      "limit_type": "Max",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 39,
+      "setting_name": "FinGuard_Defect_Min",
+      "parameter_set": 19,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 40,
+      "setting_name": "FinGuard_Defect_Max",
+      "parameter_set": 19,
+      "limit_type": "Max",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 41,
+      "setting_name": "Lubra_Height_Min",
+      "parameter_set": 20,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 42,
+      "setting_name": "Lubra_Height_Max",
+      "parameter_set": 20,
+      "limit_type": "Max",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 43,
+      "setting_name": "Lubra_Position_Min",
+      "parameter_set": 21,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 44,
+      "setting_name": "Lubra_Position_Max",
+      "parameter_set": 21,
+      "limit_type": "Max",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 45,
+      "setting_name": "Trimmer_Exposure_Min",
+      "parameter_set": 22,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 46,
+      "setting_name": "Trimmer_Exposure_Max",
+      "parameter_set": 22,
+      "limit_type": "Max",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 47,
+      "setting_name": "Trimmer_Mounted_Min",
+      "parameter_set": 23,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 48,
+      "setting_name": "Trimmer_Mounted_Max",
+      "parameter_set": 23,
+      "limit_type": "Max",
+      "format": "Float"
+    }
+  ]
+}

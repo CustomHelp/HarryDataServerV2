@@ -1,0 +1,366 @@
+{
+  "camera": "M11_ST060_KF1",
+  "signal_word": "Results",
+  "measurements": [
+    {
+      "telegram_place": 72,
+      "variable_name": "R_Lubra_Dark_Spots",
+      "display_name": "Lubra_Dark_Spots",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 9,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 73,
+      "variable_name": "V_Lubra_Dark_Spots",
+      "display_name": "Lubra_Dark_Spots",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 9,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 74,
+      "variable_name": "R_Lubra_White_Spots",
+      "display_name": "Lubra_White_Spots",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 8,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 75,
+      "variable_name": "V_Lubra_White_Spots",
+      "display_name": "Lubra_White_Spots",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 8,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 76,
+      "variable_name": "R_Lubra_Gap_LT",
+      "display_name": "Lubra_Gap_LT",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 3,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 77,
+      "variable_name": "V_Lubra_Gap_LT",
+      "display_name": "Lubra_Gap_LT",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 3,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 78,
+      "variable_name": "R_Lubra_Gap_RT",
+      "display_name": "Lubra_Gap_RT",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 3,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 79,
+      "variable_name": "V_Lubra_Gap_RT",
+      "display_name": "Lubra_Gap_RT",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 3,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 80,
+      "variable_name": "R_Lubra_Length",
+      "display_name": "Lubra_Length",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 4,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 81,
+      "variable_name": "V_Lubra_Length",
+      "display_name": "Lubra_Length",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 4,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 82,
+      "variable_name": "R_Lubra_MouseBites",
+      "display_name": "Lubra_MouseBites",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 5,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 83,
+      "variable_name": "V_Lubra_MouseBites",
+      "display_name": "Lubra_MouseBites",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 5,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 84,
+      "variable_name": "R_Lubra_MouseBitesTop",
+      "display_name": "Lubra_MouseBitesTop",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 6,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 85,
+      "variable_name": "V_Lubra_MouseBitesTop",
+      "display_name": "Lubra_MouseBitesTop",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 6,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 86,
+      "variable_name": "R_Lubra_Presence",
+      "display_name": "Lubra_Presence",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 7,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 87,
+      "variable_name": "V_Lubra_Presence",
+      "display_name": "Lubra_Presence",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 7,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 88,
+      "variable_name": "R_Lubra_Position_S1",
+      "display_name": "Lubra_Position_S1",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 2,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 89,
+      "variable_name": "V_Lubra_Position_S1",
+      "display_name": "Lubra_Position_S1",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 2,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 90,
+      "variable_name": "R_Lubra_Position_S2",
+      "display_name": "Lubra_Position_S2",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 2,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 91,
+      "variable_name": "V_Lubra_Position_S2",
+      "display_name": "Lubra_Position_S2",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 2,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 92,
+      "variable_name": "R_Lubra_Position_S3",
+      "display_name": "Lubra_Position_S3",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 2,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 93,
+      "variable_name": "V_Lubra_Position_S3",
+      "display_name": "Lubra_Position_S3",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 2,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 94,
+      "variable_name": "R_Lubra_Position_S4",
+      "display_name": "Lubra_Position_S4",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 2,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 95,
+      "variable_name": "V_Lubra_Position_S4",
+      "display_name": "Lubra_Position_S4",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 2,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 96,
+      "variable_name": "R_Lubra_Position_S5",
+      "display_name": "Lubra_Position_S5",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 2,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 97,
+      "variable_name": "V_Lubra_Position_S5",
+      "display_name": "Lubra_Position_S5",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 2,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 98,
+      "variable_name": "R_Lubra_Height_S1",
+      "display_name": "Lubra_Height_S1",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 1,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 99,
+      "variable_name": "V_Lubra_Height_S1",
+      "display_name": "Lubra_Height_S1",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 1,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 100,
+      "variable_name": "R_Lubra_Height_S2",
+      "display_name": "Lubra_Height_S2",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 1,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 101,
+      "variable_name": "V_Lubra_Height_S2",
+      "display_name": "Lubra_Height_S2",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 1,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 102,
+      "variable_name": "R_Lubra_Height_S3",
+      "display_name": "Lubra_Height_S3",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 1,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 103,
+      "variable_name": "V_Lubra_Height_S3",
+      "display_name": "Lubra_Height_S3",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 1,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 104,
+      "variable_name": "R_Lubra_Height_S4",
+      "display_name": "Lubra_Height_S4",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 1,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 105,
+      "variable_name": "V_Lubra_Height_S4",
+      "display_name": "Lubra_Height_S4",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 1,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 106,
+      "variable_name": "R_Lubra_Height_S5",
+      "display_name": "Lubra_Height_S5",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 1,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    },
+    {
+      "telegram_place": 107,
+      "variable_name": "V_Lubra_Height_S5",
+      "display_name": "Lubra_Height_S5",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 1,
+      "module_ref": "M1x",
+      "feature_group": "Lubra Measured"
+    }
+  ]
+}

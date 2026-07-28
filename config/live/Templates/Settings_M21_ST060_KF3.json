@@ -1,0 +1,34 @@
+{
+  "camera": "M21_ST060_KF3",
+  "signal_word": "Settings",
+  "settings": [
+    {
+      "telegram_place": 3,
+      "setting_name": "Pin_Height_Min",
+      "parameter_set": 1,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 4,
+      "setting_name": "Pin_Height_Max",
+      "parameter_set": 1,
+      "limit_type": "Max",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 3,
+      "setting_name": "Pin_Distance_Min",
+      "parameter_set": 2,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 4,
+      "setting_name": "Pin_Distance_Max",
+      "parameter_set": 2,
+      "limit_type": "Max",
+      "format": "Float"
+    }
+  ]
+}

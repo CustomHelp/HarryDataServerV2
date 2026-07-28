@@ -1031,6 +1031,17 @@ Location: configurable per camera in Harry.ini (`JsonParameters=` and `JsonSetti
 > legacy `D:\HarryDataServer`.
 > **Relative paths** in Harry.ini (e.g. `Templates\Result_*.json`) are resolved
 > against the directory that contains Harry.ini, so the whole config folder is portable.
+>
+> **Versioned snapshot: `config/live/` (added 2026-07-28).** `F:\002_Configs` lives only on the
+> server drive, so the repo now carries a copy of the **real** live configuration — `Harry.ini` +
+> the 28 `Templates\*.json` — under `config/live/` (see its README). It is **documentation/backup
+> only, never read at runtime**, and must be re-synced by hand after a config change:
+> `robocopy F:\002_Configs config\live\ Harry.ini` (+ the `Templates` subfolder).
+> Do **not** confuse it with `HarryDataServer/Resources/Templates/*.json`, which the `.csproj`
+> copies next to the EXE as the loader's fallback and which still holds **stubs** for the M1X
+> cameras — those are customer-owned and deliberately left alone.
+> `F:\002_Configs\MSA_References\` is **not** in the snapshot (it changes during operation through
+> LimitSample teaching).
 
 ```ini
 [General]
