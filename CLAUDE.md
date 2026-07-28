@@ -31,12 +31,20 @@
 > like `config/live/Harry.ini` does: `Password=<siehe F:\002_Configs\Harry.ini>` plus a note in the
 > accompanying README saying that this is the only line differing from the live file. This applies to
 > INIs, scripts, docs, test fixtures and commit messages alike.
-> **Open cleanup item (pre-existing, not yet done):** two older files still carry the DB password in
-> clear text — **`HarryDataServer/Harry.ini` (line 16)** and **`tools/customer/Harry.customer.ini`**.
-> Both predate this rule. Cleaning them up needs a decision (placeholder + a documented step in the
-> deploy/customer-package procedure, since the customer INI is generated from the template), and the
-> repository must stay **private** until then. The customer changes the passwords after deployment
-> anyway (§8).
+> **Open cleanup item (pre-existing, not yet done).** An audit on 2026-07-28
+> (`git grep -l "1234Set\|1234Get"`) found the credentials in **10 tracked files**, not just the two
+> originally assumed — so this is a bigger job than a two-line edit:
+> - **INI:** `HarryDataServer/Harry.ini` (line 16, `Password=1234Set`)
+> - **Hardcoded code defaults:** `HarryDataServer/Configuration/IniConfigManager.cs` (~107),
+>   `HarryDataServer/Models/AppConfig.cs` (~52) for `SettData`; `HarryPareto/ParetoSettings.cs` (~24),
+>   `HarryShared/Config/HarryConfig.cs` for `GetData` — these are **fallback values in code**, so
+>   removing them changes runtime behaviour when a key is missing and needs its own decision.
+> - **Docs:** `README.md`, `STATUS.md`, `COMPANION_TOOLS.md`, `HarryPareto/README.md`,
+>   `tools/DEPLOY_FENSTER.md`.
+>
+> `tools/customer/Harry.customer.ini` is **already clean** (`GetPassword=<READONLY_PASSWORD>`) and was
+> wrongly listed at first. Until the cleanup is done the repository must stay **private**; the customer
+> changes the passwords after deployment anyway (§8).
 
 ---
 
