@@ -26,6 +26,18 @@
 > are safe to run anytime. **`D:\` is the DVD drive — never write there;** use `F:\` for logs
 > (`F:\004_Logs`), MSA fallback (`F:\003_Deploy\MSA_Reports_Fallback`) and deploy.
 
+> **STANDING RULE — no plaintext passwords in new repo files (since 2026-07-28).** Credentials stay on
+> the machine (`F:\002_Configs\Harry.ini`). A file newly added to the repository must **mask** them,
+> like `config/live/Harry.ini` does: `Password=<siehe F:\002_Configs\Harry.ini>` plus a note in the
+> accompanying README saying that this is the only line differing from the live file. This applies to
+> INIs, scripts, docs, test fixtures and commit messages alike.
+> **Open cleanup item (pre-existing, not yet done):** two older files still carry the DB password in
+> clear text — **`HarryDataServer/Harry.ini` (line 16)** and **`tools/customer/Harry.customer.ini`**.
+> Both predate this rule. Cleaning them up needs a decision (placeholder + a documented step in the
+> deploy/customer-package procedure, since the customer INI is generated from the template), and the
+> repository must stay **private** until then. The customer changes the passwords after deployment
+> anyway (§8).
+
 ---
 
 ## 1. Project Overview
@@ -1019,6 +1031,39 @@ Location: configurable per camera in Harry.ini (`JsonParameters=` and `JsonSetti
 2. For each camera: INSERT or UPDATE `measurement_definitions` and `setting_definitions`
 3. Use `effective_from` / `effective_end` for historical tracking
 4. Log any changes to definition names or telegram places
+
+### Where the templates live — two copies, one truth (clarified 2026-07-28)
+
+| Copy | Role |
+|------|------|
+| **`F:\002_Configs\Templates\*.json`** | **THE ACTIVE templates.** `[CameraN] JsonParameters=Templates\…` is relative and is resolved against the folder that holds Harry.ini (§10), i.e. normally this one. **Customer-owned** — the deploy never writes here. |
+| **`HarryDataServer/Resources/Templates/*.json`** (repo) | **Reference + loader fallback.** The `.csproj` ships them as `Content` into `<exe>\Templates\`. Synced to the live state on 2026-07-28 (see below). |
+| `config/live/Templates/*.json` (repo) | Pure documentation snapshot of the live folder (§10), never read at runtime. |
+
+**When the fallback actually applies** (`Configuration/JsonTemplateLoader.ResolveTemplatePath`) — the
+resolution is **per file**: ① the configured path if `File.Exists`, ② else `<exe>\Templates\<name>`,
+③ else `<exe>\<name>`, ④ else `null` (the camera gets no definitions). So ② is reached whenever the
+configured path is missing, concretely:
+- Harry.ini was found somewhere **other than** `F:\002_Configs` (search order ③/④ in §10: next to the
+  exe, or legacy `D:\HarryDataServer`) — the relative `Templates\…` then points at that folder;
+- `F:\002_Configs\Templates\` is unreachable (drive/share/permission) or a single file was
+  renamed/deleted;
+- a dev/test run on a machine that has no `F:\002_Configs`.
+
+That is a **real runtime path**, which is why shipping stubs there was a latent defect: until
+2026-07-28 the repo copy held `"STUB - Please fill telegram_place …"` placeholders for the four M1X
+cameras (26 lines instead of 165), so a fallback would have registered TODO definitions. All 28 files
+are now byte-identical to the live folder, including the 2026-07-21 correction that starts
+`telegram_place` at **72**.
+
+> **Standing rule — the deploy is not a template distribution channel.**
+> `tools\deploy.cmd` mirrors the **build output** into `App\<Project>\` (`robocopy … /MIR /XD Logs
+> Capture`), so it **does** refresh the fallback copy `App\HarryDataServer\Templates\` — that is
+> intended, it is part of the binary. It **never** touches `F:\002_Configs\Templates\`: the live,
+> customer-owned templates are outside the deploy scope (deploy.cmd header: "the live Harry.ini is NOT
+> copied or changed here"). Changing a camera program therefore means editing
+> `F:\002_Configs\Templates\` on the machine, and afterwards syncing the repo copies (reference +
+> `config/live` snapshot) by hand — never the other way round.
 
 ---
 

@@ -1,19 +1,32 @@
 {
   "camera": "M11_ST030_KF1",
   "signal_word": "Settings",
-  "_comment": "STUB - Please fill telegram_place and setting names from camera program documentation",
   "settings": [
     {
       "telegram_place": 3,
-      "setting_name": "TODO_Setting_Min",
+      "setting_name": "GlueDot_Volume_Min",
       "parameter_set": 1,
       "limit_type": "Min",
       "format": "Float"
     },
     {
       "telegram_place": 4,
-      "setting_name": "TODO_Setting_Max",
+      "setting_name": "GlueDot_Volume_Max",
       "parameter_set": 1,
+      "limit_type": "Max",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 5,
+      "setting_name": "FinGuardBlob_Min",
+      "parameter_set": 2,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 6,
+      "setting_name": "FinGuardBlob_Max",
+      "parameter_set": 2,
       "limit_type": "Max",
       "format": "Float"
     }

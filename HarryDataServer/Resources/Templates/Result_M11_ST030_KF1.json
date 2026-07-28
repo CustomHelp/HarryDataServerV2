@@ -1,27 +1,166 @@
 {
   "camera": "M11_ST030_KF1",
   "signal_word": "Results",
-  "_comment": "STUB - Please fill telegram_place and measurement names from camera program documentation",
   "measurements": [
     {
       "telegram_place": 72,
-      "variable_name": "R_TODO_Measurement1",
-      "display_name": "TODO_Measurement1",
+      "variable_name": "R_GlueDot_1_Volume",
+      "display_name": "GlueDot_1_Volume",
       "type": "Result",
       "format": "SINT",
       "parameter_set": 1,
-      "module_ref": "M1X",
-      "feature_group": "TODO_Group"
+      "module_ref": "M1x",
+      "feature_group": "Glue Points"
     },
     {
       "telegram_place": 73,
-      "variable_name": "V_TODO_Measurement1",
-      "display_name": "TODO_Measurement1",
+      "variable_name": "V_GlueDot_1_Volume",
+      "display_name": "GlueDot_1_Volume",
       "type": "Value",
       "format": "Float",
       "parameter_set": 1,
-      "module_ref": "M1X",
-      "feature_group": "TODO_Group"
+      "module_ref": "M1x",
+      "feature_group": "Glue Points"
+    },
+    {
+      "telegram_place": 74,
+      "variable_name": "R_GlueDot_2_Volume",
+      "display_name": "GlueDot_2_Volume",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 1,
+      "module_ref": "M1x",
+      "feature_group": "Glue Points"
+    },
+    {
+      "telegram_place": 75,
+      "variable_name": "V_GlueDot_2_Volume",
+      "display_name": "GlueDot_2_Volume",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 1,
+      "module_ref": "M1x",
+      "feature_group": "Glue Points"
+    },
+    {
+      "telegram_place": 76,
+      "variable_name": "R_GlueDot_3_Volume",
+      "display_name": "GlueDot_3_Volume",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 1,
+      "module_ref": "M1x",
+      "feature_group": "Glue Points"
+    },
+    {
+      "telegram_place": 77,
+      "variable_name": "V_GlueDot_3_Volume",
+      "display_name": "GlueDot_3_Volume",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 1,
+      "module_ref": "M1x",
+      "feature_group": "Glue Points"
+    },
+    {
+      "telegram_place": 78,
+      "variable_name": "R_GlueDot_4_Volume",
+      "display_name": "GlueDot_4_Volume",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 1,
+      "module_ref": "M1x",
+      "feature_group": "Glue Points"
+    },
+    {
+      "telegram_place": 79,
+      "variable_name": "V_GlueDot_4_Volume",
+      "display_name": "GlueDot_4_Volume",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 1,
+      "module_ref": "M1x",
+      "feature_group": "Glue Points"
+    },
+    {
+      "telegram_place": 80,
+      "variable_name": "R_GlueDot_5_Volume",
+      "display_name": "GlueDot_5_Volume",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 1,
+      "module_ref": "M1x",
+      "feature_group": "Glue Points"
+    },
+    {
+      "telegram_place": 81,
+      "variable_name": "V_GlueDot_5_Volume",
+      "display_name": "GlueDot_5_Volume",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 1,
+      "module_ref": "M1x",
+      "feature_group": "Glue Points"
+    },
+    {
+      "telegram_place": 82,
+      "variable_name": "R_GlueDot_6_Volume",
+      "display_name": "GlueDot_6_Volume",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 1,
+      "module_ref": "M1x",
+      "feature_group": "Glue Points"
+    },
+    {
+      "telegram_place": 83,
+      "variable_name": "V_GlueDot_6_Volume",
+      "display_name": "GlueDot_6_Volume",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 1,
+      "module_ref": "M1x",
+      "feature_group": "Glue Points"
+    },
+    {
+      "telegram_place": 84,
+      "variable_name": "R_GlueDot_7_Volume",
+      "display_name": "GlueDot_7_Volume",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 1,
+      "module_ref": "M1x",
+      "feature_group": "Glue Points"
+    },
+    {
+      "telegram_place": 85,
+      "variable_name": "V_GlueDot_7_Volume",
+      "display_name": "GlueDot_7_Volume",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 1,
+      "module_ref": "M1x",
+      "feature_group": "Glue Points"
+    },
+    {
+      "telegram_place": 86,
+      "variable_name": "R_FinGuardBlob",
+      "display_name": "FinGuardBlob",
+      "type": "Result",
+      "format": "SINT",
+      "parameter_set": 2,
+      "module_ref": "M1x",
+      "feature_group": "FinGuard"
+    },
+    {
+      "telegram_place": 87,
+      "variable_name": "V_FinGuardBlob",
+      "display_name": "FinGuardBlob",
+      "type": "Value",
+      "format": "Float",
+      "parameter_set": 2,
+      "module_ref": "M1x",
+      "feature_group": "FinGuard"
     }
   ]
 }

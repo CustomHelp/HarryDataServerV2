@@ -71,6 +71,34 @@
       "parameter_set": 5,
       "limit_type": "Max",
       "format": "Float"
+    },
+    {
+      "telegram_place": 15,
+      "setting_name": "Trimmer_Presence_Min",
+      "parameter_set": 7,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 16,
+      "setting_name": "Trimmer_Presence_Max",
+      "parameter_set": 7,
+      "limit_type": "Max",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 17,
+      "setting_name": "Trimmer_Seated_Min",
+      "parameter_set": 8,
+      "limit_type": "Min",
+      "format": "Float"
+    },
+    {
+      "telegram_place": 18,
+      "setting_name": "Trimmer_Seated_Max",
+      "parameter_set": 8,
+      "limit_type": "Max",
+      "format": "Float"
     }
   ]
 }
