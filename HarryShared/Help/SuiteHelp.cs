@@ -56,6 +56,8 @@ public static class SuiteHelp
                     "Die gespeicherte Referenz vermerkt den MSA/LimitSample-Lauf, aus dem sie eingelernt wurde (source_base_id), ermittelt über den DMC des Teils — zur Rückverfolgbarkeit. Leer bleibt sie nur, wenn zum Teil kein MSA-Lauf vorliegt."),
                 new("'Config-Pfad ändern…' (top bar) selects which Harry.ini — and thus which database — the tool uses; the choice is saved per tool under %APPDATA% and applies after a restart.",
                     "'Config-Pfad ändern…' (obere Leiste) wählt, welche Harry.ini — und damit welche Datenbank — das Werkzeug nutzt; die Auswahl wird pro Werkzeug unter %APPDATA% gespeichert und gilt nach einem Neustart."),
+                new("On a stand-alone PC (customer install via Install.cmd) the Harry.ini next to the exe is used automatically — only [MySQL] Server and GetPassword need to be filled in. Paths in it may contain %USERPROFILE% / %LOCALAPPDATA%, so no particular drive letter is required.",
+                    "Auf einem Einzelplatz-PC (Kundeninstallation über Install.cmd) wird automatisch die Harry.ini neben der exe genutzt — einzutragen sind nur [MySQL] Server und GetPassword. Pfade darin dürfen %USERPROFILE% / %LOCALAPPDATA% enthalten, ein bestimmter Laufwerksbuchstabe ist also nicht nötig."),
             }),
         },
         Shortcuts: new List<HelpShortcut>
@@ -95,6 +97,8 @@ public static class SuiteHelp
                     "Export All schreibt alle Teile der History in eine CSV. Rechtsklick auf eine History-Zeile entfernt sie; Clear All leert die History."),
                 new("'Config-Pfad ändern…' (top bar) selects which Harry.ini — and thus which database — the tool uses; the choice is saved per tool under %APPDATA% and applies after a restart.",
                     "'Config-Pfad ändern…' (obere Leiste) wählt, welche Harry.ini — und damit welche Datenbank — das Werkzeug nutzt; die Auswahl wird pro Werkzeug unter %APPDATA% gespeichert und gilt nach einem Neustart."),
+                new("On a stand-alone PC (customer install via Install.cmd) the Harry.ini next to the exe is used automatically — only [MySQL] Server and GetPassword need to be filled in. Paths in it may contain %USERPROFILE% / %LOCALAPPDATA%, so no particular drive letter is required.",
+                    "Auf einem Einzelplatz-PC (Kundeninstallation über Install.cmd) wird automatisch die Harry.ini neben der exe genutzt — einzutragen sind nur [MySQL] Server und GetPassword. Pfade darin dürfen %USERPROFILE% / %LOCALAPPDATA% enthalten, ein bestimmter Laufwerksbuchstabe ist also nicht nötig."),
             }),
         },
         Shortcuts: new List<HelpShortcut>
@@ -130,6 +134,8 @@ public static class SuiteHelp
                     "Refresh all lädt alle Graphen neu. In einem Graph kann gezoomt/verschoben werden; eine Graph-Konfiguration lässt sich als JSON speichern/laden."),
                 new("'Config-Pfad ändern…' (top bar) selects which Harry.ini — and thus which database — the tool uses; the choice is saved per tool under %APPDATA% and applies after a restart.",
                     "'Config-Pfad ändern…' (obere Leiste) wählt, welche Harry.ini — und damit welche Datenbank — das Werkzeug nutzt; die Auswahl wird pro Werkzeug unter %APPDATA% gespeichert und gilt nach einem Neustart."),
+                new("On a stand-alone PC (customer install via Install.cmd) the Harry.ini next to the exe is used automatically — only [MySQL] Server and GetPassword need to be filled in. Paths in it may contain %USERPROFILE% / %LOCALAPPDATA%, so no particular drive letter is required.",
+                    "Auf einem Einzelplatz-PC (Kundeninstallation über Install.cmd) wird automatisch die Harry.ini neben der exe genutzt — einzutragen sind nur [MySQL] Server und GetPassword. Pfade darin dürfen %USERPROFILE% / %LOCALAPPDATA% enthalten, ein bestimmter Laufwerksbuchstabe ist also nicht nötig."),
             }),
         },
         Shortcuts: new List<HelpShortcut>
@@ -161,6 +167,8 @@ public static class SuiteHelp
                     "Live aggregiert die letzten N fertigen Teile (N editierbar). Ein fester Bereich nutzt From/To Datum + Zeit."),
                 new("'Config-Pfad ändern…' (top bar) selects which Harry.ini — and thus which database — the tool uses; the choice is saved per tool under %APPDATA% and applies after a restart.",
                     "'Config-Pfad ändern…' (obere Leiste) wählt, welche Harry.ini — und damit welche Datenbank — das Werkzeug nutzt; die Auswahl wird pro Werkzeug unter %APPDATA% gespeichert und gilt nach einem Neustart."),
+                new("On a stand-alone PC (customer install via Install.cmd) the Harry.ini next to the exe is used automatically — only [MySQL] Server and GetPassword need to be filled in. Paths in it may contain %USERPROFILE% / %LOCALAPPDATA%, so no particular drive letter is required.",
+                    "Auf einem Einzelplatz-PC (Kundeninstallation über Install.cmd) wird automatisch die Harry.ini neben der exe genutzt — einzutragen sind nur [MySQL] Server und GetPassword. Pfade darin dürfen %USERPROFILE% / %LOCALAPPDATA% enthalten, ein bestimmter Laufwerksbuchstabe ist also nicht nötig."),
             }),
         },
         Shortcuts: new List<HelpShortcut>
@@ -190,6 +198,8 @@ public static class SuiteHelp
                     "Export preview… erzeugt ein Vorschaubild des aktuellen Layouts."),
                 new("'Config-Pfad ändern…' (top bar) selects which Harry.ini the tool uses (optional here — the tool mainly edits Collage.ini); saved per tool under %APPDATA%, applies after a restart.",
                     "'Config-Pfad ändern…' (obere Leiste) wählt, welche Harry.ini das Werkzeug nutzt (hier optional — das Werkzeug bearbeitet vor allem Collage.ini); pro Werkzeug unter %APPDATA% gespeichert, gilt nach Neustart."),
+                new("On a stand-alone PC (customer install via Install.cmd) the Harry.ini next to the exe is used automatically. Paths in it may contain %USERPROFILE% / %LOCALAPPDATA%, so no particular drive letter is required — [Collage] Collage_IniPath points at the layout file the tool opens on start.",
+                    "Auf einem Einzelplatz-PC (Kundeninstallation über Install.cmd) wird automatisch die Harry.ini neben der exe genutzt. Pfade darin dürfen %USERPROFILE% / %LOCALAPPDATA% enthalten, ein bestimmter Laufwerksbuchstabe ist also nicht nötig — [Collage] Collage_IniPath zeigt auf die Layout-Datei, die das Werkzeug beim Start öffnet."),
             }),
         },
         Shortcuts: new List<HelpShortcut>

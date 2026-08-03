@@ -102,8 +102,13 @@ Build/run: `dotnet build HarryDataServer.sln -c Release` (0 warnings / 0 errors,
 - **DI:** `Microsoft.Extensions.DependencyInjection`; singletons composed in `App.xaml.cs`
   `BuildServiceProvider()`, window resolved from the container.
 - **Config:** reuse the `IniConfigManager`/`IConfigService` pattern. Harry.ini resolution
-  order: `HARRY_CONFIG_DIR` env → `F:\002_Configs` → next to the exe → legacy
-  `D:\HarryDataServer`. Relative paths resolve against the Harry.ini directory.
+  order: `HARRY_CONFIG_DIR` env → per-tool `%APPDATA%\<Tool>\config.json` override → `F:\002_Configs`
+  → next to the exe → legacy `D:\HarryDataServer`. Relative paths resolve against the Harry.ini
+  directory, and `%VAR%` environment variables in configured paths are expanded (`HarryConfig.Expand`)
+  — the customer package uses `%USERPROFILE%\Documents\HarryTools\…` so a PC with only `C:` works.
+- **Customer package:** `tools\package_customer.cmd` → `HarryCompanionTools_<version>.zip`
+  (all tools + bundled .NET 8 Desktop Runtime + `Install.cmd`, installs to `C:\HarryTools`,
+  desktop shortcuts, keeps an existing `Harry.ini` on re-install). See CLAUDE.md §17.
 - **DB access:** `MySqlConnector`. **One `MySqlConnection` per operation** (pooled, never
   shared across threads); `ConfigureAwait(false)` on every async I/O.
 - **Logging:** Serilog (`SerilogService`), daily rolling files, 30-day retention.

@@ -1674,12 +1674,36 @@ kept in `App_prev\` for rollback; `App\version.txt` records date + git hash.
 6. The full step-by-step stop-window procedure is in **`tools\DEPLOY_FENSTER.md`**.
 
 ### Deploy (customer companion tools — off-line, off the line)
-`tools\package_customer.cmd` builds a **framework-dependent** ZIP per companion into
-`F:\100_Installer\CompanionTools\` with a stripped customer `Harry.ini` (read-only DB placeholder,
-network paths only, **no `F:` and no write user**) and a README. The target PC needs the **.NET 8
-Desktop Runtime (x64)** — put its installer next to the ZIPs (customer installs it once first).
-Restore runs once with a hard timeout (offline-safe; aborts clearly instead of retrying nuget.org),
-then publishes use `--no-restore`. See the script header for details.
+`tools\package_customer.cmd` builds **framework-dependent** customer packages into
+`F:\100_Installer\CompanionTools\`. It stays offline-safe: restore runs once and is errorlevel-checked
+(aborts clearly instead of retrying nuget.org), the per-tool publishes use `--no-restore`.
+
+**Output (extended 2026-08-03):**
+- **`HarryCompanionTools_<yyyyMMdd>_<hash>.zip` — the thing to hand to the customer** (~60 MB): all six
+  companions under `Tools\`, the bundled **.NET 8 Desktop Runtime (x64)** installer under `Runtime\`,
+  `Install.cmd`, `README.txt`, `readonly_user.sql`.
+- one **`<Tool>_<version>.zip`** per companion (same `Install.cmd`) for handing out a single tool,
+- the runtime installer + README + `readonly_user.sql` loose next to the ZIPs.
+
+**`tools\customer\Install.cmd`** (in each package) installs to **`C:\HarryTools\<Tool>`**, falls back to
+**`%LOCALAPPDATA%\HarryTools`** when `C:\` is not writable (no admin rights needed), accepts an own
+target as argument 1, creates a **desktop shortcut** per tool, and installs the bundled .NET runtime
+only when `Microsoft.WindowsDesktop.App 8.*` is missing. Re-running it **upgrades** an installation and
+**never overwrites an existing `Harry.ini`** (robocopy `/XF Harry.ini Install.cmd`). It detects a bundle
+by the `Tools\` folder, a single-tool ZIP by its `Harry*.exe`. **cmd caveat:** parentheses inside an
+`echo` inside an `if`-block break parsing (`"." kann syntaktisch … nicht verarbeitet werden`) — keep the
+echo texts paren-free.
+
+**`tools\customer\Harry.customer.ini`** is the rudimentary customer config shipped as `Harry.ini` next
+to each exe (not for HarryPareto — it has its own dialog and stores the DPAPI-encrypted connection in
+`%APPDATA%\HarryPareto`). Only `[MySQL] Server` + `GetPassword` are placeholders to fill in; `[MSA]`,
+`[Collage]`, `[CSV]`, `[Scanner]` are optional and pre-set to per-user paths. **No `D:`/`F:`/`Y:`/`Z:`
+anywhere — a PC with only `C:` is fully supported.** To make that possible `HarryConfig` now
+**expands `%VAR%` environment variables** in configured paths (`ReferencePath`, `Collage_IniPath`,
+`Collage_SingleImages`, `CSV_BasePath`), so the template can use
+`%USERPROFILE%\Documents\HarryTools\…`; on the line no path contains `%`, so it is a no-op there.
+Verified 2026-08-03: all six tools start and stay up with the unfilled placeholder INI (no DB
+reachable) — a failing connection is surfaced, never a crash.
 
 ### Git Repository
 `https://github.com/CustomHelp/HarryDataServerV2`

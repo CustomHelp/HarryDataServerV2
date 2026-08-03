@@ -59,8 +59,8 @@ public sealed class HarryConfig
 
         MsaReferencePath = ResolvePath(Str(data["MSA"], "ReferencePath", string.Empty));
         CollageIniPath = ResolvePath(Str(data["Collage"], "Collage_IniPath", string.Empty));
-        CollageSingleImagesPath = Str(data["Collage"], "Collage_SingleImages", string.Empty);
-        CsvBasePath = Str(data["CSV"], "CSV_BasePath", string.Empty);
+        CollageSingleImagesPath = Expand(Str(data["Collage"], "Collage_SingleImages", string.Empty));
+        CsvBasePath = Expand(Str(data["CSV"], "CSV_BasePath", string.Empty));
 
         var scanner = data["Scanner"];
         ScannerHost = Str(scanner, "CompanionHost", "172.29.1.5");
@@ -89,9 +89,24 @@ public sealed class HarryConfig
 
     private string ResolvePath(string value)
     {
+        var expanded = Expand(value);
+        if (expanded.Length == 0)
+            return string.Empty;
+        return Path.IsPathRooted(expanded) ? expanded : Path.GetFullPath(Path.Combine(ConfigDir, expanded));
+    }
+
+    /// <summary>
+    /// Expand <c>%VAR%</c> environment variables in a configured path. Lets a customer Harry.ini use
+    /// <c>%USERPROFILE%\Documents\…</c> instead of a drive letter — on the line no path uses <c>%</c>,
+    /// so this is a no-op there. An unknown variable is left verbatim by Windows, and the calling code
+    /// already treats a non-existing path as "feature not available".
+    /// </summary>
+    private static string Expand(string value)
+    {
         if (string.IsNullOrWhiteSpace(value))
             return string.Empty;
-        return Path.IsPathRooted(value) ? value : Path.GetFullPath(Path.Combine(ConfigDir, value));
+        var trimmed = value.Trim();
+        return trimmed.Contains('%') ? Environment.ExpandEnvironmentVariables(trimmed) : trimmed;
     }
 
     /// <summary>
