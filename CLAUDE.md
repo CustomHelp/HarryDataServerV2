@@ -1158,6 +1158,12 @@ CSV_Evaluation=365
 CSV_Merge=365
 CSV_ExtraResults=90
 
+[Monitoring]
+; Free-disk watchdog (§11b). Optional section — the defaults below apply when it is absent.
+DiskCheckIntervalMinutes=15
+DiskWarnFreeGB=10         ; WARNING below this; 0 disables the whole watchdog
+DiskCriticalFreeGB=2      ; ERROR below this (writes are about to fail)
+
 [Collage]
 Collage_IniPath=D:\HarryDataServer\Collage.ini
 Collage_Generate=true
@@ -1345,6 +1351,35 @@ fallback** with a WARNING when the matching `[Retention]` key is absent; the liv
 no fallback fires there.
 
 ---
+
+### 11b. Free-disk watchdog (`DiskSpaceMonitor`, [Monitoring] section — added 2026-08-14)
+
+**A full drive must never again be invisible.** The watchdog checks every drive the server writes to
+every `DiskCheckIntervalMinutes` (default 15) and logs a **WARNING** below `DiskWarnFreeGB` (10) and
+an **ERROR** below `DiskCriticalFreeGB` (2). `DiskWarnFreeGB=0` disables it. It is **read-only — it
+never deletes anything**; freeing space stays a human decision (retention, §11a, is the deleting one).
+
+- **Watched paths** come from the live config (logs, CSV roots, MSA report + fallback + references,
+  all NAS image folders, collage output) **plus MySQL's own `tmpdir`/`datadir`**, which are asked of
+  the running server (`SELECT @@tmpdir, @@datadir`) instead of guessed — `tmpdir` is a Windows
+  service default under `C:\Windows\ServiceProfiles\NetworkService\…` and is exactly the one nobody
+  thinks of. Paths are grouped per drive root, so one drive logs **one** line naming every user of it.
+- **Log discipline = the camera-outage rule** (§4): one line per level change (including recovery),
+  and a drive that stays bad repeats only every **6 h** — a permanently tight drive cannot inflate the
+  warning counter. UNC paths are skipped (`DriveInfo` cannot read them); mapped drives (X:/Y:/Z:) are
+  watched normally.
+
+> **The incident it comes from (2026-08-14).** `C:` was full (0.09 GB of 343 GB — Keyence
+> VisionTerminal SD-card mirrors under `C:\Users\…\Documents\KEYENCE`, 273 GB, not written by us).
+> MySQL's `tmpdir` was on `C:`, so **only queries large enough to spill a temp table to disk failed**
+> (`Error writing file … OS errno 28`) while every small query kept working. Concretely
+> `MsaService.ExportRawDataAsync` (JOIN + ORDER BY over ~20 736 rows) lost the **RAW export of two M50
+> MSA3 runs** (`50260814093342`, `50260814095617`) — PDF, IMG and the DB rows were all fine because
+> the export is best-effort. Nothing pointed at the disk. **Both CSVs were regenerated from
+> `msa_measurements`** (the data is never lost — the RAW export is reproducible from the DB), and
+> **MySQL `tmpdir` was moved to `E:/MySQL/Temp`** in `E:\MySQL\Data\my.ini` (backup:
+> `my.ini.bak_20260814`; the service account `NT AUTHORITY\NetworkService` was granted Modify on the
+> new folder). That change needs a **MySQL service restart** to take effect.
 
 ## 12. Collage Generator
 

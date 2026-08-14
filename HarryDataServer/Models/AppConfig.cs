@@ -18,6 +18,7 @@ public sealed class AppConfig
     public MsaConfig Msa { get; init; } = new();
     public ScannerConfig Scanner { get; init; } = new();
     public RetentionConfig Retention { get; init; } = new();
+    public MonitoringConfig Monitoring { get; init; } = new();
     public IReadOnlyList<CameraConfig> Cameras { get; init; } = Array.Empty<CameraConfig>();
 }
 
@@ -220,4 +221,23 @@ public sealed class RetentionConfig
     /// <summary>Human-readable deprecation notes for legacy keys that were used as a fallback
     /// (logged once at startup). Empty when the [Retention] section fully supersedes them.</summary>
     public IReadOnlyList<string> Deprecations { get; init; } = Array.Empty<string>();
+}
+
+/// <summary>
+/// <c>[Monitoring]</c> — free-disk watchdog (<see cref="HarryDataServer.Services.DiskSpaceMonitor"/>).
+/// Added 2026-08-14 after a full C: drive silently broke the MSA raw-data export: MySQL could not
+/// write its temp file, so only the LARGE queries failed while everything small kept working.
+/// </summary>
+public sealed class MonitoringConfig
+{
+    /// <summary>How often the free space of every used drive is checked. Default 15 min.</summary>
+    public int DiskCheckIntervalMinutes { get; init; } = 15;
+
+    /// <summary>Free space (GB) below which a drive is reported as a WARNING. 0 disables the whole
+    /// watchdog. Default 10.</summary>
+    public int DiskWarnFreeGb { get; init; } = 10;
+
+    /// <summary>Free space (GB) below which a drive is reported as an ERROR — at this point MySQL
+    /// temp files and file exports are about to fail. Default 2.</summary>
+    public int DiskCriticalFreeGb { get; init; } = 2;
 }

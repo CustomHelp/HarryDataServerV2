@@ -105,6 +105,9 @@ public partial class App : Application
             var retention = _services.GetRequiredService<IRetentionService>();
             _ = Task.Run(() => retention.StartAsync(_shutdownCts.Token));
 
+            var diskMonitor = _services.GetRequiredService<IDiskSpaceMonitor>();
+            _ = Task.Run(() => diskMonitor.StartAsync(_shutdownCts.Token));
+
             var msa = _services.GetRequiredService<IMsaService>();
             _ = Task.Run(() => msa.StartAsync(_shutdownCts.Token));
 
@@ -211,6 +214,7 @@ public partial class App : Application
                 _services?.GetService<ICsvService>()?.StopAsync(),
                 _services?.GetService<IMsaService>()?.StopAsync(),
                 _services?.GetService<IRetentionService>()?.StopAsync(),
+                _services?.GetService<IDiskSpaceMonitor>()?.StopAsync(),
                 _services?.GetService<ICollageService>()?.StopAsync(),
             }.Where(t => t is not null).Cast<Task>().ToArray();
 
@@ -288,6 +292,10 @@ public partial class App : Application
 
         // --- Central retention (Phase 8: images + reports + CSV + DB) + MSA engine (Phase 10) ---
         services.AddSingleton<IRetentionService, RetentionService>();
+
+        // Free-disk watchdog ([Monitoring]): warns before a full drive breaks MySQL temp files/exports.
+        services.AddSingleton<IDiskSpaceMonitor, DiskSpaceMonitor>();
+
         services.AddSingleton<MsaReferenceLoader>();
         services.AddSingleton<IPdfReportService, PdfReportService>();
         services.AddSingleton<IMsaService, MsaService>();

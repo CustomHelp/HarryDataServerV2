@@ -47,6 +47,7 @@ public sealed class IniConfigManager
             Msa = ParseMsa(data, configDir),
             Scanner = ParseScanner(data),
             Retention = ParseRetention(data),
+            Monitoring = ParseMonitoring(data),
             Cameras = ParseCameras(data, configDir),
         };
     }
@@ -59,6 +60,22 @@ public sealed class IniConfigManager
             ListenPort = Int(s, "ScannerListenPort", 9004),
             CompanionPort = Int(s, "CompanionPort", 9000),
             MaxScanHistoryRows = Int(s, "MaxScanHistoryRows", 100),
+        };
+    }
+
+    /// <summary>
+    /// <c>[Monitoring]</c> — free-disk watchdog. The section is optional; the defaults (check every
+    /// 15 min, WARNING below 10 GB, ERROR below 2 GB) apply when it is absent, so an untouched
+    /// Harry.ini gets the watchdog automatically.
+    /// </summary>
+    private static MonitoringConfig ParseMonitoring(IniData data)
+    {
+        var s = data["Monitoring"];
+        return new MonitoringConfig
+        {
+            DiskCheckIntervalMinutes = Int(s, "DiskCheckIntervalMinutes", 15),
+            DiskWarnFreeGb = Int(s, "DiskWarnFreeGB", 10),
+            DiskCriticalFreeGb = Int(s, "DiskCriticalFreeGB", 2),
         };
     }
 
