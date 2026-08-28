@@ -9,7 +9,7 @@ namespace HarryDataServer.Infrastructure;
 ///
 /// <para><b>Value rule:</b> a shared column takes the <b>non-empty</b> value of its source controllers.
 /// The sources are mutually exclusive per part (strand A = M10+M20, strand B = M11+M21; M50 ST110
-/// window KF1 vs KF3) — verified over 4 099 live rows and 1 099 036 filled cells without a single
+/// window KF1 vs KF4, formerly KF3) — verified over 4 099 live rows and 1 099 036 filled cells without a single
 /// collision.</para>
 ///
 /// <para><b>Collision rule:</b> should both sources ever be filled, the controller that <b>matches the
@@ -84,10 +84,16 @@ public sealed class CsvMergeFill
     {
         if (M50St110Kf is not null)
             return;
-        if (camera.Equals("M50_ST110_KF1", StringComparison.OrdinalIgnoreCase))
-            M50St110Kf = "1";
-        else if (camera.Equals("M50_ST110_KF3", StringComparison.OrdinalIgnoreCase))
-            M50St110Kf = "3";
+
+        // The KF number is read OFF the controller name (prefix match), not from a hardcoded list:
+        // the second window was renamed KF3 -> KF4 on 2026-08-28 and a fixed list stops recording it.
+        const string prefix = "M50_ST110_KF";
+        if (!camera.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        var kf = camera[prefix.Length..].Trim();
+        if (kf.Length > 0)
+            M50St110Kf = kf;
     }
 
     /// <summary>One WARNING per part (never per cell) when a shared column had both sources filled.</summary>

@@ -100,7 +100,7 @@ Everything that happens in Strand 1 happens identically in Strand 2.
 | Camera8 | M21_ST060_KF3 | M21 | ST60 | 172.29.21.62 | 8500 |
 | Camera9 | M50_ST040_KF1 | M50 | ST40 | 172.29.50.40 | 8500 |
 | Camera10 | M50_ST110_KF1 | M50 | ST110 | 172.29.50.111 | 8500 |
-| Camera11 | M50_ST110_KF3 | M50 | ST110 | 172.29.50.112 | 8500 |
+| Camera11 | M50_ST110_KF4 | M50 | ST110 | 172.29.50.112 | 8500 |
 | Camera12 | M50_ST120_KF1 | M50 | ST120 | 172.29.50.120 | 8500 |
 | Camera13 | M50_ST130_KF1 | M50 | ST130 | 172.29.50.130 | 8500 |
 | Camera14 | M50_ST140_KF1 | M50 | ST140 | 172.29.50.140 | 8500 |
@@ -638,7 +638,7 @@ Harry.ini by BOTH the server and the HarryLimitSample editor). Schema (`HarrySha
   "module": "M50",
   "taught_at": "2026-07-21T17:04:33",
   "source_base_id": "50260721170000",
-  "controllers": ["M50_ST110_KF1", "M50_ST110_KF3"],
+  "controllers": ["M50_ST110_KF1", "M50_ST110_KF4"],
   "expected": { "Anode_Flatness_L": "ShouldFail", "Pin_Area_1": "ShouldPass" }
 }
 ```
@@ -1445,8 +1445,31 @@ was always empty. Those pairs now share a column (`Infrastructure/CsvColumnLayou
 |---------------------------|--------------------|
 | `M1x_<Station>_<KF>` | `M10_<Station>_<KF>` + `M11_<Station>_<KF>` |
 | `M2x_<Station>_<KF>` | `M20_<Station>_<KF>` + `M21_<Station>_<KF>` |
-| `M50_ST110` | `M50_ST110_KF1` + `M50_ST110_KF3` |
+| `M50_ST110` | **every** `M50_ST110_*` window — `KF1` + `KF4` (and the legacy `KF3`, see below) |
 | unchanged | `M50_ST040_KF1`, `M50_ST120_KF1`, `M50_ST130_KF1`, `M50_ST140_KF1`, … |
+
+> **ST110 is matched by PREFIX, never by an explicit KF list (fixed 2026-08-28).** The second control
+> window was renamed **`M50_ST110_KF3` → `M50_ST110_KF4`** (INI + camera program: image filenames *and*
+> data upload + settings). `CsvColumnLayout.MergeGroup` hardcoded the pair `KF1`/`KF3`, so the renamed
+> window silently fell out of the merge and got its **own 216-column block**: the live production CSV
+> grew from **431 to 655 columns** (verified in `Y:\02_CSV_Merge\2026\08\27`, header row 1 showed
+> `M50_ST110` **and** `M50_ST110_KF4`, 216 each). Both `MergeGroup` and `CsvMergeFill.NoteController`
+> now derive the group / the `M50St110Kf` digit from the `M50_ST110_` prefix, so a further rename
+> cannot unmerge the windows again.
+>
+> **The legacy `KF3` camera was retired on 2026-08-28** (it had stayed `active=1` with all 216
+> definitions at `effective_end IS NULL`, because the camera simply disappeared from the INI and
+> nothing ever end-dates a camera that is no longer configured): `cameras.active = 0` +
+> `effective_end = '2026-08-28'` on its 216 measurement definitions. **Deliberately NOT deleted** —
+> 3.5 M production rows (ageing out ~2026-09-25 via `Database_Production=35`) and **417 k
+> `msa_measurements` rows that never age out** (`Database_MSA=0`) reference those `definition_id`s and
+> would lose their measurement names. The retirement survives restarts (both sync steps only ever
+> touch cameras listed in the INI) and is reversible: set `effective_end` back to `NULL` and
+> `active` back to `1`. Its 46 `setting_definitions` stay (the `settings` FK depends on them).
+>
+> **Resulting layout:** 722 active definitions → **422** measurement columns + 17 meta = **439**.
+> **A server restart is required for the fix to take effect, and the new layout only applies to newly
+> created CSV files** (the layout is frozen per file at creation).
 
 - **Column count:** 706 active definitions → **414** measurement columns (292 of them shared);
   with the meta columns **722 → 431** total.
@@ -1458,7 +1481,8 @@ was always empty. Those pairs now share a column (`Infrastructure/CsvColumnLayou
 - **Nothing is folded away silently:** a variable that exists on only ONE side of a pair keeps **its
   own column under the original controller name** and produces a one-off WARNING at header-build time.
   Today there is none — all five pairs are exactly identical in the live DB (0 one-sided variables).
-- **New meta column `M50St110Kf`** (`1`/`3`, empty without an ST110 measurement) sits directly behind
+- **New meta column `M50St110Kf`** (the KF digit — `1`/`4`, historically `3`; empty without an ST110
+  measurement) sits directly behind
   `M50Nest`; every other meta column keeps its name and relative order, and the delimiter/format are
   unchanged. Meta columns: **16 → 17**.
 - **Validated against reality** before the change: all five pairs identical in

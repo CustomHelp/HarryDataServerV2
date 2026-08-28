@@ -21,7 +21,7 @@ public sealed record CsvColumnSource(int DefinitionId, string Camera, string Var
 /// <list type="bullet">
 ///   <item><c>M10_&lt;Station&gt;_&lt;KF&gt;</c> ↔ <c>M11_…</c> → <c>M1x_&lt;Station&gt;_&lt;KF&gt;</c></item>
 ///   <item><c>M20_&lt;Station&gt;_&lt;KF&gt;</c> ↔ <c>M21_…</c> → <c>M2x_&lt;Station&gt;_&lt;KF&gt;</c></item>
-///   <item><c>M50_ST110_KF1</c> ↔ <c>M50_ST110_KF3</c> → <c>M50_ST110</c></item>
+///   <item><c>M50_ST110_*</c> — every ST110 control window (KF1 ↔ KF4, formerly KF3) → <c>M50_ST110</c></item>
 ///   <item>every other controller keeps its own name unchanged</item>
 /// </list>
 ///
@@ -88,9 +88,10 @@ public sealed class CsvColumnLayout
         if (string.IsNullOrEmpty(camera))
             return camera;
 
-        // M50 ST110 inspects every part twice through two control windows (KF1 / KF3).
-        if (camera.Equals("M50_ST110_KF1", StringComparison.OrdinalIgnoreCase) ||
-            camera.Equals("M50_ST110_KF3", StringComparison.OrdinalIgnoreCase))
+        // M50 ST110 inspects every part through two control windows. Matched by PREFIX, never by an
+        // explicit KF list: the second window was renamed KF3 -> KF4 on 2026-08-28, and the hardcoded
+        // pair silently unmerged it (the live CSV grew from 431 to 655 columns, KF4 in its own block).
+        if (camera.StartsWith("M50_ST110_", StringComparison.OrdinalIgnoreCase))
             return "M50_ST110";
 
         // Parallel strands: M10/M11 and M20/M21 — "M1x_…" / "M2x_…" keeps the station + camera suffix.

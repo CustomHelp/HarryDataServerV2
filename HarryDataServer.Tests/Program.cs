@@ -1365,7 +1365,7 @@ internal static class Program
         {
             ("M10_ST030_KF1", 8), ("M10_ST060_KF1", 18), ("M11_ST030_KF1", 8), ("M11_ST060_KF1", 18),
             ("M20_ST060_KF1", 4), ("M20_ST060_KF3", 8), ("M21_ST060_KF1", 4), ("M21_ST060_KF3", 8),
-            ("M50_ST040_KF1", 18), ("M50_ST110_KF1", 108), ("M50_ST110_KF3", 108),
+            ("M50_ST040_KF1", 18), ("M50_ST110_KF1", 108), ("M50_ST110_KF4", 108),
             ("M50_ST120_KF1", 1), ("M50_ST130_KF1", 30), ("M50_ST140_KF1", 12),
         };
 
@@ -1375,7 +1375,7 @@ internal static class Program
         {
             // Variable names are identical within a merge pair — that is the whole premise (verified in
             // the live DB: 0 one-sided variables across all five pairs). Deriving the stem from the
-            // MERGE GROUP reproduces exactly that: M10/M11 (and ST110 KF1/KF3) get the same names.
+            // MERGE GROUP reproduces exactly that: M10/M11 (and ST110 KF1/KF4) get the same names.
             var stem = CsvColumnLayout.MergeGroup(camera);
             for (var i = 1; i <= pairs; i++)
             {
@@ -1395,9 +1395,25 @@ internal static class Program
         AssertEqual("M11_ST060_KF1 → M1x", "M1x_ST060_KF1", CsvColumnLayout.MergeGroup("M11_ST060_KF1"));
         AssertEqual("M21_ST060_KF3 → M2x", "M2x_ST060_KF3", CsvColumnLayout.MergeGroup("M21_ST060_KF3"));
         AssertEqual("M50_ST110_KF1 → M50_ST110", "M50_ST110", CsvColumnLayout.MergeGroup("M50_ST110_KF1"));
-        AssertEqual("M50_ST110_KF3 → M50_ST110", "M50_ST110", CsvColumnLayout.MergeGroup("M50_ST110_KF3"));
+        AssertEqual("M50_ST110_KF4 → M50_ST110", "M50_ST110", CsvColumnLayout.MergeGroup("M50_ST110_KF4"));
+        // The window was renamed KF3 → KF4 (2026-08-28). The old definitions are still active in the
+        // live DB, so the LEGACY name must keep folding into the same group — otherwise the historic
+        // KF3 columns reappear next to the KF4 ones (that is exactly what the 655-column file showed).
+        AssertEqual("legacy M50_ST110_KF3 → M50_ST110", "M50_ST110", CsvColumnLayout.MergeGroup("M50_ST110_KF3"));
         AssertEqual("M50_ST040_KF1 unchanged", "M50_ST040_KF1", CsvColumnLayout.MergeGroup("M50_ST040_KF1"));
         AssertEqual("M50_ST130_KF1 unchanged", "M50_ST130_KF1", CsvColumnLayout.MergeGroup("M50_ST130_KF1"));
+
+        // 1b) The rename left the OLD KF3 definitions active in the live DB, so all THREE names can
+        // arrive at once. They must still produce ONE set of columns, not one per controller.
+        var renameSources = new List<CsvColumnSource>
+        {
+            new(1, "M50_ST110_KF1", "R_Feat"), new(2, "M50_ST110_KF3", "R_Feat"),
+            new(3, "M50_ST110_KF4", "R_Feat"),
+        };
+        var renameLayout = CsvColumnLayout.Build(renameSources);
+        AssertEqual("KF1 + legacy KF3 + KF4 → ONE shared column", 1, renameLayout.ColumnCount);
+        AssertEqual("…headed by the merge group", "M50_ST110", renameLayout.ControllerHeaders[0]);
+        AssertEqual("…and no one-sided warning", 0, renameLayout.Warnings.Count);
 
         // 2) Column counts against the measured reality (706 definitions → 414 columns, 292 merged).
         var layout = CsvColumnLayout.Build(LiveLikeDefinitions());
@@ -1418,7 +1434,7 @@ internal static class Program
         AssertTrue("no M20_/M21_ controller header left",
             !layout.ControllerHeaders.Any(h => h.StartsWith("M20_") || h.StartsWith("M21_")));
         AssertTrue("no ST110 KF header left",
-            !layout.ControllerHeaders.Any(h => h is "M50_ST110_KF1" or "M50_ST110_KF3"));
+            !layout.ControllerHeaders.Any(h => h is "M50_ST110_KF1" or "M50_ST110_KF4"));
         AssertEqual("M50_ST110 columns", 216, layout.ControllerHeaders.Count(h => h == "M50_ST110"));
         AssertEqual("M1x_ST060_KF1 columns", 36, layout.ControllerHeaders.Count(h => h == "M1x_ST060_KF1"));
         AssertEqual("M50_ST130_KF1 columns untouched", 60, layout.ControllerHeaders.Count(h => h == "M50_ST130_KF1"));
@@ -1429,9 +1445,9 @@ internal static class Program
         AssertEqual("M10 and M11 share one column for the same variable",
             layout.ColumnByDefinitionId[m10.DefinitionId], layout.ColumnByDefinitionId[m11.DefinitionId]);
         var kf1 = LiveLikeDefinitions().First(d => d.Camera == "M50_ST110_KF1" && d.Variable.StartsWith("V_"));
-        var kf3 = LiveLikeDefinitions().First(d => d.Camera == "M50_ST110_KF3" && d.Variable == kf1.Variable);
-        AssertEqual("ST110 KF1 and KF3 share one column",
-            layout.ColumnByDefinitionId[kf1.DefinitionId], layout.ColumnByDefinitionId[kf3.DefinitionId]);
+        var kf4 = LiveLikeDefinitions().First(d => d.Camera == "M50_ST110_KF4" && d.Variable == kf1.Variable);
+        AssertEqual("ST110 KF1 and KF4 share one column",
+            layout.ColumnByDefinitionId[kf1.DefinitionId], layout.ColumnByDefinitionId[kf4.DefinitionId]);
 
         // … while an unmerged controller stays separate.
         var st130 = LiveLikeDefinitions().First(d => d.Camera == "M50_ST130_KF1");
@@ -1448,7 +1464,7 @@ internal static class Program
             new(1, "M10_ST030_KF1", "R_Shared"),
             new(2, "M11_ST030_KF1", "R_Shared"),
             new(3, "M10_ST030_KF1", "R_OnlyOnM10"),      // no counterpart on M11
-            new(4, "M50_ST110_KF3", "R_OnlyOnKf3"),      // no counterpart on KF1
+            new(4, "M50_ST110_KF4", "R_OnlyOnKf4"),      // no counterpart on KF1
         };
         var layout = CsvColumnLayout.Build(sources);
 
@@ -1459,7 +1475,7 @@ internal static class Program
             layout.ControllerHeaders[layout.ColumnByDefinitionId[1]]);
         AssertEqual("one-sided M10 variable keeps the ORIGINAL controller name", "M10_ST030_KF1",
             layout.ControllerHeaders[layout.ColumnByDefinitionId[3]]);
-        AssertEqual("one-sided ST110 variable keeps the ORIGINAL controller name", "M50_ST110_KF3",
+        AssertEqual("one-sided ST110 variable keeps the ORIGINAL controller name", "M50_ST110_KF4",
             layout.ControllerHeaders[layout.ColumnByDefinitionId[4]]);
         AssertEqual("two warnings — nothing is folded away silently", 2, layout.Warnings.Count);
         AssertTrue("the warning names the variable and the partner group",
@@ -1546,14 +1562,14 @@ internal static class Program
         // 6) ST110 has no part-side hint → the first non-empty value wins (and M50St110Kf names it).
         var rowH = new string?[meta + 2];
         var fillH = new CsvMergeFill(part, new RecordingLog());
-        fillH.Write(rowH, meta, 0, "M50_ST110_KF3", "first");
+        fillH.Write(rowH, meta, 0, "M50_ST110_KF4", "first");
         fillH.Write(rowH, meta, 0, "M50_ST110_KF1", "second");
         AssertEqual("ST110: the first non-empty value is kept", "first", rowH[meta]);
     }
 
     private static void CsvFill_M50St110KfIsTraceable()
     {
-        Console.WriteLine("[Case AV] CSV meta column M50St110Kf = 1 / 3 / empty");
+        Console.WriteLine("[Case AV] CSV meta column M50St110Kf = 1 / 4 / empty");
 
         var part = CsvTestPart();
 
@@ -1563,9 +1579,9 @@ internal static class Program
         kf1.NoteController("M50_ST130_KF1");
         AssertEqual("control window KF1 → \"1\"", "1", kf1.M50St110Kf);
 
-        var kf3 = new CsvMergeFill(part, new RecordingLog());
-        kf3.NoteController("M50_ST110_KF3");
-        AssertEqual("control window KF3 → \"3\"", "3", kf3.M50St110Kf);
+        var kf4 = new CsvMergeFill(part, new RecordingLog());
+        kf4.NoteController("M50_ST110_KF4");
+        AssertEqual("control window KF4 → \"4\"", "4", kf4.M50St110Kf);
 
         var none = new CsvMergeFill(part, new RecordingLog());
         none.NoteController("M10_ST030_KF1");
@@ -1573,9 +1589,9 @@ internal static class Program
         AssertTrue("no ST110 measurement → empty", none.M50St110Kf is null);
 
         var both = new CsvMergeFill(part, new RecordingLog());
-        both.NoteController("M50_ST110_KF3");
+        both.NoteController("M50_ST110_KF4");
         both.NoteController("M50_ST110_KF1");
-        AssertEqual("the window that supplied the values is reported (first one)", "3", both.M50St110Kf);
+        AssertEqual("the window that supplied the values is reported (first one)", "4", both.M50St110Kf);
     }
 
     private static void CsvMetaColumns_UnchangedExceptTheNewOne()

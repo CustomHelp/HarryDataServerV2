@@ -276,7 +276,7 @@ eine Hälfte leer war.
 |---|---|
 | `M1x_<Station>_<KF>` | `M10_<Station>_<KF>` + `M11_<Station>_<KF>` |
 | `M2x_<Station>_<KF>` | `M20_<Station>_<KF>` + `M21_<Station>_<KF>` |
-| `M50_ST110` | `M50_ST110_KF1` + `M50_ST110_KF3` |
+| `M50_ST110` | `M50_ST110_KF1` + `M50_ST110_KF4` |
 | unverändert | `M50_ST040_KF1`, `M50_ST120_KF1`, `M50_ST130_KF1`, `M50_ST140_KF1` |
 
 | | vorher | nachher |
@@ -577,8 +577,11 @@ Mögliche Auswege (zu entscheiden):
 Im alten Layout liegt zusätzlich noch eine `*_RawData.csv` direkt im Modulordner.
 
 **B9 — Controller `M50_ST110_KF4` existiert in den Bilddaten, aber nicht in der `Harry.ini`.**
-Er taucht sowohl in NG-Bildern als auch in den MSA-Laufbildern auf; die INI kennt für ST110 nur
-`KF1` und `KF3`. Für diese Kamera gibt es folglich keine Telegramm-/Messwertanbindung.
+Er taucht sowohl in NG-Bildern als auch in den MSA-Laufbildern auf; die INI kannte für ST110 nur
+`KF1` und `KF3`. **ERLEDIGT 2026-08-28:** Es war ein Namensfehler auf unserer Seite — das zweite
+Kontrollfenster heißt tatsächlich `KF4`. INI, Kameraprogramm (Bildablage + Datenupload) und
+Settings sind auf `M50_ST110_KF4` umbenannt; die Bild- und die Messwertseite tragen damit denselben
+Namen.
 
 **B11 — Fake-DMCs im MSA-Betrieb.** Die per-Teil-PDFs des Laufs `20260724070500` heißen
 `…_00000000000000000000000000000001_…` — Serial2 enthält dort nur einen Zähler statt eines echten DMC
@@ -604,8 +607,11 @@ Entscheidung — falls M1X-OK-Bilder gesichert werden sollen, muss die Kamera na
 (`CsvFileWriter.Open` + `FileNaming.Stamp`, gemäß SOW §5.1.2). Die Doku in §13 ist veraltet, nicht der Code.
 
 **B9 — Controller `M50_ST110_KF4` existiert in den Bilddaten, aber nicht in der `Harry.ini`.**
-Er taucht sowohl in NG-Bildern als auch in den MSA-Laufbildern auf; die INI kennt für ST110 nur
-`KF1` und `KF3`. Für diese Kamera gibt es folglich keine Telegramm-/Messwertanbindung.
+Er taucht sowohl in NG-Bildern als auch in den MSA-Laufbildern auf; die INI kannte für ST110 nur
+`KF1` und `KF3`. **ERLEDIGT 2026-08-28:** Es war ein Namensfehler auf unserer Seite — das zweite
+Kontrollfenster heißt tatsächlich `KF4`. INI, Kameraprogramm (Bildablage + Datenupload) und
+Settings sind auf `M50_ST110_KF4` umbenannt; die Bild- und die Messwertseite tragen damit denselben
+Namen.
 
 **B10 — Die OK-Bildsuche nutzt `…\Input` ohne `SortedRoot`, die DE-Suche mit.** Damit findet die
 OK-Aufräumung Bilder **nicht**, die das NAS bereits nach `JJJJ\MM\TT` einsortiert hat, die DE-Löschung
