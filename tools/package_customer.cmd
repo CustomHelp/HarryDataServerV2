@@ -75,7 +75,20 @@ for %%T in (%TOOLS_INI% %TOOLS_NOINI%) do (
 
     copy /Y "%CUST%\README.txt" "!TDIR!\README.txt" >nul
     copy /Y "%CUST%\Install.cmd" "!TDIR!\Install.cmd" >nul
-    echo %TOOLS_INI% | find /I "%%T" >nul && copy /Y "%CUST%\Harry.customer.ini" "!TDIR!\Harry.ini" >nul
+    REM Membership test in pure cmd - deliberately NOT "echo %TOOLS_INI% | find /I".
+    REM "find" was resolved from PATH, so running this script from a shell that puts
+    REM Git Bash's /usr/bin ahead of System32 picked up the Unix find, which failed;
+    REM the && then silently skipped the copy and the package shipped WITHOUT the
+    REM customer Harry.ini. The copy is now verified and aborts loudly instead.
+    set "NEEDS_INI="
+    if not "!TOOLS_INI:%%T=!" == "%TOOLS_INI%" set "NEEDS_INI=1"
+    if defined NEEDS_INI (
+        copy /Y "%CUST%\Harry.customer.ini" "!TDIR!\Harry.ini" >nul
+        if not exist "!TDIR!\Harry.ini" (
+            echo ABORT: could not stage Harry.ini for %%T.
+            exit /b 6
+        )
+    )
 
     REM the all-in-one bundle gets the same folder, but WITHOUT the per-tool
     REM Install.cmd/README (they live once at the bundle root)
