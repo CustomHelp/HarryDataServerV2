@@ -70,7 +70,7 @@
                     <CheckBox Content="Auto" IsChecked="{Binding AutoRefresh}" VerticalAlignment="Center" Margin="0,0,16,0" />
                     <ToggleButton Content="Split by camera" IsChecked="{Binding SeparateByCamera}"
                                   VerticalAlignment="Center" Margin="0,0,6,0"
-                                  ToolTip="OFF: merge KF1/KF3 of a station (default). ON: separate per camera." />
+                                  ToolTip="OFF: merge a station's cameras, e.g. ST110 KF1/KF4 (default). ON: separate per camera." />
                     <ToggleButton Content="Split sensors" IsChecked="{Binding SensorsIndividual}"
                                   VerticalAlignment="Center" Margin="0,0,6,0"
                                   ToolTip="OFF: merge _S1..S5 into one sensor family (default). ON: each sensor individually." />
@@ -232,7 +232,7 @@
                     <DockPanel>
                         <TextBlock DockPanel.Dock="Top" Text="Defect share by origin module" FontWeight="Bold"
                                    FontSize="15" Margin="0,0,0,6" />
-                        <TextBlock DockPanel.Dock="Top" Text="(M10/M11, M20/M21 from dmcserial · unknown = part not yet exited · click filters above)"
+                        <TextBlock DockPanel.Dock="Top" Text="(M10/M11, M20/M21, M30–M35 from dmcserial · unknown = part not yet exited · click filters above)"
                                    Foreground="{DynamicResource TextDimBrush}" FontSize="11" Margin="0,0,0,8"
                                    TextWrapping="Wrap" />
                         <ListBox ItemsSource="{Binding ModuleBars}" SelectedItem="{Binding SelectedModuleBar}"
@@ -272,8 +272,15 @@
                             <Grid DockPanel.Dock="Top" Margin="0,0,0,6">
                                 <TextBlock Text="{Binding OriginTitle}" FontWeight="Bold" FontSize="16"
                                            TextTrimming="CharacterEllipsis" HorizontalAlignment="Left" />
-                                <Button Content="✕ Close" Command="{Binding CloseOriginCommand}"
-                                        HorizontalAlignment="Right" Padding="10,3" />
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                    <TextBlock Text="Group by" VerticalAlignment="Center" Margin="0,0,6,0"
+                                               Foreground="{DynamicResource TextDimBrush}" />
+                                    <ComboBox ItemsSource="{Binding OriginModuleOptions}"
+                                              SelectedItem="{Binding SelectedOriginModule}"
+                                              Width="70" Margin="0,0,12,0" VerticalAlignment="Center"
+                                              ToolTip="Which module family the rows are grouped by. M3X = blade module — use it to see which blade module e.g. anode cosmetic defects come from." />
+                                    <Button Content="✕ Close" Command="{Binding CloseOriginCommand}" Padding="10,3" />
+                                </StackPanel>
                             </Grid>
                             <TextBlock DockPanel.Dock="Top" Text="{Binding OriginSubtitle}" TextWrapping="Wrap"
                                        Foreground="{DynamicResource TextDimBrush}" FontSize="12" Margin="0,0,0,10" />

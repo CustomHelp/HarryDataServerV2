@@ -121,9 +121,13 @@
                 </Grid.RowDefinitions>
 
                 <!-- Header card -->
+                <!-- DockPanel, NOT a horizontal StackPanel: a StackPanel measures its children with
+                     infinite width, so TextWrapping on the info line never took effect and everything
+                     past ~8 fields (M2X/M3X/M50/Created) was clipped off the right edge. -->
                 <Border Grid.Row="0" Style="{StaticResource Card}" Margin="0,4,0,8">
-                    <StackPanel Orientation="Horizontal">
-                        <Border CornerRadius="4" Padding="10,4" VerticalAlignment="Center" Margin="0,0,12,0"
+                    <DockPanel LastChildFill="True">
+                        <Border DockPanel.Dock="Left" CornerRadius="4" Padding="10,4" VerticalAlignment="Center"
+                                Margin="0,0,12,0"
                                 Background="{Binding Part.ResultStatus, Converter={StaticResource ResultStatusToBrush}}"
                                 Visibility="{Binding ResultBadge, Converter={StaticResource NullToVisible}}">
                             <TextBlock Text="{Binding ResultBadge}" Foreground="White" FontWeight="Bold" FontSize="14" />
@@ -134,7 +138,7 @@
                                        Visibility="{Binding MatchedFieldText, Converter={StaticResource NullToVisible}}" />
                             <TextBlock Text="{Binding HeaderInfo}" TextWrapping="Wrap" />
                         </StackPanel>
-                    </StackPanel>
+                    </DockPanel>
                 </Border>
 
                 <!-- Measurements grid -->

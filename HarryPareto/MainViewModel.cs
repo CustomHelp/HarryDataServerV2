@@ -40,8 +40,6 @@ public sealed class ParetoBarItem
 
     /// <summary>The measurement definitions this bar aggregates — used for the origin query (task A).</summary>
     public required IReadOnlyList<int> DefinitionIds { get; init; }
-    /// <summary>True when module_ref maps to origin columns in dmcserial (M1x/M2x/M3x) — task A.</summary>
-    public bool CanShowOrigin { get; init; }
 }
 
 /// <summary>One bar of the per-module share chart (click filters the Pareto list).</summary>
@@ -170,6 +168,45 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty] private string _originNote = string.Empty;
     [ObservableProperty] private bool _hasOriginNote;
     [ObservableProperty] private bool _hasOriginMatrix;
+
+    /// <summary>The <c>dmcserial</c> column family holding the blade (M3x) module a part came from.</summary>
+    private const string BladeModule = "M3X";
+
+    /// <summary>The bar the origin panel is currently open for (needed to reload on a dimension switch).</summary>
+    private ParetoBarItem? _originBar;
+
+    /// <summary>Guard so pre-selecting the dimension in <see cref="ShowOriginAsync"/> does not reload twice.</summary>
+    private bool _originAutoSelected;
+
+    /// <summary>Selectable origin dimensions — a part passes through one module of each family.</summary>
+    public IReadOnlyList<string> OriginModuleOptions { get; } = new[] { "M1X", "M2X", BladeModule };
+
+    private string _selectedOriginModule = BladeModule;
+
+    /// <summary>
+    /// Which module family the origin matrix groups by. Pre-selected from the feature's
+    /// <c>module_ref</c> when that maps to dmcserial columns, but freely switchable — the blade module
+    /// behind e.g. an anode cosmetic defect is not reachable through module_ref (it is M2x / NoRef).
+    /// </summary>
+    public string SelectedOriginModule
+    {
+        get => _selectedOriginModule;
+        set
+        {
+            if (!SetProperty(ref _selectedOriginModule, value) || _originAutoSelected || !HasOriginDetail)
+                return;
+            _ = LoadOriginAsync();
+        }
+    }
+
+    /// <summary>Plain-language label for a dimension, so "M3X" is never the only thing on screen.</summary>
+    private static string OriginModuleLabel(string module) => module?.Trim().ToUpperInvariant() switch
+    {
+        "M1X" => "M1x lubrastrip module",
+        "M2X" => "M2x trimmer module",
+        BladeModule => "M3x blade module",
+        _ => module ?? string.Empty,
+    };
 
     public string AppName => "HarryPareto — Live Top-20 defect reasons";
     public string AppVersion => "v" + (GetType().Assembly.GetName().Version?.ToString(3) ?? "2.0.0");
@@ -533,7 +570,6 @@ public sealed partial class MainViewModel : ObservableObject
                 SparklineValues = spark,
                 SparklineBrush = moduleColor,
                 DefinitionIds = g.DefIds.ToList(),
-                CanShowOrigin = HasOriginColumns(g.ModuleRef),
             });
         }
     }
@@ -574,8 +610,7 @@ public sealed partial class MainViewModel : ObservableObject
             }
         }
 
-        if (HasOriginColumns(g.ModuleRef))
-            sb.Append("(Click: origin module/nest)");
+        sb.Append("(Click: origin module/nest — switchable to the M3x blade module)");
         return sb.ToString().TrimEnd();
     }
 
@@ -646,34 +681,57 @@ public sealed partial class MainViewModel : ObservableObject
         if (bar is null)
             return;
 
-        OriginTitle = "Origin — " + bar.Label;
+        _originBar = bar;
+
+        // The dimension is only PRE-SELECTED from module_ref — it no longer gates the panel. A part
+        // passes through an M1x, an M2x and an M3x module, so every one of those breakdowns is
+        // available for every feature; module_ref just says which one the template considers causal.
+        // Without a usable hint we open on the blade module (M3X): that is the case the customer asked
+        // for (anode cosmetic defects come from the blade modules), and the note below says so plainly.
+        _originAutoSelected = true;
+        SelectedOriginModule = HasOriginColumns(bar.ModuleRef) ? bar.ModuleRef.Trim().ToUpperInvariant() : BladeModule;
+        _originAutoSelected = false;
+
+        HasOriginDetail = true;
+        await LoadOriginAsync().ConfigureAwait(true);
+    }
+
+    /// <summary>(Re)load the matrix for the open bar in <see cref="SelectedOriginModule"/>.</summary>
+    private async Task LoadOriginAsync()
+    {
+        var bar = _originBar;
+        if (bar is null)
+            return;
+
+        var dimension = SelectedOriginModule;
+        OriginTitle = $"Origin ({OriginModuleLabel(dimension)}) — {bar.Label}";
         OriginRows.Clear();
         OriginNests.Clear();
         HasOriginMatrix = false;
-        HasOriginDetail = true;
 
-        if (!bar.CanShowOrigin)
-        {
-            OriginSubtitle = string.Empty;
-            OriginNote = $"No origin can be derived — module_ref = {bar.ModuleRef} (no strand relation M10/M11 or M20/M21).";
-            HasOriginNote = true;
-            return;
-        }
+        // Never let a fallback read as a derived fact: say when the shown dimension is NOT the one the
+        // measurement's module_ref points at.
+        var derived = string.Equals(dimension, bar.ModuleRef.Trim(), StringComparison.OrdinalIgnoreCase);
+        var hint = derived
+            ? string.Empty
+            : $"Showing {OriginModuleLabel(dimension)} — the measurement's module_ref is {bar.ModuleRef}, " +
+              "so this grouping is your choice, not one derived from the template. ";
 
         try
         {
-            var cells = await _db.GetOriginAsync(_winFrom, _winTo, bar.DefinitionIds, bar.ModuleRef).ConfigureAwait(true);
+            var cells = await _db.GetOriginAsync(_winFrom, _winTo, bar.DefinitionIds, dimension).ConfigureAwait(true);
             if (cells.Count == 0)
             {
                 OriginSubtitle = string.Empty;
-                OriginNote = "No completed parts in the time window — the origin (module/nest) is only known after part exit.";
+                OriginNote = hint +
+                    "No completed parts in the time window — the origin (module/nest) is only known after part exit.";
                 HasOriginNote = true;
                 return;
             }
 
             BuildOriginMatrix(cells);
-            OriginNote = string.Empty;
-            HasOriginNote = false;
+            OriginNote = hint;
+            HasOriginNote = hint.Length > 0;
             OriginSubtitle =
                 "Concentration on one module/nest → check mechanics/process there · " +
                 "even distribution → more likely material or camera evaluation.";

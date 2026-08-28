@@ -143,9 +143,12 @@ public partial class MainViewModel : ObservableObject
                 $"Order: {p.OrderName ?? "-"}",
                 $"Temperature: {p.M1xTemperature?.ToString("0.0") ?? "-"}",
                 $"Humidity: {p.M1xHumidity?.ToString("0.0") ?? "-"}",
-                $"M1X: mod {p.M1xModule?.ToString() ?? "-"} / nest {p.M1xNest?.ToString() ?? "-"}",
-                $"M2X: mod {p.M2xModule?.ToString() ?? "-"} / nest {p.M2xNest?.ToString() ?? "-"}",
-                $"M3X: {p.M3xModule ?? "-"} / nest {p.M3xNest ?? "-"}",
+                // Spelled out, not just "M1X/M2X/M3X": the origin modules are what an operator reads
+                // this line for, and "M3X" alone was not recognised as the BLADE module (customer
+                // feedback 2026-08-28 — the field had been here since 2026-07-03 but went unnoticed).
+                $"M1X lubrastrip module: {p.M1xModule?.ToString() ?? "-"} / nest {p.M1xNest?.ToString() ?? "-"}",
+                $"M2X trimmer module: {p.M2xModule?.ToString() ?? "-"} / nest {p.M2xNest?.ToString() ?? "-"}",
+                $"M3X blade module: {p.M3xModule ?? "-"} / nest {p.M3xNest ?? "-"}",
                 $"M50 nest: {p.M50Nest ?? "-"}",
                 $"Created: {p.CreatedAt:yyyy-MM-dd HH:mm:ss}");
         }
